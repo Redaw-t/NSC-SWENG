@@ -122,7 +122,7 @@ nickel-sales-auth/
   run-demo.bat                       double-click: compiles + runs the demo
   test/nickelsales/auth/demo/
       AuthDemo.java                  THROWAWAY harness (see section 2)
-  README.md                          this file
+  CONTRIBUTING.md                          this file
 ```
 
 Two rules keep this architecture healthy:
