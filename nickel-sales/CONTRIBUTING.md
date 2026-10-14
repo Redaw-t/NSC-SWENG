@@ -262,6 +262,57 @@ login succeeds and the session stays active; invalid login shows the right
 message; a logout action calls `auth.logout(sessionId)` and returns to the
 login screen.
 
+---
+## Session UI (SESSION/UI role)
+
+Implemented: `InMemorySessionManager`, `LoginScreen`, `LogoutAction`.
+
+```
+src/nickelsales/
+  auth/session/InMemorySessionManager.java   implements contract.SessionManager
+  ui/login/LoginScreen.java                   JavaFX login form
+  ui/login/LogoutAction.java                  logout handler + "Log out" button
+```
+
+### Session rules
+
+- Session ids are random UUIDs, kept in memory (lost when the app closes).
+- A session expires after 30 minutes of inactivity. Pass a `Duration` to the
+  constructor to change it (tests use a few hundred milliseconds).
+- `getSession(id)` counts as activity and resets the timer, so
+  `AuthenticationService.getCurrentUser(sessionId)` keeps a session alive.
+  `isSessionValid(id)` only checks and never resets the timer.
+- Unknown, expired, and logged-out ids return `null`/`false`; they never throw.
+
+### Wiring
+
+```java
+SessionManager sessions = new InMemorySessionManager();
+AuthenticationService auth = new AuthenticationService(repo, sessions, null, audit);
+
+LoginScreen login = new LoginScreen(auth, result -> router.openDashboardFor(result));
+LogoutAction logout = new LogoutAction(auth, () -> { login.reset(); router.showLogin(); });
+```
+
+- `LoginScreen` (labelled "Staff ID"; the value typed is the User ID) does NOT pick the dashboard. It hands the `LoginResult` to the
+  callback; role routing is the AUTHZ role's job (`result.user().getRoles()`).
+- Keep `result.session().getSessionId()` after login. Each dashboard passes it to
+  `logout.createButton(sessionId)` and to `auth.getCurrentUser(sessionId)`.
+- A screen that gets `null` from `getCurrentUser(sessionId)` must send the user
+  back to the login screen.
+
+### Messages the login screen shows
+
+| Situation | Message |
+| --------- | ------- |
+| Empty User ID or password | "Enter your Staff ID and password." (no call to `auth.login`) |
+| Any `AuthenticationException` | the exception's own `getMessage()` |
+| Login worked but `session()` is null | "...no session could be started. Contact the system administrator." |
+| Any other runtime error | "Something went wrong while logging in. Try again, or contact the system administrator." |
+
+The password field is cleared after every failure.
+---
+
 ### 3.3 Role `AUTHZ` — authorization and role routing
 
 Implement `AuthorizationService` on top of the shared vocabulary — never
