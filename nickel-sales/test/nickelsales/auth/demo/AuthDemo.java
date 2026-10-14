@@ -176,10 +176,16 @@ public class AuthDemo {
         System.out.println();
         System.out.println(" INTERACTIVE LOGIN (the real login UI replaces this prompt)");
         System.out.println(" Try NSC-00001 / " + TEST_PASSWORD + ", a wrong password, or NSC-00004.");
-        System.out.println(" Type q as the user ID to quit.");
+        System.out.println(" Commands at the User ID prompt:");
+        System.out.println("   logout  - end the active session (calls AuthenticationService.logout)");
+        System.out.println("   whoami  - show the currently logged-in user for the active session");
+        System.out.println("   q       - quit");
         System.out.println("-----------------------------------------------------------------");
 
         Scanner in = new Scanner(System.in);
+        // What the real UI keeps after a successful login; logout/whoami use it.
+        String currentSessionId = null;
+
         while (true) {
             System.out.print(" User ID: ");
             String userId = in.nextLine().trim();
@@ -187,15 +193,41 @@ public class AuthDemo {
                 System.out.println(" Bye.");
                 break;
             }
+
+            if (userId.equalsIgnoreCase("logout")) {
+                if (currentSessionId == null) {
+                    System.out.println(" No active session in this demo - log in first.");
+                } else {
+                    User current = auth.getCurrentUser(currentSessionId);
+                    auth.logout(currentSessionId);
+                    System.out.println(" LOGOUT OK -> session " + currentSessionId + " ended"
+                            + (current != null ? " (" + current.getFullName() + " logged out)." : "."));
+                    currentSessionId = null;
+                }
+                System.out.println("-----------------------------------------------------------------");
+                continue;
+            }
+
+            if (userId.equalsIgnoreCase("whoami")) {
+                User current = currentSessionId == null ? null : auth.getCurrentUser(currentSessionId);
+                System.out.println(current == null
+                        ? " No active session (never logged in, logged out, or expired)."
+                        : " Current user -> " + current.getFullName() + " (" + current.getUserId()
+                                + "), roles: " + current.getRoles());
+                System.out.println("-----------------------------------------------------------------");
+                continue;
+            }
+
             System.out.print(" Password: ");
             String password = in.nextLine();
 
             try {
                 LoginResult r = auth.login(userId, password);
+                currentSessionId = r.session().getSessionId();
                 System.out.println(" LOGIN OK -> " + r.user().getFullName()
                         + " (" + r.user().getUserId() + ")");
                 System.out.println("   roles      : " + r.user().getRoles());
-                System.out.println("   session id : " + r.session().getSessionId());
+                System.out.println("   session id : " + currentSessionId);
                 System.out.println("   role routing (AUTHZ + SESSION/UI's job): would open "
                         + dashboards(r.user()));
             } catch (AuthenticationException e) {
