@@ -1,30 +1,89 @@
-# Nickel Sales Center — Authentication Module (Sprint 1)
+# Nickel Sales Center — Contributor Guide (Sprint 1)
 
-*I suggest updating this md file as you work through the other areas of the project; it will serve as a guide for other developers/QAs.*
+*Keep this file up to date as you work on other areas of the project — it is
+the guide for the next developer or QA.*
 
 ## Who this document is for
 
 This document is for **whoever continues work on this project — a human
 programmer or an AI assistant**. It explains:
 
-1. how the authentication module in this folder works,
-2. which parts are done and which parts are still to be built,
-3. exactly how to build the missing parts so they plug in without breaking
+1. how to get the project running on your machine (start here),
+2. how the authentication module works,
+3. which parts are done and which parts are still to be built,
+4. exactly how to build the missing parts so they plug in without breaking
    anything.
 
 Work in this project is organized by **functional role**, not by person. The
 roles are `AUTH`, `DATA`, `SESSION/UI`, and `AUTHZ`. Wherever this document
 says a role, read it as: *the person or AI assistant currently assigned to
-that role*. If you are an AI assistant, you will find ready-to-use
-instruction blocks for each role further down — copy the one matching your
-assignment and follow it literally.
+that role*. If you are an AI assistant, section 3 lists the exact signatures,
+notes and definition of done for each role — follow the one matching your
+assignment literally.
 
 **Project context:** desktop POS and Inventory Management System for Nickel
 Sales Center (offline, local MySQL database). Sprint 1 delivers an
 end-to-end login flow: credential validation, bcrypt password verification,
-session creation, and role recognition. This folder contains the
-**authentication module only** — everything else is other roles' work and
-is deliberately NOT implemented here.
+session creation, and role recognition. The `nickel-sales/` folder currently
+contains the **authentication module** plus the **session manager and login
+screen**; data access (`DATA`) and authorization (`AUTHZ`) are still to be
+built.
+
+---
+
+## 0. Quick start — set up your machine
+
+### What you need
+
+| Tool | Version | Notes |
+| ---- | ------- | ----- |
+| JDK | **17 or newer** | Windows: `setup.bat` finds one or offers to install Temurin 21 for you |
+| JavaFX | 21.0.5 | **Downloaded automatically** into `nickel-sales/lib/javafx/` — don't install it yourself |
+| jBCrypt | 0.4 | Already in `nickel-sales/lib/` |
+| IntelliJ IDEA | any recent | Optional — the scripts work without it |
+| MySQL | 8.x | **Not needed yet.** The demo uses in-memory stub users until `DATA` lands |
+
+No Maven or Gradle is needed.
+
+### Windows
+
+1. Get the project (clone the repo or copy the folder).
+2. Open `nickel-sales\` and double-click **`setup.bat`**. It:
+   - looks for a JDK 17+ (in `JAVA_HOME`, `PATH`, `C:\Program Files\...`
+     and IntelliJ's downloaded JDKs in `%USERPROFILE%\.jdks`);
+     if there is none it asks to install Eclipse Temurin JDK 21 via `winget`,
+   - downloads the three JavaFX jars into `nickel-sales\lib\javafx\`.
+3. Double-click **`run-demo.bat`**. You should see `RESULT: 8 passed, 0 failed`.
+
+You can skip step 2 — `run-demo.bat` runs `setup.bat` itself if anything is
+missing. The first run needs internet access (to download JavaFX); after
+that everything works offline.
+
+### macOS / Linux
+
+You need a JDK 17+ first (`brew install --cask temurin@21`, or your distro's
+`openjdk-21-jdk` package). Then:
+
+```bash
+cd nickel-sales
+chmod +x run-demo.sh      # first time only
+./run-demo.sh             # downloads JavaFX for your OS on the first run
+```
+
+### IntelliJ IDEA
+
+1. Run `setup.bat` (or `./run-demo.sh --setup`) once so `lib/javafx/` exists.
+2. **File → Open** the repository root folder (`NSC-SWENG-Session-UI`, the
+   one containing `NSC-SWENG-Session-UI.iml`).
+3. **File → Project Structure → Project → SDK**: pick a JDK 17+.
+4. Use the shared run configurations in the top-right dropdown:
+   **AuthDemo (console)** and **LoginDemoApp (GUI)**. They already pass the
+   JavaFX VM options, so don't run `LoginDemoApp` via the green arrow next to
+   `main()` — that run has no JavaFX options and fails with
+   *"JavaFX runtime components are missing"*.
+
+The `jbcrypt-0.4` and `javafx` libraries are already configured in
+`NSC-SWENG-Session-UI.iml`, and the run configurations live in `.run/`.
 
 ---
 
@@ -97,33 +156,51 @@ switches on the code. The `getMessage()` strings are already user-ready.
 A corrupt/malformed stored hash also counts as `INVALID_CREDENTIALS` rather
 than crashing — database damage must not turn into a stack trace on screen.
 
+
 ### 1.4 File map — what is real, what is a contract
 
 ```
-nickel-sales-auth/
-  src/nickelsales/auth/
-    auth/                            <- THE DELIVERABLE (implemented, tested)
-      AuthenticationService.java       all login logic lives here
-      LoginResult.java                record: user() + session()
-      AuthenticationException.java    base error, catch this in UIs
-      InvalidCredentialsException.java
-      InactiveUserException.java
-      LockedUserException.java
-    contract/                        <- AGREEMENTS ONLY (no behavior)
-      User.java                       entity shape the auth module reads
-      UserRole.java                   ADMIN/CASHIER/INVENTORY_STAFF <-> DB codes "A"/"C"/"I"
-      UserStatus.java                 ACTIVE/INACTIVE/LOCKED <-> "Active"/"Inactive"
-      Session.java                    entity shape (sessionId, userId, timestamps, active)
-      UserRepository.java             interface — implemented by DATA
-      SessionManager.java             interface — implemented by SESSION/UI
-      PasswordPolicy.java             interface — used by user management
-      AuditLogger.java                interface — implemented by logging
-  lib/jbcrypt-0.4.jar                the ONLY dependency (bcrypt hashing)
-  run-demo.bat                       double-click: compiles + runs the demo
-  test/nickelsales/auth/demo/
-      AuthDemo.java                  THROWAWAY harness (see section 2)
-  CONTRIBUTING.md                          this file
+NSC-SWENG-Session-UI/                  repository root (open this in IntelliJ)
+  database/
+    NickelSales-Database-Config.sql    MySQL schema + seed data (used by DATA)
+  nickel-sales/
+    src/nickelsales/
+      auth/
+        auth/                          <- AUTH: DONE (implemented, tested)
+          AuthenticationService.java     all login logic lives here
+          LoginResult.java               record: user() + session()
+          AuthenticationException.java   base error, catch this in UIs
+          InvalidCredentialsException.java
+          InactiveUserException.java
+          LockedUserException.java
+        contract/                      <- AGREEMENTS ONLY (no behavior)
+          User.java                      entity shape the auth module reads
+          UserRole.java                  ADMIN/CASHIER/INVENTORY_STAFF <-> DB codes "A"/"C"/"I"
+          UserStatus.java                ACTIVE/INACTIVE/LOCKED <-> "Active"/"Inactive"
+          Session.java                   entity shape (sessionId, userId, timestamps, active)
+          UserRepository.java            interface — implemented by DATA (TODO)
+          SessionManager.java            interface — implemented by SESSION/UI (done)
+          PasswordPolicy.java            interface — used by user management
+          AuditLogger.java               interface — implemented by logging
+        session/
+          InMemorySessionManager.java    <- SESSION/UI: DONE
+      ui/login/
+        LoginScreen.java               <- SESSION/UI: DONE (JavaFX login form)
+        LogoutAction.java              <- SESSION/UI: DONE (logout handler + button)
+    test/nickelsales/auth/demo/        THROWAWAY harnesses (see section 2)
+      AuthDemo.java                    console demo + stub UserRepository
+      LoginDemoApp.java                JavaFX demo of the real login screen
+    lib/
+      jbcrypt-0.4.jar                  bcrypt hashing (committed)
+      javafx/                          JavaFX jars — downloaded by setup, NOT committed
+    setup.bat                          Windows: find/install JDK, download JavaFX
+    run-demo.bat                       Windows: setup + compile + run the demo
+    run-demo.sh                        macOS/Linux equivalent
+    CONTRIBUTING.md                    this file
 ```
+
+`out/` folders are build output — never edit or commit them; the run scripts
+wipe and rebuild `nickel-sales/out/` every time.
 
 Two rules keep this architecture healthy:
 
@@ -149,25 +226,55 @@ before building on top:
 
 ---
 
+---
+
 ## 2. How to run and test it right now
 
 The authentication module has no `main()` of its own — by design, it needs
-the other modules' implementations. To run it **before** those exist, this
-folder ships a throwaway harness (`test/.../AuthDemo.java`) that feeds the
-service two in-memory stubs: a stub `UserRepository` seeded with demo
-accounts, and a stub `SessionManager`.
+the other modules' implementations. To run it **before** those exist, the
+`test/` folder ships two throwaway harnesses that feed the real
+`AuthenticationService` an in-memory stub `UserRepository` seeded with demo
+accounts:
 
-- **Windows:** double-click `run-demo.bat` (finds the JDK automatically).
-- **Any terminal** (JDK 17+), from this folder:
+| Command (from `nickel-sales/`) | What it does |
+| ------------------------------ | ------------ |
+| `run-demo.bat` / `./run-demo.sh` | Console demo: runs the scenarios, then an interactive login prompt |
+| `run-demo.bat --scripted` / `./run-demo.sh --scripted` | Scenarios only — a smoke test; exit code 1 if anything fails |
+| `run-demo.bat --gui` / `./run-demo.sh --gui` | The real JavaFX `LoginScreen` + `InMemorySessionManager` + `LogoutAction`: login → placeholder dashboard → Log out → login |
 
-```bash
-javac -encoding UTF-8 -cp lib/jbcrypt-0.4.jar -d out $(find src test -name "*.java")
-java -cp "out;lib/jbcrypt-0.4.jar" nickelsales.auth.demo.AuthDemo
+Every run recompiles all of `src/` and `test/` from scratch, so you always
+run your latest code.
+
+### Compiling by hand
+
+The scripts are the recommended way. If you want the raw commands, run them
+from `nickel-sales/` after setup has created `lib/javafx/`:
+
+Windows (cmd):
+
+```bat
+dir /s /b src\*.java test\*.java > out\sources.txt
+javac -encoding UTF-8 --module-path lib\javafx --add-modules javafx.controls -cp lib\jbcrypt-0.4.jar -d out @out\sources.txt
+java --module-path lib\javafx --add-modules javafx.controls -cp "out;lib\jbcrypt-0.4.jar" nickelsales.auth.demo.AuthDemo
 ```
 
-Add `--scripted` to run only the scenario list (it doubles as a smoke test:
-exit code 1 if anything fails). The interactive prompt accepts real typing —
-use it to demo login validation.
+(Create `out\` first with `mkdir out`. If the project path contains spaces,
+use `run-demo.bat` instead — it quotes the paths in the source list.)
+
+macOS / Linux:
+
+```bash
+mkdir -p out
+javac -encoding UTF-8 --module-path lib/javafx --add-modules javafx.controls \
+      -cp lib/jbcrypt-0.4.jar -d out $(find src test -name "*.java")
+java --module-path lib/javafx --add-modules javafx.controls \
+     -cp "out:lib/jbcrypt-0.4.jar" nickelsales.auth.demo.AuthDemo
+```
+
+Note the classpath separator: `;` on Windows, `:` on macOS/Linux. JavaFX is
+needed to compile because `ui/login/` and `LoginDemoApp` use it.
+
+### Demo accounts
 
 Seeded accounts (password `Password123` for all — test seeds only):
 
@@ -179,21 +286,27 @@ Seeded accounts (password `Password123` for all — test seeds only):
 | NSC-00004 | Test Inactive   | C       | Inactive |
 | NSC-00005 | Test Locked     | C       | Locked   |
 
-The scenarios shown cover: valid login per role, wrong password, unknown
-user (identical error), inactive and locked accounts with correct passwords,
+The scenarios cover: valid login per role, wrong password, unknown user
+(identical error), inactive and locked accounts with correct passwords,
 boolean validation, and the session lifecycle. **Delete `test/` once the
-real `DATA` and `SESSION/UI` implementations land** — it exists only so the
-module is demonstrable standalone.
+real `DATA` and `SESSION/UI` implementations are wired together** — it exists
+only so the modules are demonstrable standalone.
 
 ---
 
 ## 3. Roles and what each one must deliver
 
 The rest of Sprint 1 is four work packages. Each lists the exact signatures
-to implement, implementation notes, and the definition of done. Both
-approaches are valid and expected: **a programmer writes the code
-themselves, or an AI assistant is given the matching instruction block from
-section 5 and produces it.**
+to implement, implementation notes, and the definition of done. A programmer
+can write the code themselves, or hand the matching subsection to an AI
+assistant to produce it.
+
+| Role | Status |
+| ---- | ------ |
+| `AUTH` | **Done** |
+| `SESSION/UI` | **Done** (session manager + login screen) |
+| `DATA` | To do |
+| `AUTHZ` | To do |
 
 ### 3.1 Role `DATA` — user storage and retrieval
 
@@ -210,10 +323,11 @@ List<User> findAll();
 Implementation notes:
 
 - Backend: the `Users` table of database `NickelSales_Database`
-  (`NickelSales-Database-Config.sql`): `UserID` PK varchar(10),
+  (`database/NickelSales-Database-Config.sql` at the repository root): `UserID` PK varchar(10),
   `UserPassword` varchar(60), `UserName`, `UserLastname`, `UserRole`
   varchar(5), `UserStatus` varchar(8). Use JDBC prepared statements
-  (`mysql-connector-j`); never concatenate SQL strings.
+  (`mysql-connector-j` — see section 5, "Adding a dependency"); never
+  concatenate SQL strings.
 - `findByUsername` is a case-insensitive, whitespace-trimmed lookup on
   `UserID`, returning `null` (not an exception) when not found.
 - Build `User` objects with the ready-made converters — do not hand-parse
@@ -227,11 +341,18 @@ Implementation notes:
 - Definition of done: users can be saved/retrieved locally; the three role
   seed accounts exist; plaintext is never stored.
 
-### 3.2 Role `SESSION/UI` — sessions and the login screen
+### 3.2 Role `SESSION/UI` — sessions and the login screen (DONE)
 
-Two deliverables.
+Implemented:
 
-**(a)** Implement `nickelsales.auth.contract.SessionManager`:
+```
+src/nickelsales/
+  auth/session/InMemorySessionManager.java   implements contract.SessionManager
+  ui/login/LoginScreen.java                  JavaFX login form
+  ui/login/LogoutAction.java                 logout handler + "Log out" button
+```
+
+The contract it fulfils:
 
 ```java
 Session createSession(String userId);
@@ -240,27 +361,54 @@ void invalidateSession(String sessionId);
 boolean isSessionValid(String sessionId);
 ```
 
-An in-memory `Map<String, Session>` with UUID session ids is enough for
-Sprint 1; add an inactivity timeout (class diagram suggests 30 minutes)
-when convenient. Persisting sessions is optional and can come later — the
-interface does not care.
+**Session rules**
 
-**(b)** Build the login screen on top of the authentication module:
+- Session ids are random UUIDs, kept in memory (lost when the app closes).
+  Persisting sessions is optional and can come later — the interface does
+  not care.
+- A session expires after 30 minutes of inactivity. Pass a `Duration` to the
+  constructor to change it (tests use a few hundred milliseconds).
+- `getSession(id)` counts as activity and resets the timer, so
+  `AuthenticationService.getCurrentUser(sessionId)` keeps a session alive.
+  `isSessionValid(id)` only checks and never resets the timer.
+- Unknown, expired, and logged-out ids return `null`/`false`; they never throw.
+
+**Wiring**
 
 ```java
-try {
-    LoginResult result = auth.login(userIdField.getText(), passwordField.getText());
-    String sessionId = result.session().getSessionId();     // keep this
-    openDashboardFor(result.user().getRoles());             // AUTHZ decides what this is
-} catch (AuthenticationException e) {
-    showMessage(e.getMessage());   // already user-ready; or switch on e.getCode()
-}
+SessionManager sessions = new InMemorySessionManager();
+AuthenticationService auth = new AuthenticationService(repo, sessions, null, audit);
+
+LoginScreen login = new LoginScreen(auth, result -> router.openDashboardFor(result));
+LogoutAction logout = new LogoutAction(auth, () -> { login.reset(); router.showLogin(); });
 ```
 
-Definition of done: username/password can be entered and submitted; valid
-login succeeds and the session stays active; invalid login shows the right
-message; a logout action calls `auth.logout(sessionId)` and returns to the
-login screen.
+- `LoginScreen` (labelled "Staff ID"; the value typed is the User ID) does
+  NOT pick the dashboard. It hands the `LoginResult` to the callback; role
+  routing is the `AUTHZ` role's job (`result.user().getRoles()`).
+- Keep `result.session().getSessionId()` after login. Each dashboard passes
+  it to `logout.createButton(sessionId)` and to `auth.getCurrentUser(sessionId)`.
+- A screen that gets `null` from `getCurrentUser(sessionId)` must send the
+  user back to the login screen.
+- The logo is optional: put it at `nickel-sales/resources/images/nickel-logo.png`
+  (the run scripts copy `resources/` onto the classpath, where `LoginScreen`
+  looks for `/images/nickel-logo.png`). Without it, the screen simply has no logo.
+
+**Messages the login screen shows**
+
+| Situation | Message |
+| --------- | ------- |
+| Empty User ID or password | "Enter your Staff ID and password." (no call to `auth.login`) |
+| Any `AuthenticationException` | the exception's own `getMessage()` |
+| Login worked but `session()` is null | "...no session could be started. Contact the system administrator." |
+| Any other runtime error | "Something went wrong while logging in. Try again, or contact the system administrator." |
+
+The password field is cleared after every failure.
+
+Definition of done (met): username/password can be entered and submitted;
+valid login succeeds and the session stays active; invalid login shows the
+right message; a logout action calls `auth.logout(sessionId)` and returns to
+the login screen.
 
 ### 3.3 Role `AUTHZ` — authorization and role routing
 
@@ -325,38 +473,53 @@ to the login screen when it returns `null`. That single pattern is all the
 
 ---
 
-## 5. Copy-paste instruction blocks for AI assistants (DEPRACATED)
 
+## 5. Putting it all together (the Sprint 1 demo)
 
----
-
-## 6. Putting it all together (the Sprint 1 demo)
-
-Once `DATA` and `SESSION/UI` land, the only new code is the wiring —
-usually a few lines in the application's entry point:
+Once `DATA` lands, the only new code is the wiring — usually a few lines in
+the application's entry point (`LoginDemoApp.start()` is a working template):
 
 ```java
 UserRepository repo = /* DATA's implementation */;
-SessionManager sess = /* SESSION/UI's implementation */;
+SessionManager sess = new InMemorySessionManager();
 AuditLogger audit   = (event, userId) -> System.out.println("[AUDIT] " + event + " " + userId);
 
 AuthenticationService auth = new AuthenticationService(repo, sess, null, audit);
-// hand `auth` to the login screen; keep the sessionId after each login
+// hand `auth` to the LoginScreen; keep the sessionId after each login
 ```
 
 Everything demonstrated today with the stubs — valid/invalid/inactive/locked
 logins, sessions, logout — then runs against the real database and the real
-UI with **zero changes to this module**.
+UI with **zero changes to the `auth/` package**.
 
-### Compiling
+### Adding a dependency
 
-No Maven/Gradle required (plain `javac`, JDK 17+):
+Dependencies are plain jars, no build tool:
 
-```bash
-cd nickel-sales-auth
-javac -encoding UTF-8 -cp lib/jbcrypt-0.4.jar -d out $(find src -name "*.java")
-```
+- **Small, platform-independent jars** (like `jbcrypt`, or `mysql-connector-j`
+  for `DATA`): commit them to `nickel-sales/lib/`, add them to the `-cp` in
+  `run-demo.bat` **and** `run-demo.sh`, and add an IntelliJ library for them
+  (File → Project Structure → Libraries → +).
+- **Large or platform-specific jars** (like JavaFX): download them in
+  `setup.bat` / `run-demo.sh` instead, and add their folder to `.gitignore`.
 
-When the team adopts a shared build setup, drop `src/nickelsales/auth/**`
-into it and add `org.mindrot:jbcrypt:0.4` as a dependency. The only import
-outside the JDK is `org.mindrot.jbcrypt.BCrypt`.
+Update the table in section 0 whenever you add one.
+
+When the team adopts a shared build tool (Maven/Gradle), the equivalent
+coordinates are `org.mindrot:jbcrypt:0.4` and `org.openjfx:javafx-controls:21.0.5`.
+
+---
+
+## 6. Troubleshooting
+
+| Symptom | Cause / fix |
+| ------- | ----------- |
+| `run-demo.bat` window flashes and closes | Run it from a terminal (`cd nickel-sales` then `run-demo.bat`) to read the error. The script now pauses on errors, so this should be rare. |
+| `No JDK found` / `javac is not recognized` | Run `setup.bat` and let it install Temurin 21, or install JDK 17+ yourself and set `JAVA_HOME`. Close and reopen the terminal afterwards. |
+| `Module javafx.controls not found` | `lib/javafx/` is missing or empty. Run `setup.bat` (or `./run-demo.sh --setup`). |
+| `JavaFX runtime components are missing` (IntelliJ) | You ran `LoginDemoApp` without VM options. Use the **LoginDemoApp (GUI)** run configuration. |
+| `package javafx... does not exist` in IntelliJ | `lib/javafx/` didn't exist when IntelliJ loaded the project. Run setup, then **File → Reload All from Disk** (or reopen the project). |
+| JavaFX download fails | No internet, or a proxy/firewall blocks `repo1.maven.org`. Download the three `javafx-*-21.0.5-win.jar` files named in the error into `nickel-sales/lib/javafx/` by hand. |
+| `Two versions of module javafx.base found` | Old jars in `lib/javafx/`. The scripts remove other versions automatically; if it persists, delete the folder and rerun setup. |
+| Changes don't show up when running | You're running stale classes. The scripts rebuild `out/` each run; in IntelliJ use **Build → Rebuild Project**. |
+| `./run-demo.sh: Permission denied` | `chmod +x run-demo.sh` once. |

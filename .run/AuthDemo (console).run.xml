@@ -1,0 +1,11 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="AuthDemo (console)" type="Application" factoryName="Application">
+    <option name="MAIN_CLASS_NAME" value="nickelsales.auth.demo.AuthDemo" />
+    <module name="NSC-SWENG-Session-UI" />
+    <option name="VM_PARAMETERS" value="--module-path &quot;$PROJECT_DIR$/nickel-sales/lib/javafx&quot; --add-modules javafx.controls" />
+    <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/nickel-sales" />
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>
