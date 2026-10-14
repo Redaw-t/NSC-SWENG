@@ -1,47 +1,70 @@
 @echo off
-rem Run the Sprint 1 authentication demo (the AUTH module + throwaway stubs).
-rem Double-click this file, or run from a terminal:  run-demo.bat --scripted
-setlocal enabledelayedexpansion
+rem =====================================================================
+rem  Nickel Sales Center - Sprint 1 demo (Windows)
+rem
+rem    run-demo.bat              console demo: scripted scenarios, then an
+rem                              interactive login prompt
+rem    run-demo.bat --scripted   scenarios only; exit code 1 if any fail
+rem    run-demo.bat --gui        JavaFX login screen (LoginDemoApp)
+rem
+rem  Double-clicking runs the console demo. The first run downloads JavaFX
+rem  (via setup.bat), so it needs internet once.
+rem =====================================================================
+setlocal EnableExtensions EnableDelayedExpansion
 cd /d "%~dp0"
 
-rem --- find a JDK: PATH, then JAVA_HOME, then C:\Program Files\Java\jdk* ---
-set "JAVAC="
-where javac >nul 2>nul && set "JAVAC=javac"
-if not defined JAVAC if defined JAVA_HOME if exist "%JAVA_HOME%\bin\javac.exe" set "JAVAC=%JAVA_HOME%\bin\javac.exe"
-if not defined JAVAC for /d %%D in ("C:\Program Files\Java\jdk*") do if not defined JAVAC set "JAVAC=%%D\bin\javac.exe"
-if not defined JAVAC (
-    echo [ERROR] No JDK found. Install JDK 17+ or set JAVA_HOME.
-    pause
-    exit /b 1
+set "MAIN=nickelsales.auth.demo.AuthDemo"
+set "APP_ARGS=%*"
+set "PAUSE_AT_END=1"
+if /i "%~1"=="--gui" (
+    set "MAIN=nickelsales.auth.demo.LoginDemoApp"
+    set "APP_ARGS="
 )
+if /i "%~1"=="--scripted" set "PAUSE_AT_END="
+if /i "%~1"=="-s" set "PAUSE_AT_END="
 
-set "JAVA=java"
-if not "!JAVAC!"=="javac" (
-    for %%F in ("!JAVAC!") do set "JAVA=%%~dpFjava.exe"
-)
+set "FX=lib\javafx"
+set "CP=lib\jbcrypt-0.4.jar"
 
-if not exist out mkdir out
+rem --- 1. JDK + JavaFX (setup.bat skips whatever is already there) ------
+call "%~dp0setup.bat" --from-run
+if errorlevel 1 goto :fail
 
-rem Build the source list with QUOTED FORWARD-SLASH paths: the folder name
-rem contains a space ("New folder") so paths must be quoted, and javac
-rem argfiles treat backslashes as escape characters, so use "/".
-set "SOURCES=out\_sources.txt"
-type nul > "!SOURCES!"
+rem --- 2. Compile everything in src\ and test\ into a clean out\ -------
+if exist out rmdir /s /q out
+mkdir out
+
+rem javac argfiles treat "\" as an escape character and the project path
+rem may contain spaces, so write each path quoted, with forward slashes.
+set "SOURCES=out\sources.txt"
+type nul > "%SOURCES%"
 for /r src %%F in (*.java) do (
     set "P=%%F"
-    echo "!P:\=/!">>"!SOURCES!"
+    >>"%SOURCES%" echo "!P:\=/!"
 )
 for /r test %%F in (*.java) do (
     set "P=%%F"
-    echo "!P:\=/!">>"!SOURCES!"
+    >>"%SOURCES%" echo "!P:\=/!"
 )
 
-"!JAVAC!" -encoding UTF-8 -cp lib\jbcrypt-0.4.jar -d out "@!SOURCES!"
+echo Compiling...
+"!JDK_BIN!\javac.exe" -encoding UTF-8 --module-path "%FX%" --add-modules javafx.controls -cp "%CP%" -d out @%SOURCES%
 if errorlevel 1 (
     echo [ERROR] Compile failed - see the javac output above.
-    pause
-    exit /b 1
+    goto :fail
 )
 
-"!JAVA!" -cp "out;lib\jbcrypt-0.4.jar" nickelsales.auth.demo.AuthDemo %*
-pause
+rem Optional resources (e.g. resources\images\nickel-logo.png for the login screen)
+if exist resources xcopy /e /i /q /y resources out >nul
+
+rem --- 3. Run -------------------------------------------------------------
+echo Running %MAIN% ...
+echo.
+"!JDK_BIN!\java.exe" --module-path "%FX%" --add-modules javafx.controls -cp "out;%CP%" %MAIN% %APP_ARGS%
+set "RC=!errorlevel!"
+if defined PAUSE_AT_END pause
+endlocal & exit /b %RC%
+
+:fail
+if defined PAUSE_AT_END pause
+endlocal & exit /b 1

@@ -1,0 +1,10 @@
+# Build output
+out/
+nickel-sales/out/
+
+# Downloaded by setup.bat / run-demo.sh - each machine fetches its own
+nickel-sales/lib/javafx/
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
