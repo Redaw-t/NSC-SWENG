@@ -26,8 +26,8 @@ Sales Center (offline, local MySQL database). Sprint 1 delivers an
 end-to-end login flow: credential validation, bcrypt password verification,
 session creation, and role recognition. The `nickel-sales/` folder currently
 contains the **authentication module** plus the **session manager and login
-screen**; data access (`DATA`) and authorization (`AUTHZ`) are still to be
-built.
+screen**, plus **authorization and role routing** (`AUTHZ`); data access
+(`DATA`) is still to be built.
 
 ---
 
@@ -184,12 +184,20 @@ NSC-SWENG-Session-UI/                  repository root (open this in IntelliJ)
           AuditLogger.java               interface — implemented by logging
         session/
           InMemorySessionManager.java    <- SESSION/UI: DONE
-      ui/login/
-        LoginScreen.java               <- SESSION/UI: DONE (JavaFX login form)
-        LogoutAction.java              <- SESSION/UI: DONE (logout handler + button)
+      authz/                           <- AUTHZ: DONE
+        Permission.java                  the six actions a user can be allowed to do
+        AuthorizationService.java        role -> permission matrix; checkAccess()
+      ui/
+        login/
+          LoginScreen.java             <- SESSION/UI: DONE (JavaFX login form)
+          LogoutAction.java            <- SESSION/UI: DONE (logout handler + button)
+        dashboard/                     <- AUTHZ: DONE
+          DashboardRouter.java           picks the screen for the user's role
+          PHDashboard.java               placeholder Admin / Cashier / Inventory screen
     test/nickelsales/auth/demo/        THROWAWAY harnesses (see section 2)
       AuthDemo.java                    console demo + stub UserRepository
-      LoginDemoApp.java                JavaFX demo of the real login screen
+      AuthzDemo.java                   console check of the role -> permission matrix
+      LoginDemoApp.java                JavaFX demo: login -> role's dashboard -> logout
     lib/
       jbcrypt-0.4.jar                  bcrypt hashing (committed)
       javafx/                          JavaFX jars — downloaded by setup, NOT committed
@@ -232,7 +240,7 @@ before building on top:
 
 The authentication module has no `main()` of its own — by design, it needs
 the other modules' implementations. To run it **before** those exist, the
-`test/` folder ships two throwaway harnesses that feed the real
+`test/` folder ships three throwaway harnesses that feed the real
 `AuthenticationService` an in-memory stub `UserRepository` seeded with demo
 accounts:
 
@@ -240,7 +248,7 @@ accounts:
 | ------------------------------ | ------------ |
 | `run-demo.bat` / `./run-demo.sh` | Console demo: runs the scenarios, then an interactive login prompt |
 | `run-demo.bat --scripted` / `./run-demo.sh --scripted` | Scenarios only — a smoke test; exit code 1 if anything fails |
-| `run-demo.bat --gui` / `./run-demo.sh --gui` | The real JavaFX `LoginScreen` + `InMemorySessionManager` + `LogoutAction`: login → placeholder dashboard → Log out → login |
+| `run-demo.bat --gui` / `./run-demo.sh --gui` | The real JavaFX `LoginScreen` + `InMemorySessionManager` + `LogoutAction` + `DashboardRouter`: login → the role's placeholder dashboard (Admin / Cashier / Inventory) → Log out → login |
 
 Every run recompiles all of `src/` and `test/` from scratch, so you always
 run your latest code.
@@ -274,17 +282,30 @@ java --module-path lib/javafx --add-modules javafx.controls \
 Note the classpath separator: `;` on Windows, `:` on macOS/Linux. JavaFX is
 needed to compile because `ui/login/` and `LoginDemoApp` use it.
 
+### Checking the permission matrix (AUTHZ)
+
+`run-demo` compiles `AuthzDemo` but does not run it. After any `run-demo`
+run (so `out/` is fresh), from `nickel-sales/`:
+
+```bat
+java -cp "out;lib\jbcrypt-0.4.jar" nickelsales.auth.demo.AuthzDemo
+```
+
+(macOS/Linux: `-cp "out:lib/jbcrypt-0.4.jar"`.) It prints every permission
+for each demo account, then checks the key rules. Expected last line:
+`RESULTS: 10 tests passed, 0 tests failed.` Exit code 1 if any check fails.
+
 ### Demo accounts
 
 Seeded accounts (password `Password123` for all — test seeds only):
 
-| User ID   | Name            | Roles   | Status   |
-| --------- | --------------- | ------- | -------- |
-| NSC-00001 | Jerick Cubillan | A;C;I   | Active   |
-| NSC-00002 | Juan Dela Cruz  | C       | Active   |
-| NSC-00003 | Maria Santa Ana | I       | Active   |
-| NSC-00004 | Test Inactive   | C       | Inactive |
-| NSC-00005 | Test Locked     | C       | Locked   |
+| User ID   | Name            | Roles   | Status   | Lands on (`--gui`)          |
+| --------- | --------------- | ------- | -------- | --------------------------- |
+| NSC-00001 | Jerick Cubillan | A;C;I   | Active   | Admin Dashboard             |
+| NSC-00002 | Juan Dela Cruz  | C       | Active   | Cashier Dashboard           |
+| NSC-00003 | Maria Santa Ana | I       | Active   | Inventory Staff Dashboard   |
+| NSC-00004 | Test Inactive   | C       | Inactive | — (blocked at login)        |
+| NSC-00005 | Test Locked     | C       | Locked   | — (blocked at login)        |
 
 The scenarios cover: valid login per role, wrong password, unknown user
 (identical error), inactive and locked accounts with correct passwords,
@@ -306,7 +327,7 @@ assistant to produce it.
 | `AUTH` | **Done** |
 | `SESSION/UI` | **Done** (session manager + login screen) |
 | `DATA` | To do |
-| `AUTHZ` | To do |
+| `AUTHZ` | **Done** (permission matrix + role routing; placeholder dashboards) |
 
 ### 3.1 Role `DATA` — user storage and retrieval
 
@@ -429,6 +450,18 @@ ADMIN reaches the admin dashboard.
 
 Definition of done: correct role permissions returned; each role reaches the
 correct (placeholder) screen; access outside a role's permissions is denied.
+
+**Implemented (Sprint 1).** Decisions made:
+
+- Landing screen order: ADMIN → Admin dashboard; else CASHIER → Cashier;
+  else INVENTORY_STAFF → Inventory. A `C;I` user lands on Cashier.
+- Each screen requires a permission (Admin: `MANAGE_SYSTEM`, Cashier:
+  `PROCESS_SALE`, Inventory: `UPDATE_INVENTORY`); `DashboardRouter.openScreen`
+  checks the session (`getCurrentUser`) and `checkAccess` before showing it.
+- `checkAccess` denies null and non-ACTIVE users (fail closed).
+- **Open question for the team:** should inventory staff's `VIEW_REPORTS`
+  be limited to inventory reports? (Split the permission, or filter by role
+  in the reports screen.)
 
 ### 3.4 Role `AUTH` — this module
 
