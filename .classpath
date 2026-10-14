@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<classpath>
+	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER"/>
+	<classpathentry kind="src" path="nickel-sales/src"/>
+	<classpathentry kind="src" path="nickel-sales/test"/>
+	<classpathentry kind="lib" path="nickel-sales/lib/javafx/javafx-base-21.0.5-win.jar"/>
+	<classpathentry kind="lib" path="nickel-sales/lib/javafx/javafx-controls-21.0.5-win.jar"/>
+	<classpathentry kind="lib" path="nickel-sales/lib/javafx/javafx-graphics-21.0.5-win.jar"/>
+	<classpathentry kind="lib" path="nickel-sales/lib/jbcrypt-0.4.jar"/>
+	<classpathentry kind="output" path="nickel-sales/out"/>
+</classpath>

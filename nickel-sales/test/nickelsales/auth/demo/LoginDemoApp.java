@@ -1,5 +1,6 @@
 package nickelsales.auth.demo;
 
+import nickelsales.data.MySqlUserRepository;
 import javafx.application.Application;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
@@ -41,7 +42,7 @@ public class LoginDemoApp extends Application {
         this.stage = stage;
 
         AuthenticationService auth = new AuthenticationService(
-                new AuthDemo.StubUserRepository(),
+        		new MySqlUserRepository(),
                 new InMemorySessionManager(),
                 null,
                 (event, userId) -> System.out.println("[AUDIT] " + event + " " + userId));
