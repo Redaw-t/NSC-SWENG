@@ -11,6 +11,6 @@
 	<classpathentry kind="lib" path="lib/javafx/javafx-controls-21.0.5-win.jar"/>
 	<classpathentry kind="lib" path="lib/javafx/javafx-graphics-21.0.5-win.jar"/>
 	<classpathentry kind="lib" path="lib/jbcrypt-0.4.jar"/>
-	<classpathentry kind="lib" path="C:/Users/xanlu/Desktop/NSC-SWENG/nickel-sales/lib/mysql-connector-j-9.4.0.jar"/>
+	<classpathentry kind="lib" path="lib/mysql-connector-j-9.4.0.jar"/>
 	<classpathentry kind="output" path="out"/>
 </classpath>

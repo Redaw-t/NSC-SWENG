@@ -1,0 +1,3 @@
+# Keep Windows batch files with CRLF line endings (they can misbehave with LF)
+*.bat text eol=crlf
+*.sh  text eol=lf

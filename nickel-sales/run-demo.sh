@@ -2,10 +2,11 @@
 # =====================================================================
 #  Nickel Sales Center - Sprint 1 demo (macOS / Linux)
 #
-#    ./run-demo.sh              console demo: scripted scenarios, then an
-#                               interactive login prompt
-#    ./run-demo.sh --scripted   scenarios only; exit code 1 if any fail
-#    ./run-demo.sh --gui        JavaFX login screen (LoginDemoApp)
+#    ./run-demo.sh              JavaFX login screen (LoginDemoApp) - reads
+#                               users from the local MySQL database
+#    ./run-demo.sh --console    console demo with built-in stub users:
+#                               scenarios, then an interactive login prompt
+#    ./run-demo.sh --scripted   console scenarios only; exit code 1 if any fail
 #    ./run-demo.sh --setup      only download JavaFX, don't build or run
 #
 #  Needs a JDK 17+ (java/javac on PATH, or JAVA_HOME set). The first run
@@ -17,7 +18,7 @@ cd "$(dirname "$0")"
 FX_VERSION="21.0.5"
 FX_DIR="lib/javafx"
 FX_URL="https://repo1.maven.org/maven2/org/openjfx"
-CP="lib/jbcrypt-0.4.jar"
+CP="lib/jbcrypt-0.4.jar:lib/mysql-connector-j-9.4.0.jar"
 
 # --- 1. JDK -----------------------------------------------------------
 if [[ -n "${JAVA_HOME:-}" && -x "$JAVA_HOME/bin/javac" ]]; then
@@ -62,9 +63,12 @@ done
 [[ "${1:-}" == "--setup" ]] && { echo "[setup] JavaFX $FX_VERSION ready in nickel-sales/$FX_DIR"; exit 0; }
 
 # --- 3. Compile ---------------------------------------------------------
-MAIN="nickelsales.auth.demo.AuthDemo"
-ARGS=("$@")
-if [[ "${1:-}" == "--gui" ]]; then MAIN="nickelsales.auth.demo.LoginDemoApp"; ARGS=(); fi
+MAIN="nickelsales.auth.demo.LoginDemoApp"
+ARGS=()
+case "${1:-}" in
+    --console)  MAIN="nickelsales.auth.demo.AuthDemo" ;;
+    --scripted) MAIN="nickelsales.auth.demo.AuthDemo"; ARGS=(--scripted) ;;
+esac
 
 rm -rf out && mkdir out
 find src test -name '*.java' | sed 's/.*/"&"/' > out/sources.txt

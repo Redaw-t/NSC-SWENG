@@ -18,6 +18,15 @@
       </library>
     </orderEntry>
     <orderEntry type="module-library">
+      <library name="mysql-connector-j-9.4.0">
+        <CLASSES>
+          <root url="jar://$MODULE_DIR$/nickel-sales/lib/mysql-connector-j-9.4.0.jar!/" />
+        </CLASSES>
+        <JAVADOC />
+        <SOURCES />
+      </library>
+    </orderEntry>
+    <orderEntry type="module-library">
       <library name="javafx">
         <CLASSES>
           <root url="file://$MODULE_DIR$/nickel-sales/lib/javafx" />

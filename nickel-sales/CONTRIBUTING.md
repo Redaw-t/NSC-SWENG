@@ -26,8 +26,8 @@ Sales Center (offline, local MySQL database). Sprint 1 delivers an
 end-to-end login flow: credential validation, bcrypt password verification,
 session creation, and role recognition. The `nickel-sales/` folder currently
 contains the **authentication module** plus the **session manager and login
-screen**, plus **authorization and role routing** (`AUTHZ`); data access
-(`DATA`) is still to be built.
+screen**, **authorization and role routing** (`AUTHZ`), and a MySQL-backed
+user repository (`DATA`).
 
 ---
 
@@ -41,23 +41,64 @@ screen**, plus **authorization and role routing** (`AUTHZ`); data access
 | JavaFX | 21.0.5 | **Downloaded automatically** into `nickel-sales/lib/javafx/` — don't install it yourself |
 | jBCrypt | 0.4 | Already in `nickel-sales/lib/` |
 | IntelliJ IDEA | any recent | Optional — the scripts work without it |
-| MySQL | 8.x | **Not needed yet.** The demo uses in-memory stub users until `DATA` lands |
+| MySQL Server | 8.x | **You install it** — [MySQL Installer](https://dev.mysql.com/downloads/installer/), "Server only". Needed for the login screen (the default demo), not for `--console` / `--scripted`. `setup.bat` then creates the database for you |
+| MySQL Connector/J | 9.4.0 | Already in `nickel-sales/lib/` |
 
 No Maven or Gradle is needed.
 
 ### Windows
 
 1. Get the project (clone the repo or copy the folder).
-2. Open `nickel-sales\` and double-click **`setup.bat`**. It:
-   - looks for a JDK 17+ (in `JAVA_HOME`, `PATH`, `C:\Program Files\...`
-     and IntelliJ's downloaded JDKs in `%USERPROFILE%\.jdks`);
-     if there is none it asks to install Eclipse Temurin JDK 21 via `winget`,
-   - downloads the three JavaFX jars into `nickel-sales\lib\javafx\`.
-3. Double-click **`run-demo.bat`**. You should see `RESULT: 8 passed, 0 failed`.
+2. Open `nickel-sales\` and double-click **`setup.bat`**. It checks every
+   dependency and prints what is OK, what is missing, and **where to download
+   anything you need to install**:
+   - **JDK 17+** — looks in `JAVA_HOME`, `PATH`, `C:\Program Files\...` and
+     IntelliJ's JDKs (`%USERPROFILE%\.jdks`). If none: prints the download
+     link, and offers to install Temurin JDK 21 for you via `winget`.
+   - **JavaFX** — downloads the three jars into `nickel-sales\lib\javafx\`.
+   - **MySQL Server** — if it isn't installed or isn't running, tells you
+     where to get it / how to start it. Once it is running, it creates
+     `NickelSales_Database` (asking first) and offers to save your MySQL
+     password as `NSC_DB_PASSWORD` (the password is typed hidden).
+3. Install anything it reports as missing, then run `setup.bat` again until
+   it says **Everything is ready**.
+4. Double-click **`run-demo.bat`**. The login screen opens — log in as
+   `NSC-00001` / `Password123`.
+
+No MySQL yet? Run `run-demo.bat --scripted` in a terminal instead; it uses
+built-in stub users and should end with `RESULT: 8 passed, 0 failed`.
 
 You can skip step 2 — `run-demo.bat` runs `setup.bat` itself if anything is
 missing. The first run needs internet access (to download JavaFX); after
 that everything works offline.
+
+### MySQL (needed for the login screen)
+
+**Windows:** install MySQL Server 8 from
+<https://dev.mysql.com/downloads/installer/> ("MySQL Installer for Windows",
+choose **Server only**, keep port 3306, remember the root password), then run
+`setup.bat` — it creates the database and saves your password for the app.
+XAMPP/MariaDB also works as long as its MySQL server is running.
+
+**By hand** (macOS/Linux, or if `setup.bat` can't find `mysql.exe`):
+
+1. Run `database/NickelSales-Database-Config.sql` once (MySQL Workbench:
+   File → Open SQL Script → run, or
+   `mysql -u root -p < database/NickelSales-Database-Config.sql`).
+   It creates `NickelSales_Database` and the demo users.
+2. Tell the app your MySQL login. `nickelsales.data.Database` reads these
+   environment variables:
+
+   | Variable | Default |
+   | -------- | ------- |
+   | `NSC_DB_URL` | `jdbc:mysql://localhost:3306/NickelSales_Database?...` |
+   | `NSC_DB_USER` | `root` |
+   | `NSC_DB_PASSWORD` | *none — you must set it* |
+
+   Windows: `setx NSC_DB_PASSWORD "your-mysql-password"`, then open a **new**
+   terminal. macOS/Linux: `export NSC_DB_PASSWORD=...` in your shell profile.
+   IntelliJ/Eclipse: add it to the run configuration's environment variables.
+   **Never put a real password in the code** — the repo is public.
 
 ### macOS / Linux
 
@@ -178,12 +219,15 @@ NSC-SWENG-Session-UI/                  repository root (open this in IntelliJ)
           UserRole.java                  ADMIN/CASHIER/INVENTORY_STAFF <-> DB codes "A"/"C"/"I"
           UserStatus.java                ACTIVE/INACTIVE/LOCKED <-> "Active"/"Inactive"
           Session.java                   entity shape (sessionId, userId, timestamps, active)
-          UserRepository.java            interface — implemented by DATA (TODO)
+          UserRepository.java            interface — implemented by DATA (data/)
           SessionManager.java            interface — implemented by SESSION/UI (done)
           PasswordPolicy.java            interface — used by user management
           AuditLogger.java               interface — implemented by logging
         session/
           InMemorySessionManager.java    <- SESSION/UI: DONE
+      data/                            <- DATA: MySQL implementation
+        Database.java                    opens JDBC connections (NSC_DB_* env vars)
+        MySqlUserRepository.java         implements contract.UserRepository
       authz/                           <- AUTHZ: DONE
         Permission.java                  the six actions a user can be allowed to do
         AuthorizationService.java        role -> permission matrix; checkAccess()
@@ -195,13 +239,16 @@ NSC-SWENG-Session-UI/                  repository root (open this in IntelliJ)
           DashboardRouter.java           picks the screen for the user's role
           PHDashboard.java               placeholder Admin / Cashier / Inventory screen
     test/nickelsales/auth/demo/        THROWAWAY harnesses (see section 2)
-      AuthDemo.java                    console demo + stub UserRepository
+      AuthDemo.java                    console demo + stub UserRepository (no DB needed)
       AuthzDemo.java                   console check of the role -> permission matrix
-      LoginDemoApp.java                JavaFX demo: login -> role's dashboard -> logout
+      LoginDemoApp.java                JavaFX demo against MySQL: login -> role's dashboard -> logout
     lib/
       jbcrypt-0.4.jar                  bcrypt hashing (committed)
+      mysql-connector-j-9.4.0.jar      MySQL JDBC driver (committed)
       javafx/                          JavaFX jars — downloaded by setup, NOT committed
-    setup.bat                          Windows: find/install JDK, download JavaFX
+    setup.bat                          Windows: checks every dependency, says what to install and where;
+                                       downloads JavaFX; sets up the MySQL database
+    setup-database.ps1                 helper used by setup.bat for the database step
     run-demo.bat                       Windows: setup + compile + run the demo
     run-demo.sh                        macOS/Linux equivalent
     CONTRIBUTING.md                    this file
@@ -239,16 +286,14 @@ before building on top:
 ## 2. How to run and test it right now
 
 The authentication module has no `main()` of its own — by design, it needs
-the other modules' implementations. To run it **before** those exist, the
-`test/` folder ships three throwaway harnesses that feed the real
-`AuthenticationService` an in-memory stub `UserRepository` seeded with demo
-accounts:
+the other modules' implementations. The `test/` folder ships three
+throwaway harnesses that wire the real modules together:
 
 | Command (from `nickel-sales/`) | What it does |
 | ------------------------------ | ------------ |
-| `run-demo.bat` / `./run-demo.sh` | Console demo: runs the scenarios, then an interactive login prompt |
-| `run-demo.bat --scripted` / `./run-demo.sh --scripted` | Scenarios only — a smoke test; exit code 1 if anything fails |
-| `run-demo.bat --gui` / `./run-demo.sh --gui` | The real JavaFX `LoginScreen` + `InMemorySessionManager` + `LogoutAction` + `DashboardRouter`: login → the role's placeholder dashboard (Admin / Cashier / Inventory) → Log out → login |
+| `run-demo.bat` / `./run-demo.sh` (default, double-click) | **Login screen** (`LoginDemoApp`): the real JavaFX `LoginScreen` + `InMemorySessionManager` + `LogoutAction` + `DashboardRouter`, reading users from **MySQL** via `MySqlUserRepository`: login → the role's placeholder dashboard (Admin / Cashier / Inventory) → Log out → login |
+| `run-demo.bat --console` / `./run-demo.sh --console` | Console demo (`AuthDemo`) with in-memory **stub** users — no database needed: runs the scenarios, then an interactive login prompt |
+| `run-demo.bat --scripted` / `./run-demo.sh --scripted` | Console scenarios only — a smoke test; exit code 1 if anything fails |
 
 Every run recompiles all of `src/` and `test/` from scratch, so you always
 run your latest code.
@@ -297,9 +342,12 @@ for each demo account, then checks the key rules. Expected last line:
 
 ### Demo accounts
 
-Seeded accounts (password `Password123` for all — test seeds only):
+Password `Password123` for all — test seeds only. The console demos use the
+stub users below; the login screen uses the rows inserted by
+`database/NickelSales-Database-Config.sql` (same IDs, roles and statuses;
+the SQL file also adds `NSC-00006`, an extra A;C;I account).
 
-| User ID   | Name            | Roles   | Status   | Lands on (`--gui`)          |
+| User ID   | Name            | Roles   | Status   | Lands on (login screen)     |
 | --------- | --------------- | ------- | -------- | --------------------------- |
 | NSC-00001 | Jerick Cubillan | A;C;I   | Active   | Admin Dashboard             |
 | NSC-00002 | Juan Dela Cruz  | C       | Active   | Cashier Dashboard           |
@@ -326,7 +374,7 @@ assistant to produce it.
 | ---- | ------ |
 | `AUTH` | **Done** |
 | `SESSION/UI` | **Done** (session manager + login screen) |
-| `DATA` | To do |
+| `DATA` | **In progress** — `MySqlUserRepository` + `Database` in `src/nickelsales/data/` |
 | `AUTHZ` | **Done** (permission matrix + role routing; placeholder dashboards) |
 
 ### 3.1 Role `DATA` — user storage and retrieval
@@ -556,3 +604,5 @@ coordinates are `org.mindrot:jbcrypt:0.4` and `org.openjfx:javafx-controls:21.0.
 | `Two versions of module javafx.base found` | Old jars in `lib/javafx/`. The scripts remove other versions automatically; if it persists, delete the folder and rerun setup. |
 | Changes don't show up when running | You're running stale classes. The scripts rebuild `out/` each run; in IntelliJ use **Build → Rebuild Project**. |
 | `./run-demo.sh: Permission denied` | `chmod +x run-demo.sh` once. |
+| Login screen says "Something went wrong while logging in" for every account | The app can't reach MySQL. Double-click `setup.bat`: it checks that MySQL is running, that the database exists, and that your saved password works. The full error is also printed in the `run-demo.bat` window. |
+| `No suitable driver found for jdbc:mysql` | `lib/mysql-connector-j-9.4.0.jar` is missing from the classpath. Use `run-demo.bat` / the IntelliJ run configs, or add the jar to your `-cp`. |

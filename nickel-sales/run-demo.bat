@@ -2,29 +2,30 @@
 rem =====================================================================
 rem  Nickel Sales Center - Sprint 1 demo (Windows)
 rem
-rem    run-demo.bat              console demo: scripted scenarios, then an
-rem                              interactive login prompt
-rem    run-demo.bat --scripted   scenarios only; exit code 1 if any fail
-rem    run-demo.bat --gui        JavaFX login screen (LoginDemoApp)
+rem    run-demo.bat              JavaFX login screen (LoginDemoApp) - reads
+rem                              users from the local MySQL database
+rem    run-demo.bat --console    console demo with built-in stub users:
+rem                              scenarios, then an interactive login prompt
+rem    run-demo.bat --scripted   console scenarios only; exit code 1 if any fail
 rem
-rem  Double-clicking runs the console demo. The first run downloads JavaFX
+rem  Double-clicking opens the login screen. The first run downloads JavaFX
 rem  (via setup.bat), so it needs internet once.
 rem =====================================================================
 setlocal EnableExtensions EnableDelayedExpansion
 cd /d "%~dp0"
 
-set "MAIN=nickelsales.auth.demo.AuthDemo"
-set "APP_ARGS=%*"
+set "MAIN=nickelsales.auth.demo.LoginDemoApp"
+set "APP_ARGS="
 set "PAUSE_AT_END=1"
-if /i "%~1"=="--gui" (
-    set "MAIN=nickelsales.auth.demo.LoginDemoApp"
-    set "APP_ARGS="
+if /i "%~1"=="--console" set "MAIN=nickelsales.auth.demo.AuthDemo"
+if /i "%~1"=="--scripted" (
+    set "MAIN=nickelsales.auth.demo.AuthDemo"
+    set "APP_ARGS=--scripted"
+    set "PAUSE_AT_END="
 )
-if /i "%~1"=="--scripted" set "PAUSE_AT_END="
-if /i "%~1"=="-s" set "PAUSE_AT_END="
 
 set "FX=lib\javafx"
-set "CP=lib\jbcrypt-0.4.jar"
+set "CP=lib\jbcrypt-0.4.jar;lib\mysql-connector-j-9.4.0.jar"
 
 rem --- 1. JDK + JavaFX (setup.bat skips whatever is already there) ------
 call "%~dp0setup.bat" --from-run
