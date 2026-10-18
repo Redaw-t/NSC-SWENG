@@ -7,6 +7,7 @@ rem                              users from the local MySQL database
 rem    run-demo.bat --console    console demo with built-in stub users:
 rem                              scenarios, then an interactive login prompt
 rem    run-demo.bat --scripted   console scenarios only; exit code 1 if any fail
+rem    run-demo.bat --qa         Rhian role/session/access checks; exit code 1 if any fail
 rem
 rem  Double-clicking opens the login screen. The first run downloads JavaFX
 rem  (via setup.bat), so it needs internet once.
@@ -21,6 +22,10 @@ if /i "%~1"=="--console" set "MAIN=nickelsales.auth.demo.AuthDemo"
 if /i "%~1"=="--scripted" (
     set "MAIN=nickelsales.auth.demo.AuthDemo"
     set "APP_ARGS=--scripted"
+    set "PAUSE_AT_END="
+)
+if /i "%~1"=="--qa" (
+    set "MAIN=nickelsales.auth.demo.RoleSessionAccessDemo"
     set "PAUSE_AT_END="
 )
 

@@ -38,20 +38,55 @@ public class DashboardRouter {
         loginScreen.focusUserId();
     }
 
+    /**
+     * Sprint 1 landing page. Admin wins when a user holds more than one role.
+     * Returns null when the user has no supported role (caller must log them out).
+     */
+    public static String landingTitleFor(User user) {
+        if (user == null) {
+            return null;
+        }
+        if (user.hasRole(UserRole.ADMIN)) {
+            return "Admin Dashboard";
+        }
+        if (user.hasRole(UserRole.CASHIER)) {
+            return "Cashier Dashboard";
+        }
+        if (user.hasRole(UserRole.INVENTORY_STAFF)) {
+            return "Inventory Staff Dashboard";
+        }
+        return null;
+    }
+
+    /** Permission the routed dashboard requires. Null when there is no landing page. */
+    public static Permission landingPermissionFor(User user) {
+        if (user == null) {
+            return null;
+        }
+        if (user.hasRole(UserRole.ADMIN)) {
+            return Permission.MANAGE_SYSTEM;
+        }
+        if (user.hasRole(UserRole.CASHIER)) {
+            return Permission.PROCESS_SALE;
+        }
+        if (user.hasRole(UserRole.INVENTORY_STAFF)) {
+            return Permission.UPDATE_INVENTORY;
+        }
+        return null;
+    }
+
     public void openDashboardFor(LoginResult loginResult) {
         User user = loginResult.user();
         String sessionId = loginResult.session().getSessionId();
+        String title = landingTitleFor(user);
+        Permission required = landingPermissionFor(user);
 
-        if (user.hasRole(UserRole.ADMIN)) {
-            openScreen(sessionId, "Admin Dashboard", Permission.MANAGE_SYSTEM);
-        } else if (user.hasRole(UserRole.CASHIER)) {
-            openScreen(sessionId, "Cashier Dashboard", Permission.PROCESS_SALE);
-        } else if (user.hasRole(UserRole.INVENTORY_STAFF)) {
-            openScreen(sessionId, "Inventory Staff Dashboard", Permission.UPDATE_INVENTORY);
-        } else {
-           System.out.println("[AUTHZ] " + user.getUserId() + " has no role; logging out");
-           logoutAction.logout(sessionId);
+        if (title == null || required == null) {
+            System.out.println("[AUTHZ] " + user.getUserId() + " has no role; logging out");
+            logoutAction.logout(sessionId);
+            return;
         }
+        openScreen(sessionId, title, required);
     }
 
 

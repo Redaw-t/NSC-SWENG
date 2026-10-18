@@ -7,6 +7,7 @@
 #    ./run-demo.sh --console    console demo with built-in stub users:
 #                               scenarios, then an interactive login prompt
 #    ./run-demo.sh --scripted   console scenarios only; exit code 1 if any fail
+#    ./run-demo.sh --qa         Rhian role/session/access checks; exit code 1 if any fail
 #    ./run-demo.sh --setup      only download JavaFX, don't build or run
 #
 #  Needs a JDK 17+ (java/javac on PATH, or JAVA_HOME set). The first run
@@ -68,6 +69,7 @@ ARGS=()
 case "${1:-}" in
     --console)  MAIN="nickelsales.auth.demo.AuthDemo" ;;
     --scripted) MAIN="nickelsales.auth.demo.AuthDemo"; ARGS=(--scripted) ;;
+    --qa)       MAIN="nickelsales.auth.demo.RoleSessionAccessDemo" ;;
 esac
 
 rm -rf out && mkdir out
