@@ -294,7 +294,7 @@ throwaway harnesses that wire the real modules together:
 | `run-demo.bat` / `./run-demo.sh` (default, double-click) | **Login screen** (`LoginDemoApp`): the real JavaFX `LoginScreen` + `InMemorySessionManager` + `LogoutAction` + `DashboardRouter`, reading users from **MySQL** via `MySqlUserRepository`: login → the role's placeholder dashboard (Admin / Cashier / Inventory) → Log out → login |
 | `run-demo.bat --console` / `./run-demo.sh --console` | Console demo (`AuthDemo`) with in-memory **stub** users — no database needed: runs the scenarios, then an interactive login prompt |
 | `run-demo.bat --scripted` / `./run-demo.sh --scripted` | Console scenarios only — a smoke test; exit code 1 if anything fails |
-| `run-demo.bat --qa` / `./run-demo.sh --qa` | Rhian’s role/session/access checks (`RoleSessionAccessDemo`); exit code 1 if anything fails |
+| `run-demo.bat --qa` / `./run-demo.sh --qa` | role/session/access checks (`RoleSessionAccessDemo`); exit code 1 if anything fails |
 
 Every run recompiles all of `src/` and `test/` from scratch, so you always
 run your latest code.
