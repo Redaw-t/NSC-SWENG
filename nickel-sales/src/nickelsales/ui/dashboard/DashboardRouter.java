@@ -19,6 +19,7 @@ import nickelsales.auth.account.UserAccountService;
 import nickelsales.auth.account.UserAdminService;
 import nickelsales.ui.account.ChangePasswordDialog;
 import nickelsales.ui.admin.UserManagementScreen;
+import nickelsales.ui.UiErrors;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -85,7 +86,19 @@ public class DashboardRouter {
      * instead of sending them back to a screen they can no longer open.
      */
     public void showHome(String sessionId) {
-        User user = auth.getCurrentUser(sessionId);
+        User user;
+        try {
+            user = auth.getCurrentUser(sessionId);   // reads the user from the database
+        } catch (RuntimeException e) {
+            // Database unavailable: we can't check who this is or what they may
+            // see, so end the session and go to the login screen with a message
+            // instead of leaving the user stuck on the current screen.
+            System.out.println("[SESSION] cannot load user for " + sessionId + ": " + e.getMessage());
+            logoutAction.logout(sessionId);
+            loginScreen.showMessage(UiErrors.message(e,
+                    "Something went wrong. Please log in again."));
+            return;
+        }
         if (user == null) {          // session expired or logged out
             showLogin();
             return;

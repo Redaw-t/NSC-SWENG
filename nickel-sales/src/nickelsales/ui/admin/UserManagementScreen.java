@@ -16,6 +16,7 @@ import nickelsales.auth.account.AccountException;
 import nickelsales.auth.account.UserAdminService;
 import nickelsales.auth.contract.User;
 import nickelsales.auth.contract.UserRole;
+import nickelsales.ui.UiErrors;
 
 import java.util.function.Function;
 
@@ -114,7 +115,7 @@ public class UserManagementScreen {
             message.setText(e.getMessage()); // otherwise show why the action failed
             return;
         } catch (RuntimeException e) {
-            message.setText("Something went wrong. Try again, or contact the system administrator.");
+            message.setText(UiErrors.message(e, "Something went wrong. Try again, or contact the system administrator."));
             return;
         }
         reload(true);
@@ -150,7 +151,7 @@ public class UserManagementScreen {
                 message.setText(e.getMessage());
             }
         } catch (RuntimeException e) {
-            message.setText("Something went wrong. Try again, or contact the system administrator.");
+            message.setText(UiErrors.message(e, "Something went wrong. Try again, or contact the system administrator."));
         }
     }
 

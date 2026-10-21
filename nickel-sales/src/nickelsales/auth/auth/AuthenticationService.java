@@ -143,7 +143,14 @@ public class AuthenticationService {
 
     /** Ends the session and audit-logs the logout. Safe on unknown/expired ids. */
     public void logout(String sessionId) {
-        User user = getCurrentUser(sessionId);
+        // Look the user up only for the audit log. If the database is down this
+        // fails, but the session must still be ended, so never let it stop us.
+        User user = null;
+        try {
+            user = getCurrentUser(sessionId);
+        } catch (RuntimeException e) {
+            // database unavailable: log the session id instead of the user id
+        }
         if (sessionManager != null) {
             sessionManager.invalidateSession(sessionId);
         }

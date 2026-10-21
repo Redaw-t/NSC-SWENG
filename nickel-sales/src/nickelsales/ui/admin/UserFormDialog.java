@@ -17,6 +17,7 @@ import nickelsales.auth.account.AccountException;
 import nickelsales.auth.account.PassPolicy;
 import nickelsales.auth.contract.User;
 import nickelsales.auth.contract.UserRole;
+import nickelsales.ui.UiErrors;
 
 import java.util.EnumMap;
 import java.util.EnumSet;
@@ -94,7 +95,7 @@ final class UserFormDialog {
                 error.setText(e.getMessage());
                 event.consume();
             } catch (RuntimeException e) {
-                error.setText("Something went wrong. Try again, or contact the system administrator.");
+                error.setText(UiErrors.message(e, "Something went wrong. Try again, or contact the system administrator."));
                 event.consume();
             }
         });

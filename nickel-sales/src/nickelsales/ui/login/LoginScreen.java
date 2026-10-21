@@ -26,6 +26,7 @@ import javafx.scene.text.TextAlignment;
 import nickelsales.auth.auth.AuthenticationException;
 import nickelsales.auth.auth.AuthenticationService;
 import nickelsales.auth.auth.LoginResult;
+import nickelsales.ui.UiErrors;
 
 import java.io.InputStream;
 import java.util.Objects;
@@ -115,6 +116,14 @@ public class LoginScreen {
         passwordField.clear();
         showPasswordToggle.setSelected(false); // never leave a password showing for the next person
         hideError();
+    }
+
+    /**
+     * Shows a message under the fields, e.g. why the user was sent back here.
+     * Call after {@link #reset()}, which clears it.
+     */
+    public void showMessage(String message) {
+        showError(message);
     }
 
     /** Puts the cursor in the Username field. Call after the screen is shown. */
@@ -328,8 +337,10 @@ public class LoginScreen {
             focusPassword();
             return null;
         } catch (RuntimeException e) {
-            // Database or other unexpected problem: never show a stack trace on screen.
-            showError("Something went wrong while logging in. Try again, or contact the system administrator.");
+            // Database or other unexpected problem: never show a stack trace on screen,
+            // and never let the user in.
+            showError(UiErrors.message(e,
+                    "Something went wrong while logging in. Try again, or contact the system administrator."));
             passwordField.clear();
             return null;
         } finally {

@@ -15,6 +15,7 @@ import nickelsales.auth.account.PasswordChangeException;
 import nickelsales.auth.account.UserAccountService;
 
 import java.util.Objects;
+import nickelsales.ui.UiErrors;
 
 public class ChangePasswordDialog {
 
@@ -60,7 +61,7 @@ public class ChangePasswordDialog {
                 fail(e.getMessage(), error, current, next, confirm);
                 event.consume();
             } catch (RuntimeException e) {
-                fail("Something went wrong. Try again, or contact the system administrator.",
+                fail(UiErrors.message(e, "Something went wrong. Try again, or contact the system administrator."),
                         error, current, next, confirm);
                 event.consume();
             }
