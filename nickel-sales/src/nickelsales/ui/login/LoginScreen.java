@@ -29,7 +29,7 @@ import java.util.function.Consumer;
  * LoginScreen — Sprint 1, owned by the SESSION/UI role.
  *
  * Styled after the team's login slide: logo, "NICKEL SALES CENTER" title,
- * pill-shaped "Staff ID" and "Password" fields, and a red LOGIN pill button.
+ * pill-shaped "Username" and "Password" fields, and a red LOGIN pill button.
  *
  * Calls {@link AuthenticationService#login} and reports the outcome:
  *  - success: passes the {@link LoginResult} to {@code onLoginSuccess}. This
@@ -37,8 +37,8 @@ import java.util.function.Consumer;
  *  - failure: shows the exception's user-ready message under the fields and
  *    clears the password field.
  *
- * "Staff ID" is only the on-screen label: the value typed is the User ID
- * (e.g. NSC-00001), which is the login id in the authentication module.
+ * "Username" is only the on-screen label: the value typed is the UserLoginName
+ * (e.g. JCubillan), which is the login id in the authentication module.
  *
  * Usage:
  * <pre>
@@ -96,7 +96,7 @@ public class LoginScreen {
         hideError();
     }
 
-    /** Puts the cursor in the Staff ID field. Call after the screen is shown. */
+    /** Puts the cursor in the Username field. Call after the screen is shown. */
     public void focusUserId() {
         userIdField.requestFocus();
     }
@@ -105,7 +105,7 @@ public class LoginScreen {
         Label title = new Label("NICKEL SALES CENTER");
         title.setStyle("-fx-font-family: 'Arial'; -fx-font-size: 48px; -fx-font-weight: bold; -fx-text-fill: " + BLUE + ";");
 
-        userIdField.setPromptText("Staff ID");
+        userIdField.setPromptText("Username");
         passwordField.setPromptText("Password");
         styleField(userIdField);
         styleField(passwordField);
@@ -179,7 +179,7 @@ public class LoginScreen {
         String password = passwordField.getText() == null ? "" : passwordField.getText();
 
         if (userId.isEmpty() || password.isEmpty()) {
-            showError("Enter your Staff ID and password.");
+            showError("Enter your username and password.");
             return;
         }
 

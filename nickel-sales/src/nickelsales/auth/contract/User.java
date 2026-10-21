@@ -17,29 +17,35 @@ import java.util.Set;
 public class User {
 
     private final String userId;
+    private final String loginName;
     private final String passwordHash; // bcrypt hash ($2a$..., 60 chars) — never plaintext
     private final String firstName;
     private final String lastName;
     private final Set<UserRole> roles;   // e.g. [ADMIN, CASHIER] — multi-role is normal
     private final UserStatus status;
 
-    public User(String userId, String passwordHash, String firstName, String lastName,
-                Set<UserRole> roles, UserStatus status) {
-        this.userId = userId;
-        this.passwordHash = passwordHash;
-        this.firstName = firstName;
-        this.lastName = lastName;
-        this.roles = roles == null ? Collections.emptySet() : Collections.unmodifiableSet(roles);
-        this.status = status;
-    }
+    public User(String userId, String loginName, String passwordHash, String firstName, String lastName,
+            Set<UserRole> roles, UserStatus status) {
+    this.userId = userId;
+    this.loginName = loginName;
+    this.passwordHash = passwordHash;
+    this.firstName = firstName;
+    this.lastName = lastName;
+    this.roles = roles == null ? Collections.emptySet() : Collections.unmodifiableSet(roles);
+    this.status = status;
+}
 
     public String getUserId() {
         return userId;
     }
 
-    /** What the user types at the login screen (the User ID). */
     public String getUsername() {
-        return userId;
+        return loginName;
+    }
+    
+    /** What the user types at the login screen (the User ID). */
+    public String getLoginName() {
+        return loginName;
     }
 
     public String getPasswordHash() {

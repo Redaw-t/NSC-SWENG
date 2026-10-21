@@ -16,8 +16,8 @@ import java.util.Locale;
 /** UserRepository backed by the Users table in NickelSales_Database. */
 public class MySqlUserRepository implements UserRepository {
 
-    private static final String SELECT_COLUMNS =
-            "SELECT UserID, UserPassword, UserName, UserLastname, UserRole, UserStatus FROM Users";
+	private static final String SELECT_COLUMNS =
+	        "SELECT UserID, UserLoginName, UserPassword, UserName, UserLastname, UserRole, UserStatus FROM Users";
 
     @Override
     public User findById(String userId) {
@@ -32,22 +32,24 @@ public class MySqlUserRepository implements UserRepository {
         if (username == null) {
             return null;
         }
-        // The User ID is the login id; tolerate case and surrounding spaces.
-        return queryOne(SELECT_COLUMNS + " WHERE UserID = ?", username.trim().toUpperCase(Locale.ROOT));
+        // Login name, not User ID. Trim spaces and compare case-insensitively.
+        return queryOne(SELECT_COLUMNS + " WHERE LOWER(UserLoginName) = ?",
+                username.trim().toLowerCase(Locale.ROOT));
     }
 
     @Override
     public void save(User user) {
-        String sql = "INSERT INTO Users (UserID, UserPassword, UserName, UserLastname, UserRole, UserStatus) "
-                   + "VALUES (?, ?, ?, ?, ?, ?)";
+        String sql = "INSERT INTO Users (UserID, UserLoginName, UserPassword, UserName, UserLastname, UserRole, UserStatus) "
+                   + "VALUES (?, ?, ?, ?, ?, ?, ?)";
         try (Connection c = Database.getConnection();
              PreparedStatement ps = c.prepareStatement(sql)) {
-            ps.setString(1, user.getUserId());
-            ps.setString(2, user.getPasswordHash());
-            ps.setString(3, user.getFirstName());
-            ps.setString(4, user.getLastName());
-            ps.setString(5, UserRole.toDbCodes(user.getRoles()));
-            ps.setString(6, user.getStatus().toDbString());
+        	ps.setString(1, user.getUserId());
+        	ps.setString(2, user.getLoginName());
+        	ps.setString(3, user.getPasswordHash());
+        	ps.setString(4, user.getFirstName());
+        	ps.setString(5, user.getLastName());
+        	ps.setString(6, UserRole.toDbCodes(user.getRoles()));
+        	ps.setString(7, user.getStatus().toDbString());
             ps.executeUpdate();
         } catch (SQLException e) {
             throw new RuntimeException("Could not save user " + user.getUserId(), e);
@@ -56,16 +58,17 @@ public class MySqlUserRepository implements UserRepository {
 
     @Override
     public void update(User user) {
-        String sql = "UPDATE Users SET UserPassword = ?, UserName = ?, UserLastname = ?, "
-                   + "UserRole = ?, UserStatus = ? WHERE UserID = ?";
+    	String sql = "UPDATE Users SET UserLoginName = ?, UserPassword = ?, UserName = ?, UserLastname = ?, "
+    	           + "UserRole = ?, UserStatus = ? WHERE UserID = ?";
         try (Connection c = Database.getConnection();
              PreparedStatement ps = c.prepareStatement(sql)) {
-            ps.setString(1, user.getPasswordHash());
-            ps.setString(2, user.getFirstName());
-            ps.setString(3, user.getLastName());
-            ps.setString(4, UserRole.toDbCodes(user.getRoles()));
-            ps.setString(5, user.getStatus().toDbString());
-            ps.setString(6, user.getUserId());
+        	ps.setString(1, user.getLoginName());
+        	ps.setString(2, user.getPasswordHash());
+        	ps.setString(3, user.getFirstName());
+        	ps.setString(4, user.getLastName());
+        	ps.setString(5, UserRole.toDbCodes(user.getRoles()));
+        	ps.setString(6, user.getStatus().toDbString());
+        	ps.setString(7, user.getUserId());
             if (ps.executeUpdate() == 0) {
                 throw new RuntimeException("No such user: " + user.getUserId());
             }
@@ -102,12 +105,13 @@ public class MySqlUserRepository implements UserRepository {
     }
 
     private User map(ResultSet rs) throws SQLException {
-        return new User(
-                rs.getString("UserID"),
-                rs.getString("UserPassword"),
-                rs.getString("UserName"),
-                rs.getString("UserLastname"),
-                UserRole.parseDbRoles(rs.getString("UserRole")),
-                UserStatus.fromDbString(rs.getString("UserStatus")));
+    	return new User(
+    	        rs.getString("UserID"),
+    	        rs.getString("UserLoginName"),
+    	        rs.getString("UserPassword"),
+    	        rs.getString("UserName"),
+    	        rs.getString("UserLastname"),
+    	        UserRole.parseDbRoles(rs.getString("UserRole")),
+    	        UserStatus.fromDbString(rs.getString("UserStatus")));
     }
 }

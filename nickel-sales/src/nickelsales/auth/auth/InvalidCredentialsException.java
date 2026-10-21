@@ -8,6 +8,6 @@ package nickelsales.auth.auth;
 public class InvalidCredentialsException extends AuthenticationException {
 
     public InvalidCredentialsException() {
-        super("INVALID_CREDENTIALS", "Invalid user ID or password.");
+        super("INVALID_CREDENTIALS", "Invalid username or password.");
     }
 }

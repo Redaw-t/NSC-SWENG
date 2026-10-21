@@ -5,7 +5,7 @@ USE `NickelSales_Database`;
 -- ===================== CORE RECORDS =====================
 CREATE TABLE IF NOT EXISTS `Users` (
 	UserID VARCHAR(10) PRIMARY KEY,
-    UserLoginName VARCHAR(30) NOT NULL,
+    UserLoginName VARCHAR(30) NOT NULL UNIQUE,
     UserPassword VARCHAR(60) NOT NULL, -- Bcrypt
     UserName VARCHAR(30) NOT NULL,
     UserLastname VARCHAR(30) NOT NULL,

@@ -41,24 +41,27 @@ public class AuthDemo {
         final Map<String, User> users = new HashMap<>();
 
         StubUserRepository() {
-            // One shared hash keeps startup fast; the demo never mutates users.
             String hash = BCrypt.hashpw(TEST_PASSWORD, BCrypt.gensalt(10));
-            save(new User("NSC-00001", hash, "Jerick", "Cubillan",
-                    UserRole.parseDbRoles("A;C;I"), UserStatus.ACTIVE));      // mirrors the .sql seed
-            save(new User("NSC-00002", hash, "Juan", "Dela Cruz",
-                    UserRole.parseDbRoles("C"), UserStatus.ACTIVE));          // mirrors the .sql seed
-            save(new User("NSC-00003", hash, "Maria", "Santa Ana",
-                    UserRole.parseDbRoles("I"), UserStatus.ACTIVE));          // mirrors the .sql seed
-            save(new User("NSC-00004", hash, "Test", "Inactive",
-                    UserRole.parseDbRoles("C"), UserStatus.INACTIVE));        // demo-only
-            save(new User("NSC-00005", hash, "Test", "Locked",
-                    UserRole.parseDbRoles("C"), UserStatus.LOCKED));          // demo-only
+            save(new User("NSC-00001", "JCubillan", hash, "Jerick", "Cubillan",
+                    UserRole.parseDbRoles("A;C;I"), UserStatus.ACTIVE));
+            save(new User("NSC-00002", "JDelaCruz", hash, "Juan", "Dela Cruz",
+                    UserRole.parseDbRoles("C"), UserStatus.ACTIVE));
+            save(new User("NSC-00003", "MSantaAna", hash, "Maria", "Santa Ana",
+                    UserRole.parseDbRoles("I"), UserStatus.ACTIVE));
+            save(new User("NSC-00004", "RSantos", hash, "Rhian", "Santos",
+                    UserRole.parseDbRoles("C"), UserStatus.INACTIVE));
+            save(new User("NSC-00005", "KRodriguez", hash, "Kimberly", "Rodriguez",
+                    UserRole.parseDbRoles("C"), UserStatus.LOCKED));
         }
 
         public User findById(String userId) { return userId == null ? null : users.get(userId); }
 
         public User findByUsername(String username) {
-            return username == null ? null : users.get(username.trim().toUpperCase());
+            if (username == null) return null;
+            String key = username.trim().toLowerCase();
+            return users.values().stream()
+                    .filter(u -> u.getLoginName().toLowerCase().equals(key))
+                    .findFirst().orElse(null);
         }
 
         public void save(User user) { users.put(user.getUserId(), user); }
