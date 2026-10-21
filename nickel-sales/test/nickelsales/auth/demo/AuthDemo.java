@@ -64,6 +64,14 @@ public class AuthDemo {
         public void save(User user) { users.put(user.getUserId(), user); }
         public void update(User user) { users.put(user.getUserId(), user); }
         public List<User> findAll() { return List.copyOf(users.values()); }
+        public void updatePassword(String userId, String newPasswordHash) {
+            User old = users.get(userId);
+            if (old == null) {
+                throw new RuntimeException("No such user: " + userId);
+            }
+            users.put(userId, new User(old.getUserId(), newPasswordHash, old.getFirstName(),
+                    old.getLastName(), old.getRoles(), old.getStatus()));
+        }
     }
 
     /** Throwaway stand-in for the SESSION/UI role's session management. */

@@ -29,6 +29,9 @@ public interface UserRepository {
     /** Updates an existing user. Fails (RuntimeException) if the ID does not exist. */
     void update(User user);
 
+    /** Replaces only the stored bcrypt hash. Fails (RuntimeException) if the ID does not exist. */
+    void updatePassword(String userId, String newPasswordHash);
+
     /** All users (used by user management screens, not by login). */
     List<User> findAll();
 }
