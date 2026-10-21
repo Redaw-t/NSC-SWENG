@@ -10,6 +10,9 @@ import nickelsales.authz.AuthorizationService;
 import nickelsales.authz.Permission;
 import nickelsales.ui.login.LoginScreen;
 import nickelsales.ui.login.LogoutAction;
+import javafx.scene.control.Button;
+import nickelsales.auth.account.UserAccountService;
+import nickelsales.ui.account.ChangePasswordDialog;
 
 //
 public class DashboardRouter {
@@ -18,11 +21,14 @@ public class DashboardRouter {
     private final AuthorizationService authz;
     private final LoginScreen loginScreen;
     private final LogoutAction logoutAction;
+    private final UserAccountService accounts;
 
-    public DashboardRouter(Stage stage, AuthenticationService auth, AuthorizationService authz) {
+    public DashboardRouter(Stage stage, AuthenticationService auth, AuthorizationService authz,
+                           UserAccountService accounts) {
         this.stage = stage;
         this.auth = auth;
         this.authz = authz;
+        this.accounts = accounts;
 
         this.loginScreen = new LoginScreen(auth, this::openDashboardFor);
         this.logoutAction = new LogoutAction(auth, this::showLogin);
@@ -66,7 +72,10 @@ public class DashboardRouter {
             System.out.println("[AUTHZ] " + user.getUserId() + " does not have permission " + requiredPermission );
             return;
         }
-        PHDashboard dashboard = new PHDashboard(title, user, logoutAction.createButton(sessionId));
+        Button changePassword = new Button("Change password");
+        changePassword.setOnAction(e -> new ChangePasswordDialog(stage, accounts, sessionId).show());
+
+        PHDashboard dashboard = new PHDashboard(title, user, changePassword, logoutAction.createButton(sessionId));
         stage.getScene().setRoot(dashboard.getView());
     }
 }

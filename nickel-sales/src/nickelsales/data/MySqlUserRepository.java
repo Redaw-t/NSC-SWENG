@@ -78,6 +78,21 @@ public class MySqlUserRepository implements UserRepository {
     }
 
     @Override
+    public void updatePassword(String userId, String newPasswordHash) {
+        String sql = "UPDATE Users SET UserPassword = ? WHERE UserID = ?";
+        try (Connection c = Database.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setString(1, newPasswordHash);
+            ps.setString(2, userId);
+            if (ps.executeUpdate() == 0) {
+                throw new RuntimeException("No such user: " + userId);
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("Could not update password for " + userId, e);
+        }
+    }
+
+    @Override
     public List<User> findAll() {
         List<User> users = new ArrayList<>();
         try (Connection c = Database.getConnection();

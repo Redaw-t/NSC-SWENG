@@ -10,7 +10,7 @@ package nickelsales.auth.contract;
  *
  * Events currently emitted:
  *   LOGIN_SUCCESS, LOGIN_FAILED, LOGIN_BLOCKED_INACTIVE,
- *   LOGIN_BLOCKED_LOCKED, LOGOUT
+ *   LOGIN_BLOCKED_LOCKED, LOGOUT, PASSWORD_CHANGED, PASSWORD_CHANGE_FAILED
  */
 public interface AuditLogger {
 

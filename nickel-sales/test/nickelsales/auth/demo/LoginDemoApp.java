@@ -3,7 +3,11 @@ package nickelsales.auth.demo;
 import nickelsales.data.MySqlUserRepository;
 import javafx.application.Application;
 import javafx.stage.Stage;
+import nickelsales.auth.account.PassPolicy;
+import nickelsales.auth.account.UserAccountService;
 import nickelsales.auth.auth.AuthenticationService;
+import nickelsales.auth.contract.AuditLogger;
+import nickelsales.auth.contract.PasswordPolicy;
 import nickelsales.auth.session.InMemorySessionManager;
 import nickelsales.authz.AuthorizationService;
 import nickelsales.ui.dashboard.DashboardRouter;
@@ -26,16 +30,17 @@ public class LoginDemoApp extends Application {
 
     @Override
     public void start(Stage stage) {
-        AuthenticationService auth = new AuthenticationService(
-        		new MySqlUserRepository(),
-                new InMemorySessionManager(),
-                null,
-                (event, userId) -> System.out.println("[AUDIT] " + event + " " + userId));
+        MySqlUserRepository repo = new MySqlUserRepository();
+        AuditLogger audit = (event, userId) -> System.out.println("[AUDIT] " + event + " " + userId);
+        PasswordPolicy policy = new PassPolicy();
 
-        DashboardRouter router = new DashboardRouter(stage, auth, new AuthorizationService());
+        AuthenticationService auth = new AuthenticationService(repo, new InMemorySessionManager(), policy, audit);
+        UserAccountService accounts = new UserAccountService(auth, repo, policy, audit);
+
+        DashboardRouter router = new DashboardRouter(stage, auth, new AuthorizationService(), accounts);
 
         stage.setTitle("Nickel Sales Center - POS");
-        router.showLogin(); //first call creates the scene with the login screen
+        router.showLogin();
         stage.show();
     }
 
