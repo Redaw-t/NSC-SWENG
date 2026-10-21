@@ -345,8 +345,7 @@ for each demo account, then checks the key rules. Expected last line:
 
 Password `Password123` for all — test seeds only. The console demos use the
 stub users below; the login screen uses the rows inserted by
-`database/NickelSales-Database-Config.sql` (same IDs, roles and statuses;
-the SQL file also adds `NSC-00006`, an extra A;C;I account).
+`database/NickelSales-Database-Config.sql` (same IDs, roles and statuses).
 
 | User ID   | Name            | Roles   | Status   | Lands on (login screen)     |
 | --------- | --------------- | ------- | -------- | --------------------------- |
