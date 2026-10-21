@@ -16,8 +16,9 @@ waiting for installers.
 ## What you'll end up with
 
 Double-clicking `run-demo.bat` opens the **Nickel Sales Center login
-screen**. You log in with a Staff ID and password, land on the dashboard
-for your role (Admin, Cashier or Inventory), and can log out again.
+screen**. You log in with a username and password, land on the dashboard
+for your role (Admin, Cashier or Inventory), and can log out again. Admins
+can also add and edit users, and everyone can change their own password.
 
 ## What you need (Windows)
 
@@ -123,13 +124,22 @@ The app stores its users in MySQL, so you need it running on your computer.
    there. Close it after you close the app.)
 3. Log in with:
 
-   | Staff ID | Password | You'll see |
+   | Username | Password | You'll see |
    | -------- | -------- | ---------- |
-   | `NSC-00001` | `Password123` | Admin Dashboard (this account has every role) |
-   | `NSC-00002` | `Password123` | Cashier Dashboard |
-   | `NSC-00003` | `Password123` | Inventory Staff Dashboard |
-   | `NSC-00004` | `Password123` | "This account is inactive…" message |
-   | `NSC-00005` | `Password123` | "This account is locked…" message |
+   | `JCubillan` | `Password123` | Admin Dashboard (this account has every role) |
+   | `JDelaCruz` | `Password123` | Cashier Dashboard |
+   | `MSantaAna` | `Password123` | Inventory Staff Dashboard |
+   | `RSantos` | `Password123` | "This account is inactive…" message |
+   | `KRodriguez` | `Password123` | "This account is locked…" message |
+
+   Usernames ignore upper/lower case (`jcubillan` works too); passwords
+   don't. Use the username, **not** the ID shown on the dashboard
+   (`NSC-00001`) — the ID won't log you in.
+
+   Handy on the login screen: **SHOW** reveals what you typed in the
+   password box, and a **"Caps Lock is on"** warning appears if Caps Lock is
+   on. If nobody touches the app for 30 minutes it logs you out with
+   *"Your session expired. Please log in again."*
 
 🎉 That's it — you're set up. Next time, just double-click `run-demo.bat`.
 
@@ -164,7 +174,14 @@ their own copy. Users you add don't appear on anyone else's machine.
 
 ### Adding your own user
 
-Passwords must be stored as hashes, so it's two steps:
+**The easy way — in the app.** Log in as an admin (e.g. `JCubillan`), click
+**Manage users → Add user**, fill in the name, tick the roles and set a
+temporary password (8–72 characters, with an uppercase letter and a
+number). The app creates the username for you (first initial + last name,
+e.g. `KChong`) and shows it when you save.
+
+**By hand in MySQL** (only if you need to). Passwords must be stored as
+bcrypt hashes, so it's two steps:
 
 1. **Make the hash.** In a terminal inside `nickel-sales`:
    ```bat
@@ -179,9 +196,11 @@ Passwords must be stored as hashes, so it's two steps:
 2. **Insert it** in Workbench (click ⚡ to run):
    ```sql
    USE NickelSales_Database;
-   INSERT INTO Users (UserID, UserPassword, UserName, UserLastname, UserRole, UserStatus)
-   VALUES ('NSC-00007', '$2a$10$...your-hash...', 'First', 'Last', 'C', 'Active');
+   INSERT INTO Users (UserID, UserLoginName, UserPassword, UserName, UserLastname, UserRole, UserStatus)
+   VALUES ('NSC-00007', 'FLast', '$2a$10$...your-hash...', 'First', 'Last', 'C', 'Active');
    ```
+   `UserLoginName` is what you'll type on the login screen; it must be
+   unique.
    Roles: `A` Admin, `C` Cashier, `I` Inventory — combine with `;`
    (e.g. `A;C;I`). Status: `Active`, `Inactive` or `Locked`.
 
@@ -193,7 +212,9 @@ Passwords must be stored as hashes, so it's two steps:
 | ------- | --- |
 | `run-demo.bat` window opens and closes instantly | Open a terminal in `nickel-sales`, run `run-demo.bat`, and read the error |
 | "Something went wrong while logging in" for **every** account | The app can't reach MySQL. Run `setup.bat` — it checks MySQL is running, the database exists and your saved password works |
-| "Invalid user ID or password." | Check the Staff ID (e.g. `NSC-00001`, with the dash) and that the password is `Password123` — it's case-sensitive |
+| Every login started failing **after you pulled new changes** | Your database was made from an older version of the database script. In MySQL Workbench run `DROP DATABASE NickelSales_Database;`, then run `setup.bat` and answer **Y** to create it again (this resets it to the demo users) |
+| "Invalid username or password." | Use the **username** (e.g. `JCubillan`), not the ID (`NSC-00001`), and check the password is `Password123` — passwords are case-sensitive (watch for the Caps Lock warning) |
+| "Your session expired. Please log in again." | Nobody used the app for 30 minutes, so it logged out for safety. Just log in again |
 | `setup.bat` says MySQL is **NOT RUNNING** | Press Win+R, type `services.msc`, find the MySQL service, right-click → **Start** |
 | MySQL keeps rejecting your password | You may have forgotten it — see [Resetting the MySQL root password](https://dev.mysql.com/doc/refman/en/resetting-permissions.html), or uninstall MySQL, delete `C:\ProgramData\MySQL`, and reinstall (you only lose the demo data, which `setup.bat` recreates) |
 | `'jshell' is not recognized` | Use the full path, e.g. `"C:\Program Files\Eclipse Adoptium\jdk-21…\bin\jshell.exe"`. `setup.bat` prints your JDK folder on its first line |
@@ -207,22 +228,21 @@ team.
 
 ## macOS / Linux
 
-1. Install a **JDK 17+** — macOS: `brew install --cask temurin@21`;
-   Ubuntu/Debian: `sudo apt install openjdk-21-jdk`.
-2. Install **MySQL Server 8+** and start it, then create the database:
-   ```bash
-   mysql -u root -p < database/NickelSales-Database-Config.sql
-   ```
-3. Tell the app your MySQL password (add this to `~/.zshrc` or `~/.bashrc`
-   to make it permanent):
-   ```bash
-   export NSC_DB_PASSWORD='your-mysql-password'
-   ```
-4. Run it:
+1. Install **MySQL Server 8+** and start it (macOS: the installer from
+   <https://dev.mysql.com/downloads/mysql/> or `brew install mysql`;
+   Ubuntu/Debian: `sudo apt install mysql-server`).
+2. Run the setup script. Like `setup.bat`, it checks Java (and on macOS
+   offers to install it with Homebrew), downloads JavaFX, creates the
+   database and offers to save your MySQL password in your shell profile:
    ```bash
    cd nickel-sales
-   chmod +x run-demo.sh   # first time only
-   ./run-demo.sh          # downloads JavaFX on the first run
+   chmod +x setup.sh setup-database.sh run-demo.sh   # first time only
+   ./setup.sh
+   ```
+3. Open a new terminal (so the saved password is loaded), then run:
+   ```bash
+   cd nickel-sales
+   ./run-demo.sh          # add --console or --scripted for the no-database demos
    ```
 
 ---
@@ -230,7 +250,8 @@ team.
 ## For developers
 
 - **[nickel-sales/CONTRIBUTING.md](nickel-sales/CONTRIBUTING.md)** — how
-  the code is organised, each role's work, IntelliJ/Eclipse setup, and
-  more troubleshooting.
+  the code is organised, each role's work, IntelliJ/Eclipse setup, the git
+  and commit-message rules, the checks to run before you push, and more
+  troubleshooting.
 - Never put a real password in the code — the repo is public. The app
   reads it from the `NSC_DB_PASSWORD` environment variable.

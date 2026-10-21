@@ -75,6 +75,12 @@ public class UserAdminService {
         User target = requireUser(userId);
 
         if (target.hasRole(UserRole.ADMIN) && !roles.contains(UserRole.ADMIN)) {
+            // An admin may not demote themselves (they would lose access mid-task
+            // and could lock everyone out). Another admin has to do it.
+            if (target.getUserId().equals(actor.getUserId())) {
+                throw new AccountException(
+                        "You cannot remove your own Admin role. Ask another administrator to do it.");
+            }
             requireAnotherActiveAdmin(target);
         }
         userRepository.update(copyWith(target, firstName.trim(), lastName.trim(),

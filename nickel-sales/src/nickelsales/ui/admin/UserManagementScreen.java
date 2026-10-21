@@ -3,6 +3,7 @@ package nickelsales.ui.admin;
 import javafx.beans.property.ReadOnlyStringWrapper;
 import javafx.geometry.Insets;
 import javafx.scene.Parent;
+import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.TableColumn;
@@ -27,6 +28,7 @@ public class UserManagementScreen {
 
     private final UserAdminService admin;
     private final String sessionId;
+    private final Runnable onBack;
     private final TableView<User> table = new TableView<>();
     private final Label message = new Label();
     private final BorderPane view = new BorderPane();
@@ -34,6 +36,7 @@ public class UserManagementScreen {
     public UserManagementScreen(UserAdminService admin, String sessionId, Runnable onBack) {
         this.admin = admin;
         this.sessionId = sessionId;
+        this.onBack = onBack;
 
         table.getColumns().add(column("User ID", User::getUserId));
         table.getColumns().add(column("Username", User::getLoginName));
@@ -68,7 +71,8 @@ public class UserManagementScreen {
         view.setPadding(new Insets(24));
         view.setStyle("-fx-background-color: white;");
 
-        attempt(() -> { });
+        // First load: if it fails, the message shows and Back still works.
+        reload(false);
     }
 
     public Parent getView() {
@@ -81,7 +85,7 @@ public class UserManagementScreen {
                     form.roles(), form.password());
             return "User created.\nUsername: " + created.getLoginName();
         });
-        attempt(() -> { });
+        reload(true);
     }
 
     private void editSelected() {
@@ -90,7 +94,10 @@ public class UserManagementScreen {
             admin.updateUser(sessionId, selected.getUserId(), form.firstName(), form.lastName(), form.roles());
             return null;
         });
-        attempt(() -> { });
+        // Always reload after the dialog closes so the table shows the change.
+        // If the admin just removed their own Admin role, reload() notices the
+        // lost access and returns them to their (new) dashboard.
+        reload(true);
     }
 
     private void toggleSelected() {
@@ -98,16 +105,65 @@ public class UserManagementScreen {
         attempt(() -> admin.setActive(sessionId, selected.getUserId(), !selected.isActive()));
     }
 
-    /** Runs the action, reloads the table, and shows any failure under it. */
+    /** Runs the action, then reloads the table. A failed action shows its message under the table. */
     private void attempt(Action action) {
         try {
             action.run();
-            table.getItems().setAll(admin.listUsers(sessionId));
-            message.setText("");
         } catch (AccountException e) {
-            message.setText(e.getMessage());
+            reload(true);                    // leaves the screen if access was lost
+            message.setText(e.getMessage()); // otherwise show why the action failed
+            return;
         } catch (RuntimeException e) {
             message.setText("Something went wrong. Try again, or contact the system administrator.");
+            return;
+        }
+        reload(true);
+    }
+
+    /**
+     * Reloads the user list from the database. listUsers() re-checks that the
+     * current user may still manage users; if not (their Admin role was removed,
+     * the account was deactivated, or the session expired), the table cannot
+     * be shown any more, so when {@code leaveIfDenied} is set we explain why
+     * and go back to whichever dashboard the user's roles now allow.
+     */
+    private void reload(boolean leaveIfDenied) {
+        if (leaveIfDenied && view.getScene() == null) {
+            // This screen is no longer displayed (e.g. the user was logged out
+            // for inactivity while a dialog was open): nothing to refresh.
+            return;
+        }
+        try {
+            User keep = table.getSelectionModel().getSelectedItem();
+            table.getItems().setAll(admin.listUsers(sessionId));
+            reselect(keep);
+            message.setText("");
+        } catch (AccountException e) {
+            if (leaveIfDenied) {
+                Alert notice = new Alert(Alert.AlertType.INFORMATION,
+                        e.getMessage() + "\n\nYou will be returned to your dashboard.");
+                notice.setHeaderText("You no longer have access to User Management");
+                notice.initOwner(owner());
+                notice.showAndWait();
+                onBack.run();
+            } else {
+                message.setText(e.getMessage());
+            }
+        } catch (RuntimeException e) {
+            message.setText("Something went wrong. Try again, or contact the system administrator.");
+        }
+    }
+
+    /** Keeps the same user selected after a reload (the table holds fresh User objects). */
+    private void reselect(User previous) {
+        if (previous == null) {
+            return;
+        }
+        for (User u : table.getItems()) {
+            if (u.getUserId().equals(previous.getUserId())) {
+                table.getSelectionModel().select(u);
+                return;
+            }
         }
     }
 

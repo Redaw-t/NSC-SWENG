@@ -28,7 +28,9 @@ import nickelsales.auth.contract.UserStatus;
  * implementations land. Delete this whole folder once they do — src/ is the
  * actual deliverable.
  *
- * Run (from the nickel-sales-auth folder, or just double-click run-demo.bat):
+ * Logins use the login name (e.g. JCubillan), not the User ID (NSC-00001).
+ *
+ * Run (from the nickel-sales folder: run-demo.bat --console or --scripted):
  *   java -cp "out;lib/jbcrypt-0.4.jar" nickelsales.auth.demo.AuthDemo
  *   ... --scripted   runs only the scenarios and exits (smoke test)
  */
@@ -109,61 +111,67 @@ public class AuthDemo {
         System.out.println(" NICKEL SALES CENTER - Sprint 1 Authentication (AUTH)");
         System.out.println("=================================================================");
         System.out.println(" Seeded accounts (password for all: " + TEST_PASSWORD + ")");
-        System.out.println("   NSC-00001  Jerick Cubillan   A;C;I   Active   (admin)");
-        System.out.println("   NSC-00002  Juan Dela Cruz    C       Active   (cashier)");
-        System.out.println("   NSC-00003  Maria Santa Ana   I       Active   (inventory)");
-        System.out.println("   NSC-00004  Test Inactive     C       Inactive");
-        System.out.println("   NSC-00005  Test Locked       C       Locked");
+        System.out.println("   Login name   User ID    Name               Roles   Status");
+        System.out.println("   JCubillan    NSC-00001  Jerick Cubillan    A;C;I   Active   (admin)");
+        System.out.println("   JDelaCruz    NSC-00002  Juan Dela Cruz     C       Active   (cashier)");
+        System.out.println("   MSantaAna    NSC-00003  Maria Santa Ana    I       Active   (inventory)");
+        System.out.println("   RSantos      NSC-00004  Rhian Santos       C       Inactive");
+        System.out.println("   KRodriguez   NSC-00005  Kimberly Rodriguez C       Locked");
         System.out.println("-----------------------------------------------------------------");
         System.out.println(" SCENARIOS");
         System.out.println("-----------------------------------------------------------------");
 
         // 1. valid login, multi-role user
-        scenario("Valid login - admin (NSC-00001)", () -> {
-            LoginResult r = auth.login("NSC-00001", TEST_PASSWORD);
+        scenario("Valid login - admin (JCubillan)", () -> {
+            LoginResult r = auth.login("JCubillan", TEST_PASSWORD);
             check(r.user().getUserId().equals("NSC-00001"), "wrong user returned");
             check(r.user().hasRole(UserRole.ADMIN) && r.user().hasRole(UserRole.CASHIER)
                     && r.user().hasRole(UserRole.INVENTORY_STAFF), "should hold all three roles");
             check(r.session() != null && r.session().getSessionId() != null, "no session created");
             check(!r.user().getPasswordHash().equals(TEST_PASSWORD), "password must never be plaintext");
+            // Login names are matched ignoring case and surrounding spaces.
+            check(auth.login("  jcubillan ", TEST_PASSWORD).user().getUserId().equals("NSC-00001"),
+                    "login name should be case-insensitive and trimmed");
         });
 
         // 2. valid login per single-role users
-        scenario("Valid login - cashier (NSC-00002) and inventory (NSC-00003)", () -> {
-            check(auth.login("NSC-00002", TEST_PASSWORD).user().hasRole(UserRole.CASHIER), "cashier role missing");
-            check(auth.login("NSC-00003", TEST_PASSWORD).user().hasRole(UserRole.INVENTORY_STAFF), "inventory role missing");
+        scenario("Valid login - cashier (JDelaCruz) and inventory (MSantaAna)", () -> {
+            check(auth.login("JDelaCruz", TEST_PASSWORD).user().hasRole(UserRole.CASHIER), "cashier role missing");
+            check(auth.login("MSantaAna", TEST_PASSWORD).user().hasRole(UserRole.INVENTORY_STAFF), "inventory role missing");
         });
 
         // 3. wrong password
         scenario("Wrong password is rejected", () -> {
-            expectCode(() -> auth.login("NSC-00001", "WrongPass1"), "INVALID_CREDENTIALS");
+            expectCode(() -> auth.login("JCubillan", "WrongPass1"), "INVALID_CREDENTIALS");
         });
 
         // 4. unknown user — same error as wrong password
-        scenario("Unknown user ID is rejected (same error as wrong password)", () -> {
-            expectCode(() -> auth.login("NSC-99999", TEST_PASSWORD), "INVALID_CREDENTIALS");
+        scenario("Unknown login name is rejected (same error as wrong password)", () -> {
+            expectCode(() -> auth.login("NoSuchUser", TEST_PASSWORD), "INVALID_CREDENTIALS");
+            // The User ID is no longer a login name.
+            expectCode(() -> auth.login("NSC-00001", TEST_PASSWORD), "INVALID_CREDENTIALS");
         });
 
         // 5. inactive account, CORRECT password
         scenario("Inactive account blocked even with correct password", () -> {
-            expectCode(() -> auth.login("NSC-00004", TEST_PASSWORD), "INACTIVE_USER");
+            expectCode(() -> auth.login("RSantos", TEST_PASSWORD), "INACTIVE_USER");
         });
 
         // 6. locked account, CORRECT password
         scenario("Locked account blocked even with correct password", () -> {
-            expectCode(() -> auth.login("NSC-00005", TEST_PASSWORD), "LOCKED_USER");
+            expectCode(() -> auth.login("KRodriguez", TEST_PASSWORD), "LOCKED_USER");
         });
 
         // 7. boolean validation, never throws
         scenario("validateCredentials() returns booleans", () -> {
-            check(auth.validateCredentials("NSC-00002", TEST_PASSWORD), "valid pair should be true");
-            check(!auth.validateCredentials("NSC-00002", "nope"), "wrong password should be false");
+            check(auth.validateCredentials("JDelaCruz", TEST_PASSWORD), "valid pair should be true");
+            check(!auth.validateCredentials("JDelaCruz", "nope"), "wrong password should be false");
             check(!auth.validateCredentials("ghost-user", TEST_PASSWORD), "unknown user should be false");
         });
 
         // 8. session lifecycle
         scenario("getCurrentUser() + logout() session lifecycle", () -> {
-            LoginResult r = auth.login("NSC-00002", TEST_PASSWORD);
+            LoginResult r = auth.login("JDelaCruz", TEST_PASSWORD);
             check(auth.getCurrentUser(r.session().getSessionId()) != null, "user should be logged in");
             auth.logout(r.session().getSessionId());
             check(auth.getCurrentUser(r.session().getSessionId()) == null, "session should be gone after logout");
@@ -186,8 +194,8 @@ public class AuthDemo {
     static void runInteractive(AuthenticationService auth) {
         System.out.println();
         System.out.println(" INTERACTIVE LOGIN (the real login UI replaces this prompt)");
-        System.out.println(" Try NSC-00001 / " + TEST_PASSWORD + ", a wrong password, or NSC-00004.");
-        System.out.println(" Commands at the User ID prompt:");
+        System.out.println(" Try JCubillan / " + TEST_PASSWORD + ", a wrong password, or RSantos (inactive).");
+        System.out.println(" Commands at the Username prompt:");
         System.out.println("   logout  - end the active session (calls AuthenticationService.logout)");
         System.out.println("   whoami  - show the currently logged-in user for the active session");
         System.out.println("   q       - quit");
@@ -198,7 +206,7 @@ public class AuthDemo {
         String currentSessionId = null;
 
         while (true) {
-            System.out.print(" User ID: ");
+            System.out.print(" Username: ");
             String userId = in.nextLine().trim();
             if (userId.isEmpty() || userId.equalsIgnoreCase("q")) {
                 System.out.println(" Bye.");
