@@ -12,7 +12,7 @@ public class PHDashboard {
 
     private final VBox view;
 
-    public PHDashboard(String title, User user, Button changePasswordButton, Button logoutButton) {
+    public PHDashboard(String title, User user, Button... actionButtons) {
         Label heading = new Label(title);
         heading.setStyle("-fx-font-size: 24px; -fx-font-weight: bold;");
 
@@ -20,7 +20,7 @@ public class PHDashboard {
         Label roles = new Label("Roles: " + user.getRoles());
         Label note = new Label("Note: placeholder lng muna for testing lol.");
 
-        HBox actions = new HBox(12, changePasswordButton, logoutButton);
+        HBox actions = new HBox(12, actionButtons);
         actions.setAlignment(Pos.CENTER);
 
         view = new VBox(16, heading, who, roles, note, actions);

@@ -72,8 +72,8 @@ public class AuthDemo {
             if (old == null) {
                 throw new RuntimeException("No such user: " + userId);
             }
-            users.put(userId, new User(old.getUserId(), newPasswordHash, old.getFirstName(),
-                    old.getLastName(), old.getRoles(), old.getStatus()));
+            users.put(userId, new User(old.getUserId(), old.getLoginName(), newPasswordHash,
+                    old.getFirstName(), old.getLastName(), old.getRoles(), old.getStatus()));
         }
     }
 

@@ -5,6 +5,7 @@ import javafx.application.Application;
 import javafx.stage.Stage;
 import nickelsales.auth.account.PassPolicy;
 import nickelsales.auth.account.UserAccountService;
+import nickelsales.auth.account.UserAdminService;
 import nickelsales.auth.auth.AuthenticationService;
 import nickelsales.auth.contract.AuditLogger;
 import nickelsales.auth.contract.PasswordPolicy;
@@ -36,8 +37,10 @@ public class LoginDemoApp extends Application {
 
         AuthenticationService auth = new AuthenticationService(repo, new InMemorySessionManager(), policy, audit);
         UserAccountService accounts = new UserAccountService(auth, repo, policy, audit);
+        AuthorizationService authz = new AuthorizationService();
+        UserAdminService admin = new UserAdminService(auth, repo, authz, policy, audit);
 
-        DashboardRouter router = new DashboardRouter(stage, auth, new AuthorizationService(), accounts);
+        DashboardRouter router = new DashboardRouter(stage, auth, authz, accounts, admin);
 
         stage.setTitle("Nickel Sales Center - POS");
         router.showLogin();

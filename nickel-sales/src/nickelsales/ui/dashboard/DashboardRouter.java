@@ -12,7 +12,9 @@ import nickelsales.ui.login.LoginScreen;
 import nickelsales.ui.login.LogoutAction;
 import javafx.scene.control.Button;
 import nickelsales.auth.account.UserAccountService;
+import nickelsales.auth.account.UserAdminService;
 import nickelsales.ui.account.ChangePasswordDialog;
+import nickelsales.ui.admin.UserManagementScreen;
 
 //
 public class DashboardRouter {
@@ -22,13 +24,15 @@ public class DashboardRouter {
     private final LoginScreen loginScreen;
     private final LogoutAction logoutAction;
     private final UserAccountService accounts;
+    private final UserAdminService admin;
 
     public DashboardRouter(Stage stage, AuthenticationService auth, AuthorizationService authz,
-                           UserAccountService accounts) {
+                           UserAccountService accounts, UserAdminService admin) {
         this.stage = stage;
         this.auth = auth;
         this.authz = authz;
         this.accounts = accounts;
+        this.admin = admin;
 
         this.loginScreen = new LoginScreen(auth, this::openDashboardFor);
         this.logoutAction = new LogoutAction(auth, this::showLogin);
@@ -75,7 +79,17 @@ public class DashboardRouter {
         Button changePassword = new Button("Change password");
         changePassword.setOnAction(e -> new ChangePasswordDialog(stage, accounts, sessionId).show());
 
-        PHDashboard dashboard = new PHDashboard(title, user, changePassword, logoutAction.createButton(sessionId));
+        Button logout = logoutAction.createButton(sessionId);
+
+        PHDashboard dashboard;
+        if (authz.checkAccess(user, Permission.MANAGE_USERS)) {
+            Button manageUsers = new Button("Manage users");
+            manageUsers.setOnAction(e -> stage.getScene().setRoot(new UserManagementScreen(
+                    admin, sessionId, () -> openScreen(sessionId, title, requiredPermission)).getView()));
+            dashboard = new PHDashboard(title, user, manageUsers, changePassword, logout);
+        } else {
+            dashboard = new PHDashboard(title, user, changePassword, logout);
+        }
         stage.getScene().setRoot(dashboard.getView());
     }
 }
