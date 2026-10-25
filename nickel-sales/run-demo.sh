@@ -2,11 +2,12 @@
 # =====================================================================
 #  Nickel Sales Center - Sprint 1 demo (macOS / Linux)
 #
-#    ./run-demo.sh              JavaFX login screen (LoginDemoApp) - reads
-#                               users from the local MySQL database
+#    ./run-demo.sh              the app (DevApp): login, home screen, modules.
+#                               Users and sales from the local MySQL database,
+#                               TEST products until Product & Inventory is connected
 #    ./run-demo.sh --console    console demo with built-in stub users:
 #                               scenarios, then an interactive login prompt
-#    ./run-demo.sh --scripted   console scenarios only; exit code 1 if any fail
+#    ./run-demo.sh --scripted   run ALL self-tests (before you push); exit code 1 if any fail
 #    ./run-demo.sh --setup      only run setup.sh (check dependencies, download
 #                               JavaFX, set up the database), don't build or run
 #
@@ -33,11 +34,10 @@ set -e
 [[ $SETUP_RC -eq 0 ]] || exit 1
 
 # --- 2. Pick what to run --------------------------------------------------
-MAIN="nickelsales.auth.demo.LoginDemoApp"
+MAIN="app.DevApp"
 ARGS=()
 case "${1:-}" in
-    --console)  MAIN="nickelsales.auth.demo.AuthDemo" ;;
-    --scripted) MAIN="nickelsales.auth.demo.AuthDemo"; ARGS=(--scripted) ;;
+    --console)  MAIN="auth.AuthDemo" ;;
 esac
 
 # --- 3. Compile everything in src/ and test/ into a clean out/ -----------
@@ -47,6 +47,25 @@ echo "Compiling..."
 "$JDK_BIN/javac" -encoding UTF-8 --module-path "$FX_DIR" --add-modules javafx.controls \
     -cp "$CP" -d out @out/sources.txt
 [[ -d resources ]] && cp -R resources/. out/
+
+# --- --scripted: every self-test, with the same JDK that compiled them ----
+if [[ "${1:-}" == "--scripted" ]]; then
+    FAILED=""
+    for check in "auth.AuthDemo --scripted" auth.AuthzDemo \
+                 auth.UserAdminDemo pos.PosContractCheck pos.CartCheck \
+                 pos.CheckoutCheck pos.ReceiptCheck app.AppCheck; do
+        echo
+        echo "----- ${check%% *}"
+        # shellcheck disable=SC2086
+        "$JDK_BIN/java" -cp "out:$CP:$FX_DIR/*" $check || FAILED="$FAILED ${check%% *}"
+    done
+    echo
+    echo "================================================================="
+    if [[ -n "$FAILED" ]]; then echo " CHECKS FAILED:$FAILED"; else echo " ALL CHECKS PASSED"; fi
+    echo "================================================================="
+    [[ -z "$FAILED" ]]
+    exit $?
+fi
 
 # --- 4. Run ---------------------------------------------------------------
 echo "Running $MAIN ..."

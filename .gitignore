@@ -52,6 +52,7 @@ replay_pid*.log
 *.patch
 # Project PDFs / specs kept next to the repo, not in it
 /*.pdf
+/docs/*.pdf
 
 # --- OS noise -----------------------------------------------------------
 .DS_Store

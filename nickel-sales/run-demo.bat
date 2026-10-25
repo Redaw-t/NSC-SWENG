@@ -2,11 +2,12 @@
 rem =====================================================================
 rem  Nickel Sales Center - Sprint 1 demo (Windows)
 rem
-rem    run-demo.bat              JavaFX login screen (LoginDemoApp) - reads
-rem                              users from the local MySQL database
+rem    run-demo.bat              the app (DevApp): login, home screen, modules.
+rem                              Users and sales from the local MySQL database,
+rem                              TEST products until Product & Inventory is connected
 rem    run-demo.bat --console    console demo with built-in stub users:
 rem                              scenarios, then an interactive login prompt
-rem    run-demo.bat --scripted   console scenarios only; exit code 1 if any fail
+rem    run-demo.bat --scripted   run ALL self-tests (before you push); exit code 1 if any fail
 rem
 rem  Double-clicking opens the login screen. The first run downloads JavaFX
 rem  (via setup.bat), so it needs internet once.
@@ -14,13 +15,13 @@ rem =====================================================================
 setlocal EnableExtensions EnableDelayedExpansion
 cd /d "%~dp0"
 
-set "MAIN=nickelsales.auth.demo.LoginDemoApp"
+set "MAIN=app.DevApp"
 set "APP_ARGS="
 set "PAUSE_AT_END=1"
-if /i "%~1"=="--console" set "MAIN=nickelsales.auth.demo.AuthDemo"
+if /i "%~1"=="--console" set "MAIN=auth.AuthDemo"
+set "CHECKS="
 if /i "%~1"=="--scripted" (
-    set "MAIN=nickelsales.auth.demo.AuthDemo"
-    set "APP_ARGS=--scripted"
+    set "CHECKS=1"
     set "PAUSE_AT_END="
 )
 
@@ -58,6 +59,8 @@ if errorlevel 1 (
 rem Optional resources (e.g. resources\images\nickel-logo.png for the login screen)
 if exist resources xcopy /e /i /q /y resources out >nul
 
+if defined CHECKS goto :checks
+
 rem --- 3. Run -------------------------------------------------------------
 echo Running %MAIN% ...
 echo.
@@ -69,3 +72,34 @@ endlocal & exit /b %RC%
 :fail
 if defined PAUSE_AT_END pause
 endlocal & exit /b 1
+
+rem --- --scripted: every self-test, with the same JDK that compiled them --
+:checks
+set "FAILED="
+call :check auth.AuthDemo --scripted
+call :check auth.AuthzDemo
+call :check auth.UserAdminDemo
+call :check pos.PosContractCheck
+call :check pos.CartCheck
+call :check pos.CheckoutCheck
+call :check pos.ReceiptCheck
+call :check app.AppCheck
+echo.
+echo =================================================================
+if defined FAILED (
+    echo  CHECKS FAILED:!FAILED!
+) else (
+    echo  ALL CHECKS PASSED
+)
+echo =================================================================
+if defined FAILED (
+    endlocal & exit /b 1
+)
+endlocal & exit /b 0
+
+:check
+echo.
+echo ----- %~1
+"!JDK_BIN!\java.exe" -cp "out;%CP%;%FX%\*" %*
+if errorlevel 1 set "FAILED=!FAILED! %~1"
+exit /b 0

@@ -3,7 +3,7 @@
 POS and Inventory Management System for **Nickel Sales Center** — a desktop
 app (Java + JavaFX) that runs offline against a local MySQL database.
 
-This page gets you from nothing to a working login screen. No prior Java
+This page gets you from nothing to a working app. No prior Java
 experience needed. It takes about 20–30 minutes the first time, mostly
 waiting for installers.
 
@@ -16,9 +16,19 @@ waiting for installers.
 ## What you'll end up with
 
 Double-clicking `run-demo.bat` opens the **Nickel Sales Center login
-screen**. You log in with a username and password, land on the dashboard
-for your role (Admin, Cashier or Inventory), and can log out again. Admins
-can also add and edit users, and everyone can change their own password.
+screen**. You log in with a username and password and land on a home screen
+with a button for each part of the system your role may use:
+
+- **Point of Sale** (cashiers and admins): ring up sales with a barcode
+  scanner or the keyboard, retail / wholesale prices, 12% VAT, cash or
+  GCash / Maya / QRPh, and a printed receipt. See
+  [Ringing up a sale](#ringing-up-a-sale).
+- **Manage users** (admins): add, edit and activate users.
+- **Products & inventory**, **Reports**, **System & sync**: not built yet
+  ("coming soon"). Until Products & inventory exists, Point of Sale uses a
+  few test products.
+
+Everyone can change their own password and log out.
 
 ## What you need (Windows)
 
@@ -59,7 +69,7 @@ where everything in the next steps happens.
 
 ## Step 2 — Install MySQL Server
 
-The app stores its users in MySQL, so you need it running on your computer.
+The app stores its users and sales in MySQL, so you need it running on your computer.
 
 1. Go to <https://dev.mysql.com/downloads/installer/> and download
    **MySQL Installer for Windows** (pick the larger, full download).
@@ -126,14 +136,14 @@ The app stores its users in MySQL, so you need it running on your computer.
 
    | Username | Password | You'll see |
    | -------- | -------- | ---------- |
-   | `JCubillan` | `Password123` | Admin Dashboard (this account has every role) |
-   | `JDelaCruz` | `Password123` | Cashier Dashboard |
-   | `MSantaAna` | `Password123` | Inventory Staff Dashboard |
+   | `JCubillan` | `Password123` | Home screen with every button (this account has every role) |
+   | `JDelaCruz` | `Password123` | Home screen with **Point of Sale** |
+   | `MSantaAna` | `Password123` | Home screen with **Products & inventory** and **Reports** |
    | `RSantos` | `Password123` | "This account is inactive…" message |
    | `KRodriguez` | `Password123` | "This account is locked…" message |
 
    Usernames ignore upper/lower case (`jcubillan` works too); passwords
-   don't. Use the username, **not** the ID shown on the dashboard
+   don't. Use the username, **not** the ID shown on the home screen
    (`NSC-00001`) — the ID won't log you in.
 
    Handy on the login screen: **SHOW** reveals what you typed in the
@@ -150,11 +160,32 @@ Open a terminal in `nickel-sales` (click the folder's address bar, type
 
 | Command | What it does |
 | ------- | ------------ |
-| `run-demo.bat` | The login screen (same as double-clicking) |
+| `run-demo.bat` | The app (same as double-clicking) |
 | `run-demo.bat --console` | A text-only demo with built-in test users — **works without MySQL** |
-| `run-demo.bat --scripted` | Runs 8 automatic checks; should end with `RESULT: 8 passed, 0 failed` |
+| `run-demo.bat --scripted` | Runs all the automatic self-tests; should end with **ALL CHECKS PASSED** |
 
 ---
+
+## Ringing up a sale
+
+Log in as a cashier (e.g. `JDelaCruz`), press **1** (Point of Sale), then:
+scan or type a barcode and press **Enter** for each item · **F2** to type a
+quantity first · **F3** to find an item without a barcode · **F12** to pay
+(type the cash received, or **F5** for GCash / Maya / QRPh and the reference
+number) · **Enter** to finish, then **Enter** again to print the receipt
+(**Esc** skips printing). **F7** reprints a past receipt, **F9** cancels the
+sale, **Esc** goes back.
+
+Prices are **before VAT**: the screen and receipt show the subtotal, the 12%
+VAT added on VATable items, and the total the customer pays.
+
+The receipt prints on the computer's default printer. To put your store's
+details on it (Windows, then open a new window):
+`setx NSC_STORE_ADDRESS "123 Rizal Ave., Manila"`, and likewise
+`NSC_STORE_TIN`, `NSC_STORE_PHONE`, `NSC_STORE_NAME`. For 58 mm receipt
+paper: `setx NSC_RECEIPT_WIDTH 32`.
+Until the real inventory is connected, the products are test ones
+(barcodes `4800000000019`, `4800000000026`, `4800000000040`, ...).
 
 ## Looking at the database
 
@@ -212,7 +243,10 @@ bcrypt hashes, so it's two steps:
 | ------- | --- |
 | `run-demo.bat` window opens and closes instantly | Open a terminal in `nickel-sales`, run `run-demo.bat`, and read the error |
 | "Something went wrong while logging in" for **every** account | The app can't reach MySQL. Run `setup.bat` — it checks MySQL is running, the database exists and your saved password works |
-| Every login started failing **after you pulled new changes** | Your database was made from an older version of the database script. In MySQL Workbench run `DROP DATABASE NickelSales_Database;`, then run `setup.bat` and answer **Y** to create it again (this resets it to the demo users) |
+| "The database is out of date…", or errors **after you pulled new changes** | Close the app and run `setup.bat` — it adds any new tables and columns to your database and keeps your data. Still failing? A table changed shape: in MySQL Workbench run `DROP DATABASE NickelSales_Database;`, then run `setup.bat` and answer **Y** to create it again (this resets it to the demo users and removes saved sales) |
+| "A database error occurred…" | The black window shows the real cause on a line starting with `[DATABASE]` — send that line to the team |
+| "No printer is set up on this computer" when printing a receipt | Set a default printer in Windows Settings → Printers (any printer works, even *Microsoft Print to PDF*), or press **Ctrl+P** in the receipt window to choose one |
+| Receipt is cut off at the sides on a receipt printer | For 58 mm paper run `setx NSC_RECEIPT_WIDTH 32`, then open a new window |
 | "Invalid username or password." | Use the **username** (e.g. `JCubillan`), not the ID (`NSC-00001`), and check the password is `Password123` — passwords are case-sensitive (watch for the Caps Lock warning) |
 | "Your session expired. Please log in again." | Nobody used the app for 30 minutes, so it logged out for safety. Just log in again |
 | `setup.bat` says MySQL is **NOT RUNNING** | Press Win+R, type `services.msc`, find the MySQL service, right-click → **Start** |
@@ -248,6 +282,24 @@ team.
 ---
 
 ## For developers
+
+What's where:
+
+```
+NSC-SWENG/
+  README.md          this guide
+  docs/              project documents (requirements, class diagram, plans)
+  database/          the MySQL script (setup runs it for you)
+  nickel-sales/      the Java app
+    src/             the code, one folder per module:
+      app/             the app itself (login -> home screen -> modules)
+      shared/          money, quantities, time, database - used by everyone
+      auth/            login, users, permissions
+      pos/             POS & sales
+    test/            self-tests and stand-ins, same folders as src/
+    run-demo.bat     build and run (run-demo.bat --scripted = all self-tests)
+```
+
 
 - **[nickel-sales/CONTRIBUTING.md](nickel-sales/CONTRIBUTING.md)** — how
   the code is organised, each role's work, IntelliJ/Eclipse setup, the git

@@ -132,7 +132,17 @@ main() {
         [[ "$count" =~ ^[0-9]+$ ]] || count=0
     fi
     if (( count > 0 )); then
-        step "Database        : NickelSales_Database is ready ($count users)."
+        # Re-apply the script: it only creates what is missing (new tables from
+        # other modules) and skips existing demo users, so existing data is kept.
+        run_mysql "" "$(cat "$SQL_FILE")"
+        if (( R_CODE != 0 )); then
+            step "Database        : could not bring NickelSales_Database up to date:"
+            echo "$R_TEXT"
+            step "If a table changed shape, rebuild it: in MySQL Workbench run"
+            step "  DROP DATABASE NickelSales_Database;   then run setup again."
+            return 1
+        fi
+        step "Database        : NickelSales_Database is ready and up to date ($count users)."
     else
         step "Database        : NickelSales_Database has not been created yet."
         if ! ask_yes_no "Create it now from database/NickelSales-Database-Config.sql?"; then
