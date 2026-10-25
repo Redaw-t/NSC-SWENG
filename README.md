@@ -9,7 +9,8 @@ waiting for installers.
 
 > **On a Mac or Linux?** Skip to [macOS / Linux](#macos--linux).
 > **Writing code for the project?** After this page, read
-> [nickel-sales/CONTRIBUTING.md](nickel-sales/CONTRIBUTING.md).
+> [docs/development/](docs/development/ARCHITECTURE.md) (architecture, module template, naming,
+> contributing) and [nickel-sales/CONTRIBUTING.md](nickel-sales/CONTRIBUTING.md) (setup and tests).
 
 ---
 
@@ -288,22 +289,26 @@ What's where:
 ```
 NSC-SWENG/
   README.md          this guide
-  docs/              project documents (requirements, class diagram, plans)
+  docs/              REPOSITORY_MAP.md, development/ (architecture, templates, rules), archive/
   database/          the MySQL script (setup runs it for you)
   nickel-sales/      the Java app
-    src/             the code, one folder per module:
-      app/             the app itself (login -> home screen -> modules)
+    src/             production code, one folder per module:
+      app/             the app itself (login -> home screen -> modules); Main is the entry point
       shared/          money, quantities, time, database - used by everyone
       auth/            login, users, permissions
       pos/             POS & sales
-    test/            self-tests and stand-ins, same folders as src/
+      product/         Product Management (contracts now, rest TODO)
+      inventory/       Inventory Management (contracts now, rest TODO)
+      barcode/ sync/ reports/ system/   placeholders (README only)
+    test/            self-tests, stand-ins (stubs/) and the dev launcher (app/DevApp)
     run-demo.bat     build and run (run-demo.bat --scripted = all self-tests)
 ```
 
 
-- **[nickel-sales/CONTRIBUTING.md](nickel-sales/CONTRIBUTING.md)** — how
-  the code is organised, each role's work, IntelliJ/Eclipse setup, the git
-  and commit-message rules, the checks to run before you push, and more
-  troubleshooting.
+- **[docs/development/](docs/development/ARCHITECTURE.md)** — the architecture rules, the module
+  template, naming rules, and the git/commit/pull-request rules. **[docs/REPOSITORY_MAP.md](docs/REPOSITORY_MAP.md)**
+  says which folder may depend on which.
+- **[nickel-sales/CONTRIBUTING.md](nickel-sales/CONTRIBUTING.md)** — IntelliJ/Eclipse setup,
+  environment variables, how to run the self-tests before you push, and troubleshooting.
 - Never put a real password in the code — the repo is public. The app
   reads it from the `NSC_DB_PASSWORD` environment variable.
