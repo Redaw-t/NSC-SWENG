@@ -1,12 +1,14 @@
 package app;
 
 /**
- * The real app's entry point.
+ * The real app's entry point (the composition root).
  *
  * Wires the shared services ({@link AppContext}) and opens the window.
- * Until the Product &amp; Inventory module is connected (POS Phase 6), POS
- * can't sell here: run test/app/DevApp (run-demo.bat) to try POS with
- * the test products instead.
+ * Until the Product and Inventory modules exist, POS can't sell here
+ * (it needs a ProductLookup and a StockRecorder): run test/app/DevApp
+ * (run-demo.bat) to try POS with the test products instead.
+ *
+ * This class must not import anything from test/.
  */
 public final class Main {
 
@@ -15,8 +17,9 @@ public final class Main {
     public static void main(String[] args) {
         AppConfig config = AppConfig.fromEnvironment();
 
-        // Product & Inventory: pass your ProductLookup and StockRecorder here
-        // (replace the two nulls), then register any services your screens share:
+        // Product / Inventory modules: pass your product.contract.ProductLookup and
+        // inventory.contract.StockRecorder here (replace the two nulls), then
+        // register any services your screens share:
         //     app.register(YourService.class, yourService);
         AppContext app = AppContext.create(config, null, null);
 

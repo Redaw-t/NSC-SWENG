@@ -1,7 +1,7 @@
 package pos.cart;
 
 import pos.contract.PriceType;
-import pos.contract.ProductInfo;
+import product.contract.ProductInfo;
 
 import java.math.BigDecimal;
 import java.util.Objects;

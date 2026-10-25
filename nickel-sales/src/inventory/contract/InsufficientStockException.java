@@ -1,4 +1,4 @@
-package pos.contract;
+package inventory.contract;
 
 import shared.Quantity;
 

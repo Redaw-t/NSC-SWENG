@@ -1,13 +1,12 @@
-package pos.stub;
+package stubs;
 
 import shared.Money;
 import shared.Quantity;
-import pos.contract.InsufficientStockException;
-import pos.contract.ProductInfo;
-import pos.contract.ProductLookup;
-import pos.contract.SaleLineRecord;
-import pos.contract.SaleRecord;
-import pos.contract.StockRecorder;
+import inventory.contract.InsufficientStockException;
+import inventory.contract.StockLine;
+import inventory.contract.StockRecorder;
+import product.contract.ProductInfo;
+import product.contract.ProductLookup;
 
 import java.math.BigDecimal;
 import java.sql.Connection;
@@ -20,9 +19,10 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * TEST STAND-IN for the Product &amp; Inventory module: an in-memory catalog
- * with stock, implementing both POS contracts. Lets POS be built and tested
- * before the real module exists. Never used by the real app.
+ * TEST STAND-IN for the Product and Inventory modules: an in-memory catalog
+ * with stock, implementing ProductLookup and StockRecorder. Lets POS be built
+ * and tested before the real modules exist. Production code under src/ must
+ * never use it.
  *
  * The sample products cover the cases POS must handle:
  *
@@ -93,9 +93,10 @@ public final class StubInventory implements ProductLookup, StockRecorder {
      * ignored because nothing here is in the database.
      */
     @Override
-    public synchronized void recordSale(SaleRecord sale, Connection tx) throws InsufficientStockException {
+    public synchronized void recordSale(String reference, List<StockLine> lines, Connection tx)
+            throws InsufficientStockException {
         Map<String, BigDecimal> needed = new LinkedHashMap<>();
-        for (SaleLineRecord line : sale.lines()) {
+        for (StockLine line : lines) {
             needed.merge(line.productId(), line.quantity(), BigDecimal::add);
         }
         for (Map.Entry<String, BigDecimal> e : needed.entrySet()) {

@@ -1,13 +1,13 @@
 package pos.cart;
 
+import inventory.contract.InsufficientStockException;
 import pos.checkout.CheckoutException;
 import pos.checkout.CheckoutService;
-import pos.checkout.InvoiceNumberGenerator;
-import pos.contract.InsufficientStockException;
 import pos.contract.PaymentRecord;
-import pos.contract.ProductInfo;
-import pos.contract.ProductLookup;
 import pos.contract.SaleRecord;
+import pos.repository.InvoiceNumberGenerator;
+import product.contract.ProductInfo;
+import product.contract.ProductLookup;
 import shared.Quantity;
 
 import java.math.BigDecimal;

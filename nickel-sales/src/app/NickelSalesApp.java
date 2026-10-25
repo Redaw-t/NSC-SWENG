@@ -5,8 +5,7 @@ import javafx.stage.Stage;
 
 /**
  * The JavaFX application: opens the window on the login screen. Started by
- * {@link Main} (the real app) or test/app/DevApp (with test products), which
- * build the {@link AppContext} first and pass it in.
+ * {@link Main}, which builds the {@link AppContext} first and passes it in.
  */
 public class NickelSalesApp extends Application {
 
@@ -21,7 +20,7 @@ public class NickelSalesApp extends Application {
     @Override
     public void start(Stage stage) {
         if (context == null) {
-            throw new IllegalStateException("Start the app with app.Main (or DevApp), not NickelSalesApp directly");
+            throw new IllegalStateException("Start the app through app.Main, not NickelSalesApp directly");
         }
         DashboardRouter router = new DashboardRouter(stage, context, Modules.all());
         stage.setTitle("Nickel Sales Center - POS (" + context.config().terminalId() + ")");

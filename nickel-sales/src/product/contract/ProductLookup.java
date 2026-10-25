@@ -1,14 +1,14 @@
-package pos.contract;
+package product.contract;
 
 import java.util.List;
 import java.util.Optional;
 
 /**
- * CONTRACT — implemented by the Product &amp; Inventory module, used by POS.
+ * CONTRACT — implemented by the Product module, used by POS (and Barcode).
  *
  * POS finds products ONLY through this interface; it never reads the product
- * tables directly. Until the real implementation exists, POS runs against a
- * stand-in (test/pos/stub/StubInventory).
+ * tables directly. Until the real implementation exists, tests and the
+ * dev launcher run POS against a stand-in from test/stubs.
  *
  * Database problems are reported as RuntimeException (as MySqlUserRepository
  * does); "not found" is an empty Optional / empty list, never an exception.

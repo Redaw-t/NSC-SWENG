@@ -1,4 +1,4 @@
-package auth.storage;
+package auth.repository;
 
 import shared.Database;
 

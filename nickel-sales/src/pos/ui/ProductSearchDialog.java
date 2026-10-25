@@ -13,8 +13,8 @@ import javafx.scene.input.KeyEvent;
 import javafx.scene.layout.VBox;
 import javafx.stage.Window;
 import pos.cart.ThresholdPricingRule;
-import pos.contract.ProductInfo;
-import pos.contract.ProductLookup;
+import product.contract.ProductInfo;
+import product.contract.ProductLookup;
 import shared.Quantity;
 import shared.UiErrors;
 

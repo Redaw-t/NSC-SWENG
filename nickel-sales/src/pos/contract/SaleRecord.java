@@ -9,8 +9,8 @@ import java.util.Objects;
 
 /**
  * CONTRACT — a COMPLETED sale (Sale in the class diagram, status COMPLETED).
- * Built by POS; read by Product &amp; Inventory (stock-out, {@link StockRecorder}),
- * by Sync ({@link SaleExport}) and by Reports ({@link SaleHistory}).
+ * Built by POS; read by Sync ({@link SaleExport}) and by Reports ({@link SaleHistory}).
+ * Inventory is handed plain stock lines instead (inventory.contract.StockRecorder).
  *
  * A completed sale never changes. Only completed sales are saved: a sale that
  * is cancelled before payment is simply never stored.

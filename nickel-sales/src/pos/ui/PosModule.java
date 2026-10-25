@@ -10,7 +10,7 @@ import javafx.scene.Parent;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.layout.VBox;
-import pos.checkout.PosTables;
+import pos.repository.PosTables;
 import shared.UiErrors;
 
 import java.util.List;

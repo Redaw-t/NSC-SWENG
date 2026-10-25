@@ -1,5 +1,6 @@
 package pos;
 
+import inventory.contract.InsufficientStockException;
 import pos.cart.CartException;
 import pos.cart.PricingService;
 import pos.cart.Sale;
@@ -10,13 +11,12 @@ import pos.cart.SalesService;
 import pos.cart.StockProblem;
 import pos.cart.ThresholdPricingRule;
 import pos.cart.Vat;
-import pos.contract.InsufficientStockException;
 import pos.contract.PaymentMethod;
 import pos.contract.PaymentRecord;
 import pos.contract.PriceType;
 import pos.contract.SaleLineRecord;
 import pos.contract.SaleRecord;
-import pos.stub.StubInventory;
+import stubs.StubInventory;
 import shared.Money;
 import shared.Quantity;
 

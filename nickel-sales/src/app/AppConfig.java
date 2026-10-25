@@ -1,6 +1,6 @@
 package app;
 
-import pos.checkout.InvoiceNumberGenerator;
+import pos.repository.InvoiceNumberGenerator;
 import pos.receipt.Receipt;
 import pos.receipt.StoreInfo;
 

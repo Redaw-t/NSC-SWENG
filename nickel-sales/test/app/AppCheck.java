@@ -4,7 +4,7 @@ import auth.contract.User;
 import auth.contract.UserRole;
 import auth.contract.UserStatus;
 import auth.permission.AuthorizationService;
-import pos.stub.StubInventory;
+import stubs.StubInventory;
 
 import java.time.Duration;
 import java.util.EnumSet;

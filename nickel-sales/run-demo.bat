@@ -1,6 +1,6 @@
 @echo off
 rem =====================================================================
-rem  Nickel Sales Center - Sprint 1 demo (Windows)
+rem  Nickel Sales Center Application - run and scripted checks (Windows)
 rem
 rem    run-demo.bat              the app (DevApp): login, home screen, modules.
 rem                              Users and sales from the local MySQL database,

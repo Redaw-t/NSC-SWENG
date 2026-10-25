@@ -1,4 +1,4 @@
-package pos.contract;
+package product.contract;
 
 import shared.Money;
 import shared.Quantity;

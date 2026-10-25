@@ -1,14 +1,17 @@
 package pos.checkout;
 
 import auth.contract.AuditLogger;
+import inventory.contract.InsufficientStockException;
+import inventory.contract.StockLine;
+import inventory.contract.StockRecorder;
 import pos.cart.Sale;
 import pos.cart.SaleLineItem;
 import pos.cart.SaleTotals;
-import pos.contract.InsufficientStockException;
 import pos.contract.PaymentRecord;
 import pos.contract.SaleLineRecord;
 import pos.contract.SaleRecord;
-import pos.contract.StockRecorder;
+import pos.repository.InvoiceNumberGenerator;
+import pos.repository.SaleRepository;
 import shared.Database;
 
 import java.sql.SQLException;
@@ -71,7 +74,10 @@ public class CheckoutService {
                         sale.getCashierId(), completedAt, lines, List.of(payment),
                         totals.vatableSales(), totals.vatExemptSales(), totals.vatAmount(), totals.total());
                 sales.save(record, tx);
-                stock.recordSale(record, tx);
+                List<StockLine> stockOut = record.lines().stream()
+                        .map(line -> new StockLine(line.productId(), line.quantity()))
+                        .toList();
+                stock.recordSale(record.invoiceNo(), stockOut, tx);
                 return record;
             });
         } catch (SQLException e) {

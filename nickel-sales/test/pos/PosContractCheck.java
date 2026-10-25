@@ -4,14 +4,15 @@ import shared.Money;
 import shared.PhTime;
 import shared.Quantity;
 import shared.Database;
-import pos.contract.InsufficientStockException;
+import inventory.contract.InsufficientStockException;
+import inventory.contract.StockLine;
 import pos.contract.PaymentMethod;
 import pos.contract.PaymentRecord;
 import pos.contract.PriceType;
-import pos.contract.ProductInfo;
 import pos.contract.SaleLineRecord;
 import pos.contract.SaleRecord;
-import pos.stub.StubInventory;
+import product.contract.ProductInfo;
+import stubs.StubInventory;
 
 import java.math.BigDecimal;
 import java.sql.Connection;
@@ -183,7 +184,7 @@ public class PosContractCheck {
         });
 
         check("Stand-in: stock-out deducts stock", () -> {
-            stub.recordSale(sale(List.of(line(1, "P-0002", "5"), line(2, "P-0004", "1.5"))), null);
+            stub.recordSale("T99-2026-000001", stockOut(List.of(line(1, "P-0002", "5"), line(2, "P-0004", "1.5"))), null);
             expect(stub.stockOf("P-0002"), "195.000");
             expect(stub.stockOf("P-0004"), "99.000");
         });
@@ -191,7 +192,7 @@ public class PosContractCheck {
         check("Stand-in: stock-out refuses the whole sale if any line is short", () -> {
             BigDecimal paperBefore = stub.stockOf("P-0001");
             try {
-                stub.recordSale(sale(List.of(line(1, "P-0001", "2"), line(2, "P-0005", "1"))), null);
+                stub.recordSale("T99-2026-000001", stockOut(List.of(line(1, "P-0001", "2"), line(2, "P-0005", "1"))), null);
                 throw new AssertionError("expected InsufficientStockException");
             } catch (InsufficientStockException e) {
                 expectText(e.getProductId(), "P-0005");
@@ -202,7 +203,8 @@ public class PosContractCheck {
 
         check("Stand-in: two lines of the same product are added up", () -> {
             stub.add("P-0099", "123", "Test Item", "pc", "1.00", null, true, true, "3");
-            expectThrows(() -> stub.recordSale(sale(List.of(line(1, "P-0099", "2"), line(2, "P-0099", "2"))), null),
+            expectThrows(() -> stub.recordSale("T99-2026-000001",
+                            stockOut(List.of(line(1, "P-0099", "2"), line(2, "P-0099", "2"))), null),
                     InsufficientStockException.class);
         });
 
@@ -254,6 +256,11 @@ public class PosContractCheck {
         BigDecimal q = Quantity.of(qty);
         return new SaleLineRecord(no, productId, null, productId, "pc", q, Money.of("1.00"),
                 PriceType.RETAIL, true, Money.round(q));
+    }
+
+    /** What CheckoutService hands to Inventory for a sale's lines. */
+    static List<StockLine> stockOut(List<SaleLineRecord> lines) {
+        return lines.stream().map(l -> new StockLine(l.productId(), l.quantity())).toList();
     }
 
     /** A cash sale paid exactly, with the VAT totals worked out as SaleRecord describes. */

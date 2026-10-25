@@ -1,6 +1,8 @@
 package pos;
 
 import auth.contract.AuditLogger;
+import inventory.contract.InsufficientStockException;
+import inventory.contract.StockRecorder;
 import pos.cart.CartException;
 import pos.cart.PricingService;
 import pos.cart.Sale;
@@ -8,18 +10,16 @@ import pos.cart.SaleStatus;
 import pos.cart.SalesService;
 import pos.checkout.CheckoutException;
 import pos.checkout.CheckoutService;
-import pos.checkout.InvoiceNumberGenerator;
-import pos.checkout.MySqlSaleRepository;
 import pos.checkout.PaymentService;
-import pos.contract.InsufficientStockException;
 import pos.contract.PaymentMethod;
 import pos.contract.PaymentRecord;
 import pos.contract.SaleRecord;
-import pos.contract.StockRecorder;
-import pos.stub.StubInventory;
+import pos.repository.InvoiceNumberGenerator;
+import pos.repository.MySqlSaleRepository;
 import shared.Database;
 import shared.Money;
 import shared.Quantity;
+import stubs.StubInventory;
 
 import java.math.BigDecimal;
 import java.sql.Connection;
@@ -167,7 +167,7 @@ public class CheckoutCheck {
             });
 
             check("Stock runs short while saving: no sale, no payment, no invoice number used", db, () -> {
-                StockRecorder soldOut = (sale, tx) -> {
+                StockRecorder soldOut = (reference, lines, tx) -> {
                     throw new InsufficientStockException("P-0001", "Bond Paper A4 (ream)", Quantity.of("1"), Quantity.of("2"));
                 };
                 SalesService pos = new SalesService(stock, new PricingService(), terminal,
@@ -191,7 +191,7 @@ public class CheckoutCheck {
             });
 
             check("A database error while saving also rolls everything back", db, () -> {
-                StockRecorder broken = (sale, tx) -> {
+                StockRecorder broken = (reference, lines, tx) -> {
                     throw new SQLException("simulated failure");
                 };
                 SalesService pos = new SalesService(stock, new PricingService(), terminal,

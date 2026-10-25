@@ -1,4 +1,4 @@
-package pos.checkout;
+package pos.repository;
 
 import pos.contract.SaleHistory;
 import pos.contract.SaleRecord;

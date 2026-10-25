@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =====================================================================
-#  Nickel Sales Center - Sprint 1 demo (macOS / Linux)
+#  Nickel Sales Center Application - run and scripted checks (macOS / Linux)
 #
 #    ./run-demo.sh              the app (DevApp): login, home screen, modules.
 #                               Users and sales from the local MySQL database,

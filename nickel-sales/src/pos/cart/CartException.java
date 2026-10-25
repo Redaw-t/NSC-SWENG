@@ -4,7 +4,7 @@ package pos.cart;
  * Something the cashier tried can't be done (unknown barcode, product no
  * longer sold, bad quantity, ...). The message is ready to show on screen.
  * Not enough stock is reported separately, as
- * {@link pos.contract.InsufficientStockException}.
+ * {@link inventory.contract.InsufficientStockException}.
  */
 public class CartException extends Exception {
 

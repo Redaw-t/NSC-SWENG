@@ -1,6 +1,6 @@
 package app;
 
-import pos.stub.StubInventory;
+import stubs.StubInventory;
 
 /**
  * DEVELOPMENT launcher: the real app (same login, home screen and modules
