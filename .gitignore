@@ -35,7 +35,12 @@ db.properties
 *.iws
 
 # --- Eclipse ----------------------------------------------------------
-# Shared and committed: .project and .classpath.
+# Shared and committed: nickel-sales/.project and nickel-sales/.classpath
+# (the Eclipse project is the nickel-sales/ folder; don't add one at the root).
+/.project
+/.classpath
+.factorypath
+.apt_generated/
 .settings/
 .metadata/
 .recommenders/
@@ -50,6 +55,9 @@ replay_pid*.log
 
 # --- Local-only files ---------------------------------------------------
 *.patch
+*.orig
+*.bak
+*.tmp
 # Project PDFs / specs kept next to the repo, not in it
 /*.pdf
 /docs/*.pdf
