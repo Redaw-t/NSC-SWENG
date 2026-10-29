@@ -246,7 +246,7 @@ bcrypt hashes, so it's two steps:
 | "Something went wrong while logging in" for **every** account | The app can't reach MySQL. Run `setup.bat` — it checks MySQL is running, the database exists and your saved password works |
 | "The database is out of date…", or errors **after you pulled new changes** | Close the app and run `setup.bat` — it adds any new tables and columns to your database and keeps your data. Still failing? A table changed shape: in MySQL Workbench run `DROP DATABASE NickelSales_Database;`, then run `setup.bat` and answer **Y** to create it again (this resets it to the demo users and removes saved sales) |
 | "A database error occurred…" | The black window shows the real cause on a line starting with `[DATABASE]` — send that line to the team |
-| "No printer is set up on this computer" when printing a receipt | Set a default printer in Windows Settings → Printers (any printer works, even *Microsoft Print to PDF*), or press **Ctrl+P** in the receipt window to choose one |
+| "No printer is set up on this computer" when printing a receipt | Set a default printer in Windows Settings → Printers (any printer works, even *Microsoft Print to PDF*) |
 | Receipt is cut off at the sides on a receipt printer | For 58 mm paper run `setx NSC_RECEIPT_WIDTH 32`, then open a new window |
 | "Invalid username or password." | Use the **username** (e.g. `JCubillan`), not the ID (`NSC-00001`), and check the password is `Password123` — passwords are case-sensitive (watch for the Caps Lock warning) |
 | "Your session expired. Please log in again." | Nobody used the app for 30 minutes, so it logged out for safety. Just log in again |

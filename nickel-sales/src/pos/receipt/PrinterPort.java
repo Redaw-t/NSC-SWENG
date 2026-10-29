@@ -2,9 +2,9 @@ package pos.receipt;
 
 /**
  * Prints receipts (PrinterPort in the class diagram). The app uses
- * {@link JavaFxReceiptPrinter}; a different printer (e.g. one driven
- * directly by ESC/POS commands) can be plugged in through AppContext
- * without touching the POS screen.
+ * {@link EscPosReceiptPrinter}, which sends ESC/POS commands straight to a
+ * thermal receipt printer. A different printer can be plugged in through
+ * AppContext without touching the POS screen.
  */
 public interface PrinterPort {
 

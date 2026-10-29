@@ -15,7 +15,6 @@ import javafx.scene.input.KeyEvent;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.stage.Window;
-import pos.receipt.JavaFxReceiptPrinter;
 import pos.receipt.PrinterPort;
 import pos.receipt.Receipt;
 import pos.receipt.ReceiptPrintException;
@@ -24,7 +23,6 @@ import pos.receipt.ReceiptView;
 /**
  * Shows a receipt exactly as it will print, with:
  *   Enter   print on the default printer (then close)
- *   Ctrl+P  choose the printer first
  *   Esc     close without printing
  * A printing problem is shown in the window, which stays open to try again.
  */
@@ -57,7 +55,7 @@ final class ReceiptDialog {
         error.setWrapText(true);
         error.setMaxWidth(480);
         error.setStyle("-fx-font-size: 14px; -fx-font-weight: bold; -fx-text-fill: " + PosScreen.RED + ";");
-        Label keys = new Label("Enter print  ·  Ctrl+P choose printer  ·  Esc close without printing");
+        Label keys = new Label("Enter print  ·  Esc close without printing");
         keys.setStyle("-fx-font-size: 12px; -fx-text-fill: #666666;");
 
         VBox content = new VBox(12);
@@ -68,12 +66,8 @@ final class ReceiptDialog {
         dialog.getDialogPane().setContent(content);
 
         ButtonType print = new ButtonType("Print receipt", ButtonBar.ButtonData.OK_DONE);
-        ButtonType choose = new ButtonType("Choose printer...", ButtonBar.ButtonData.OTHER);
         ButtonType close = new ButtonType("Close", ButtonBar.ButtonData.CANCEL_CLOSE);
-        dialog.getDialogPane().getButtonTypes().addAll(print, choose, close);
-        if (!(printer instanceof JavaFxReceiptPrinter)) {
-            dialog.getDialogPane().lookupButton(choose).setVisible(false);
-        }
+        dialog.getDialogPane().getButtonTypes().addAll(print, close);
 
         boolean[] printed = {false};
         dialog.getDialogPane().lookupButton(print).addEventFilter(ActionEvent.ACTION, e -> {
@@ -86,26 +80,6 @@ final class ReceiptDialog {
             } catch (RuntimeException ex) {
                 System.err.println("[PRINT] " + ex);
                 error.setText("The receipt could not be printed. Check the printer, then try again.");
-                e.consume();
-            }
-        });
-        dialog.getDialogPane().lookupButton(choose).addEventFilter(ActionEvent.ACTION, e -> {
-            try {
-                if (((JavaFxReceiptPrinter) printer).printWithChoice(receipt, dialog.getDialogPane().getScene().getWindow())) {
-                    printed[0] = true;
-                    return;    // printed: let the dialog close
-                }
-            } catch (ReceiptPrintException ex) {
-                error.setText(ex.getMessage());
-            } catch (RuntimeException ex) {
-                System.err.println("[PRINT] " + ex);
-                error.setText("The receipt could not be printed. Check the printer, then try again.");
-            }
-            e.consume();
-        });
-        dialog.getDialogPane().addEventFilter(KeyEvent.KEY_PRESSED, e -> {
-            if (e.getCode() == KeyCode.P && e.isShortcutDown()) {
-                ((Button) dialog.getDialogPane().lookupButton(choose)).fire();
                 e.consume();
             }
         });

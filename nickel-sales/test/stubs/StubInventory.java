@@ -47,6 +47,8 @@ public final class StubInventory implements ProductLookup, StockRecorder {
         add("P-0005", "4800000000057", "Masking Tape 1 inch", "roll", "35.75", "32.00", true, true, "0");
         add("P-0006", "4800000000064", "Desk Calculator", "pc", "499.00", null, true, false, "5");
         add("P-0007", null, "Glue Stick", "pc", "18.00", "16.50", true, true, "30");
+        add("P-0008", "6970340973798", "Osmanthus Oolong Tea", "box", "285.00", "255.00", true, true, "10");
+        add("P-0009", "4800067130063", "Cleene Ethyl Alcohol", "pc", "98.00", "76.00", true, true, "10");
     }
 
     /** Adds or replaces a product (tests use this to set up special cases). */

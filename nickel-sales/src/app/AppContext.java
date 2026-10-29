@@ -17,7 +17,6 @@ import pos.checkout.CheckoutService;
 import pos.checkout.PaymentService;
 import pos.contract.SaleExport;
 import pos.contract.SaleHistory;
-import pos.receipt.JavaFxReceiptPrinter;
 import pos.receipt.PrinterPort;
 import pos.receipt.ReceiptBuilder;
 import pos.repository.InvoiceNumberGenerator;
@@ -80,7 +79,7 @@ public final class AppContext {
                 : new SalesService(products, new PricingService(), config.terminalId(),
                         new CheckoutService(sales, new InvoiceNumberGenerator(), stock, audit));
         this.receipts = new ReceiptBuilder(config.store(), this::userName);
-        this.printer = new JavaFxReceiptPrinter(config.receiptWidth());
+        this.printer = new pos.receipt.EscPosReceiptPrinter(config.receiptWidth());
     }
 
     /**

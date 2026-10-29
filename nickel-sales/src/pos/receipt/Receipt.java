@@ -28,9 +28,9 @@ import java.util.Objects;
  */
 public record Receipt(StoreInfo store, SaleRecord sale, String cashierName, boolean reprint) {
 
-    public static final int DEFAULT_WIDTH = 42;   // characters per line on 80 mm paper
+    public static final int DEFAULT_WIDTH = 32;   // characters per line on 80 mm paper
     public static final int MIN_WIDTH = 32;       // 58 mm paper
-    public static final int MAX_WIDTH = 48;
+    public static final int MAX_WIDTH = 58;
 
     public static final String NOT_OFFICIAL = "THIS IS NOT AN OFFICIAL RECEIPT";
 
@@ -133,7 +133,7 @@ public record Receipt(StoreInfo store, SaleRecord sale, String cashierName, bool
         }
 
         void rule() {
-            lines.add("-".repeat(width));
+            lines.add(".".repeat(width));
         }
 
         void center(String text) {

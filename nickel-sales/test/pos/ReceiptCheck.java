@@ -42,7 +42,7 @@ import java.util.UUID;
  * original line for line (only the REPRINT mark differs).
  *
  * (Printing itself needs a printer and a screen; the printer uses exactly
- * these lines, see pos.receipt.JavaFxReceiptPrinter.)
+ * these lines, see pos.receipt.EscPosReceiptPrinter.)
  *
  * Run after any run-demo build, from nickel-sales/:
  *   java -cp "out;lib\jbcrypt-0.4.jar;lib\mysql-connector-j-9.4.0.jar" pos.ReceiptCheck
