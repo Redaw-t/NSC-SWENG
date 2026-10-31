@@ -50,18 +50,22 @@ Windows: `setx NSC_DB_PASSWORD "..."`, then open a **new** terminal (restart Int
 
 | Command (from `nickel-sales/`) | What it does |
 | ------------------------------ | ------------ |
-| `run-demo.bat` / `./run-demo.sh` | Starts `app.DevApp` (test folder): the real app with in-memory **test products**, so POS can be tried until the real Product/Inventory modules are wired into `app.Main`. Users and sales are in MySQL. |
+| `run-demo.bat` / `./run-demo.sh` | Starts `app.DevApp` (test folder): the real app (real products, users and sales in MySQL) plus a stand-in stock recorder, so POS can sell until the Inventory module's `StockRecorder` is wired into `app.Main`. |
 | `run-demo.bat --console` | Console login demo (`auth.AuthDemo`), no database needed |
 | `run-demo.bat --scripted` | Compiles `src/` and `test/` into a clean `out/` and runs **all** self-tests. Exit code 1 if any fail. |
 
-`app.Main` (in `src/`) is the production entry point. It does not use `test/`; POS stays disabled
-in it until a `ProductLookup` and `StockRecorder` are passed to `AppContext.create`.
+`app.Main` (in `src/`) is the production entry point. It does not use `test/`. It wires the Product
+module (real products from MySQL), but POS cannot complete a sale in it until the Inventory module's
+`StockRecorder` is passed to `wire(...)`. `app.DevApp` (what `run-demo.bat` starts) is `Main` plus a
+stand-in recorder, so you can sell real products today.
 
 ## Self-tests (`--scripted`)
 
 `AuthDemo`, `AuthzDemo`, `UserAdminDemo`, `PosContractCheck`, `CartCheck`, `CheckoutCheck`,
-`ReceiptCheck`, `AppCheck`. All must pass (`ALL CHECKS PASSED`).
-`PosContractCheck`, `CheckoutCheck` and `ReceiptCheck` also exercise MySQL and need the database set up
+`ReceiptCheck`, `AppCheck`, `ProductCheck`. All must pass (`ALL CHECKS PASSED`).
+`PosContractCheck`, `CartCheck`, `CheckoutCheck`, `ReceiptCheck` and `ProductCheck` use MySQL (the real product catalog;
+`CartCheck` skips entirely without it, the others skip their database scenarios). They put the nine seed products
+P-0001 to P-0009 back to their seed values around every scenario, so run them on a development database. The database must be set up
 **with the current schema**. If your database was created by an older script they fail with
 `Table ... doesn't exist` or `Sale.SaleID is missing`: run `setup.bat` again, or see below.
 Always use `run-demo.bat --scripted`; running `java ...` by hand can pick an older JDK.

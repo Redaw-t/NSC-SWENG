@@ -57,8 +57,8 @@ Inside one module the direction is `ui -> service -> repository interface <- MyS
 | Folder | Belongs here | Must not be depended on by |
 |---|---|---|
 | `test/auth/`, `test/pos/`, `test/app/AppCheck` | Self-tests (`*Check`, `*Demo`) run by `run-demo --scripted` | anything in `src/` |
-| `test/stubs/` | Stand-ins for modules that don't exist yet (`StubInventory` implements `ProductLookup` and `StockRecorder`) | anything in `src/` |
-| `test/app/DevApp` | Development launcher: `Main`'s wiring plus `StubInventory`, so POS can be tried | anything in `src/` |
+| `test/stubs/` | Stand-ins for modules that don't exist yet (`StubStockRecorder` stands in for Inventory's recorder; `TestCatalog` is the product fixture for the checks) | anything in `src/` |
+| `test/app/DevApp` | Development launcher: `Main`'s wiring plus `StubStockRecorder`, so POS can sell real products | anything in `src/` |
 
 Tests and stubs may use anything in `src/`. Nothing in `src/` may use them.
 

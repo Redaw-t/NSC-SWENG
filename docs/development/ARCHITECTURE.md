@@ -83,9 +83,9 @@ test/   self-tests (*Check, *Demo), stand-ins (test/stubs), and the dev launcher
 ```
 
 - `Main` is the only production entry point.
-- `DevApp` is a development launcher: it is `Main` plus `stubs.StubInventory`, so POS can be tried
-  before the real Product/Inventory modules exist. Once they are wired into `Main`, `DevApp`
-  can be retired.
+- `DevApp` is a development launcher: it is `Main` plus `stubs.StubStockRecorder`, so POS can sell
+  the real products before the Inventory module's `StockRecorder` exists. Once that is wired into
+  `Main`, `DevApp` can be retired.
 - A stand-in goes in `test/stubs/` and implements the same contract the real class will.
 
 ## 5. Wiring and module boundaries

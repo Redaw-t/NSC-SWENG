@@ -16,7 +16,7 @@ import pos.contract.PaymentRecord;
 import pos.contract.PriceType;
 import pos.contract.SaleLineRecord;
 import pos.contract.SaleRecord;
-import stubs.StubInventory;
+import stubs.TestCatalog;
 import shared.Money;
 import shared.Quantity;
 
@@ -27,13 +27,14 @@ import java.util.List;
 
 /**
  * SELF-TEST for POS Phase 1: the cart and pricing engine, run against the
- * StubInventory stand-in (no database, no screen).
+ * real product catalog in MySQL (no screen). It needs the database set up and
+ * resets the nine seed products P-0001 to P-0009 around every scenario.
  *
  * Run after any run-demo build, from nickel-sales/:
  *   java -cp "out;lib\jbcrypt-0.4.jar;lib\mysql-connector-j-9.4.0.jar" pos.CartCheck
  * (macOS/Linux: ':' instead of ';'). Exit code 1 on failure.
  *
- * Sample products (see StubInventory):
+ * Seed products (database/NickelSales-Database-Config.sql):
  *   4800000000019 Bond Paper   250.00 / 235.00   stock 40
  *   4800000000026 Ballpen       12.00 /  10.00   stock 200
  *   4800000000033 Notebook      45.00 / (none)   stock 60
@@ -58,6 +59,11 @@ public class CartCheck {
         System.out.println("=================================================================");
         System.out.println(" NICKEL SALES CENTER - POS Phase 1 checks (cart and pricing)");
         System.out.println("=================================================================");
+
+        if (!TestCatalog.available()) {
+            System.out.println(" [SKIP] All checks: they use the real product catalog and MySQL is not reachable.");
+            return;
+        }
 
         check("Pricing rule: retail below " + ThresholdPricingRule.WHOLESALE_MIN_QTY + ", wholesale from it", () -> {
             expectTrue(ThresholdPricingRule.WHOLESALE_MIN_QTY == 6, "the store's threshold is 6");
@@ -147,15 +153,14 @@ public class CartCheck {
         });
 
         check("Stock drops after adding: only lowering works, Pay stays off until it fits", () -> {
-            StubInventory stock = new StubInventory();
-            SalesService pos = new SalesService(stock, "T01");
+            SalesService pos = new SalesService(TestCatalog.products(), "T01");
             pos.startSale("NSC-00002");
             pos.addItem(BALLPEN, q("10"));
             pos.addItem(PAPER);
             expectTrue(pos.canCheckout() && pos.findStockProblems().isEmpty(), "fine at first");
 
             // the other terminal sells ballpens: only 3 left
-            stock.add("P-0002", BALLPEN, "Ballpen Black", "pc", "12.00", "10.00", true, true, "3");
+            TestCatalog.setStock("P-0002", "3");
             expectTrue(!pos.canCheckout(), "Pay is off");
             List<StockProblem> problems = pos.findStockProblems();
             expectTrue(problems.size() == 1, "one problem line");
@@ -170,18 +175,17 @@ public class CartCheck {
             expectTrue(pos.canCheckout() && pos.findStockProblems().isEmpty(), "3 fits: Pay is back on");
 
             // removing the line also fixes it
-            stock.add("P-0002", BALLPEN, "Ballpen Black", "pc", "12.00", "10.00", true, true, "1");
+            TestCatalog.setStock("P-0002", "1");
             expectTrue(!pos.canCheckout(), "off again at 1 left");
             pos.removeItem("P-0002");
             expectTrue(pos.canCheckout(), "on after removing the line");
         });
 
         check("A product deactivated after it was added blocks Pay until removed", () -> {
-            StubInventory stock = new StubInventory();
-            SalesService pos = new SalesService(stock, "T01");
+            SalesService pos = new SalesService(TestCatalog.products(), "T01");
             pos.startSale("NSC-00002");
             pos.addItem(NOTEBOOK);
-            stock.add("P-0003", NOTEBOOK, "Notebook 80 leaves", "pc", "45.00", null, true, false, "60");
+            TestCatalog.setActive("P-0003", false);
             expectText(pos.findStockProblems().get(0).message(),
                     "Notebook 80 leaves is no longer sold. Remove it from the sale.");
             expectTrue(!pos.canCheckout(), "Pay is off");
@@ -268,7 +272,7 @@ public class CartCheck {
         });
 
         check("Starting, cancelling and the one-open-sale rule", () -> {
-            SalesService pos = new SalesService(new StubInventory(), new PricingService(), "T01");
+            SalesService pos = new SalesService(TestCatalog.products(), new PricingService(), "T01");
             expectTrue(pos.currentSale().isEmpty(), "no sale yet");
             expectThrows(() -> pos.addItem(PAPER), IllegalStateException.class);
             Sale sale = pos.startSale("NSC-00002");
@@ -296,7 +300,7 @@ public class CartCheck {
     /* ------------------------------- helpers ------------------------------- */
 
     static SalesService newSale() {
-        SalesService pos = new SalesService(new StubInventory(), "T01");
+        SalesService pos = new SalesService(TestCatalog.products(), "T01");
         pos.startSale("NSC-00002");
         return pos;
     }
@@ -311,12 +315,15 @@ public class CartCheck {
 
     static void check(String name, Body body) {
         try {
+            TestCatalog.resetIfAvailable();   // every scenario starts from the seed products...
             body.run();
             passed++;
             System.out.println(" [PASS] " + name);
         } catch (Throwable t) {
             failed++;
             System.out.println(" [FAIL] " + name + "  ->  " + t);
+        } finally {
+            TestCatalog.resetIfAvailable();   // ...and leaves them as it found them
         }
     }
 

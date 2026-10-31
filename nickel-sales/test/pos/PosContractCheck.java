@@ -12,7 +12,9 @@ import pos.contract.PriceType;
 import pos.contract.SaleLineRecord;
 import pos.contract.SaleRecord;
 import product.contract.ProductInfo;
-import stubs.StubInventory;
+import product.service.ProductService;
+import stubs.StubStockRecorder;
+import stubs.TestCatalog;
 
 import java.math.BigDecimal;
 import java.sql.Connection;
@@ -28,8 +30,8 @@ import java.util.UUID;
 
 /**
  * SELF-TEST for POS Phase 0: shared money/quantity/time rules, the POS
- * contracts (and the rules their records enforce), the test stand-ins, the
- * POS tables, and Database.inTransaction.
+ * contracts (and the rules their records enforce), the real product lookup and the
+ * test stock recorder, the POS tables, and Database.inTransaction.
  *
  * Run after any run-demo build, from nickel-sales/:
  *   java -cp "out;lib\jbcrypt-0.4.jar;lib\mysql-connector-j-9.4.0.jar" pos.PosContractCheck
@@ -156,8 +158,6 @@ public class PosContractCheck {
                     s.vatAmount(), s.total()), IllegalArgumentException.class);                    // no payment
         });
 
-        StubInventory stub = new StubInventory();
-
         check("SaleRecord: sales saved under the old rule (VAT inside prices) still load", () -> {
             List<SaleLineRecord> lines = List.of(
                     new SaleLineRecord(1, "P-0002", null, "Ballpen Black", "pc", Quantity.of("6"),
@@ -172,43 +172,46 @@ public class PosContractCheck {
             expect(old.total(), "138.75");
         });
 
-        check("Stand-in: find by barcode, by ID, and search", () -> {
-            expectText(stub.findByBarcode("4800000000019").orElseThrow().name(), "Bond Paper A4 (ream)");
-            expectText(stub.findByBarcode(" 4800000000026 ").orElseThrow().productId(), "P-0002");
-            expectTrue(stub.findByBarcode("0000000000000").isEmpty(), "unknown barcode is empty");
-            expectTrue(stub.findById("P-0007").orElseThrow().barcode() == null, "glue stick has no barcode");
-            expectTrue(stub.search("glue", 10).size() == 1, "search by name");
-            expectTrue(stub.search("calculator", 10).isEmpty(), "inactive products are not searchable");
-            expectTrue(!stub.findByBarcode("4800000000064").orElseThrow().active(),
+        boolean db = databaseReachable();
+        ProductService products = TestCatalog.products();
+        StubStockRecorder recorder = new StubStockRecorder();
+
+        check("Product catalog: find by barcode, by ID, and search (ProductLookup contract)", db, () -> {
+            expectText(products.findByBarcode("4800000000019").orElseThrow().name(), "Bond Paper A4 (ream)");
+            expectText(products.findByBarcode(" 4800000000026 ").orElseThrow().productId(), "P-0002");
+            expectTrue(products.findByBarcode("0000000000000").isEmpty(), "unknown barcode is empty");
+            expectTrue(products.findById("P-0007").orElseThrow().barcode() == null, "glue stick has no barcode");
+            expectTrue(products.search("glue", 10).size() == 1, "search by name");
+            expectTrue(products.search("calculator", 10).isEmpty(), "inactive products are not searchable");
+            expectTrue(!products.findByBarcode("4800000000064").orElseThrow().active(),
                     "inactive products are still found by barcode");
         });
 
-        check("Stand-in: stock-out deducts stock", () -> {
-            stub.recordSale("T99-2026-000001", stockOut(List.of(line(1, "P-0002", "5"), line(2, "P-0004", "1.5"))), null);
-            expect(stub.stockOf("P-0002"), "195.000");
-            expect(stub.stockOf("P-0004"), "99.000");
+        check("Stock recorder: stock-out deducts stock (inside the sale's transaction)", db, () -> {
+            recordSale(recorder, List.of(line(1, "P-0002", "5"), line(2, "P-0004", "1.5")));
+            expect(TestCatalog.stockOf("P-0002"), "195.000");
+            expect(TestCatalog.stockOf("P-0004"), "99.000");
         });
 
-        check("Stand-in: stock-out refuses the whole sale if any line is short", () -> {
-            BigDecimal paperBefore = stub.stockOf("P-0001");
+        check("Stock recorder: refuses the whole sale if any line is short, and nothing is deducted", db, () -> {
+            BigDecimal paperBefore = TestCatalog.stockOf("P-0001");
             try {
-                stub.recordSale("T99-2026-000001", stockOut(List.of(line(1, "P-0001", "2"), line(2, "P-0005", "1"))), null);
+                recordSale(recorder, List.of(line(1, "P-0001", "2"), line(2, "P-0005", "1")));
                 throw new AssertionError("expected InsufficientStockException");
             } catch (InsufficientStockException e) {
                 expectText(e.getProductId(), "P-0005");
                 expectText(e.getMessage(), "Not enough stock for Masking Tape 1 inch: 0 left, 1 needed.");
             }
-            expect(stub.stockOf("P-0001"), paperBefore.toPlainString());   // nothing deducted
+            expect(TestCatalog.stockOf("P-0001"), paperBefore.toPlainString());   // rolled back
         });
 
-        check("Stand-in: two lines of the same product are added up", () -> {
-            stub.add("P-0099", "123", "Test Item", "pc", "1.00", null, true, true, "3");
-            expectThrows(() -> stub.recordSale("T99-2026-000001",
-                            stockOut(List.of(line(1, "P-0099", "2"), line(2, "P-0099", "2"))), null),
+        check("Stock recorder: two lines of the same product are added up", db, () -> {
+            TestCatalog.addTestProduct("123", "Test Item", "pc", "1.00", null, true, true, "3");
+            expectThrows(() -> recordSale(recorder, List.of(line(1, "P-0099", "2"), line(2, "P-0099", "2"))),
                     InsufficientStockException.class);
+            expect(TestCatalog.stockOf("P-0099"), "3.000");
         });
 
-        boolean db = databaseReachable();
         check("POS tables are up to date (run setup if this fails)", db, () -> {
             for (String[] column : new String[][] {
                     {"Sale", "SaleID"}, {"Sale", "SyncedAt"}, {"SaleLine", "PriceType"}, {"SaleLine", "Vatable"},
@@ -259,6 +262,15 @@ public class PosContractCheck {
     }
 
     /** What CheckoutService hands to Inventory for a sale's lines. */
+    /** Runs the recorder in a real transaction, exactly as checkout does: if it throws, everything is rolled back. */
+    static void recordSale(StubStockRecorder recorder, List<SaleLineRecord> lines)
+            throws InsufficientStockException, SQLException {
+        Database.<Void, InsufficientStockException>inTransaction(tx -> {
+            recorder.recordSale("T99-2026-000001", stockOut(lines), tx);
+            return null;
+        });
+    }
+
     static List<StockLine> stockOut(List<SaleLineRecord> lines) {
         return lines.stream().map(l -> new StockLine(l.productId(), l.quantity())).toList();
     }
@@ -339,12 +351,15 @@ public class PosContractCheck {
             return;
         }
         try {
+            TestCatalog.resetIfAvailable();   // every scenario starts from the seed products...
             body.run();
             passed++;
             System.out.println(" [PASS] " + name);
         } catch (Throwable t) {
             failed++;
             System.out.println(" [FAIL] " + name + "  ->  " + t);
+        } finally {
+            TestCatalog.resetIfAvailable();   // ...and leaves them as it found them
         }
     }
 

@@ -19,7 +19,9 @@ import pos.repository.MySqlSaleRepository;
 import shared.Database;
 import shared.Money;
 import shared.Quantity;
-import stubs.StubInventory;
+import product.service.ProductService;
+import stubs.StubStockRecorder;
+import stubs.TestCatalog;
 
 import java.math.BigDecimal;
 import java.sql.Connection;
@@ -39,8 +41,9 @@ import java.util.concurrent.Future;
 /**
  * SELF-TEST for POS Phase 2: payments, invoice numbers and checkout.
  *
- * The payment checks run anywhere. The checkout checks need MySQL and are
- * skipped, not failed, when it is not reachable. They use a throw-away
+ * Everything here needs MySQL (the real product catalog and the sale tables) and
+ * is skipped, not failed, when it is not reachable. The nine seed products are
+ * reset around every scenario. They use a throw-away
  * terminal ID (e.g. "CK12345") and delete everything they wrote at the end.
  *
  * Run after any run-demo build, from nickel-sales/:
@@ -68,12 +71,14 @@ public class CheckoutCheck {
         System.out.println("=================================================================");
 
         String terminal = "CK" + (10000 + (int) (Math.random() * 90000));
-        StubInventory stock = new StubInventory();
+        boolean db = databaseReachable();
+        ProductService products = TestCatalog.products();
+        StubStockRecorder stock = new StubStockRecorder();
         MySqlSaleRepository repo = new MySqlSaleRepository();
         CheckoutService checkout = new CheckoutService(repo, new InvoiceNumberGenerator(), stock, audit);
 
-        check("Cash: must cover the total (VAT included); change is worked out", () -> {
-            Sale sale = cart(new SalesService(new StubInventory(), terminal), PAPER, "1");   // 250.00 + 30.00 VAT
+        check("Cash: must cover the total (VAT included); change is worked out", db, () -> {
+            Sale sale = cart(new SalesService(products, terminal), PAPER, "1");   // 250.00 + 30.00 VAT
             PaymentRecord p = payments.recordPayment(sale, PaymentMethod.CASH, Money.of("500"), null);
             expect(p.amountTendered(), "500.00");
             expect(p.amountApplied(), "280.00");
@@ -86,8 +91,8 @@ public class CheckoutCheck {
             expect(payments.computeChange(Money.of("638.75"), Money.of("1000")), "361.25");
         });
 
-        check("GCash / Maya / QRPh: reference number required, exact amount, no change", () -> {
-            Sale sale = cart(new SalesService(new StubInventory(), terminal), PAPER, "1");
+        check("GCash / Maya / QRPh: reference number required, exact amount, no change", db, () -> {
+            Sale sale = cart(new SalesService(products, terminal), PAPER, "1");
             PaymentRecord g = payments.recordPayment(sale, PaymentMethod.GCASH, null, " 1009 876 543210 ");
             expectText(g.referenceNo(), "1009 876 543210");
             expect(g.amountTendered(), "280.00");
@@ -111,32 +116,30 @@ public class CheckoutCheck {
             expectThrows(() -> InvoiceNumberGenerator.checkTerminalId("T 1"), IllegalArgumentException.class);
         });
 
-        check("Pay is refused before saving: empty sale, stock problem, changed total", () -> {
-            StubInventory local = new StubInventory();
-            SalesService pos = new SalesService(local, new PricingService(), terminal,
-                    new CheckoutService(repo, new InvoiceNumberGenerator(), local, audit));
+        check("Pay is refused before saving: empty sale, stock problem, changed total", db, () -> {
+            SalesService pos = new SalesService(products, new PricingService(), terminal,
+                    new CheckoutService(repo, new InvoiceNumberGenerator(), stock, audit));
             Sale sale = pos.startSale(CASHIER);
             PaymentRecord any = new PaymentRecord(1, PaymentMethod.CASH, null, Money.ZERO, Money.ZERO, Money.ZERO);
             expectCart(() -> pos.finalizeSale(any), "Add an item before taking payment.");
 
             pos.addItem(BALLPEN, q("10"));
             PaymentRecord paid = payments.recordPayment(sale, PaymentMethod.CASH, Money.of("200"), null);
-            local.add("P-0002", BALLPEN, "Ballpen Black", "pc", "12.00", "10.00", true, true, "3");   // sold elsewhere
+            TestCatalog.setStock("P-0002", "3");   // sold elsewhere
             expectCart(() -> pos.finalizeSale(paid),
                     "Not enough stock for Ballpen Black: 3 left, 10 in the sale. Lower the quantity or remove it.");
             pos.updateQuantity("P-0002", q("3"));                       // total is now 36.00
             expectMessage(() -> pos.finalizeSale(paid),
                     "The total changed after the payment was entered. Enter the payment again.");
             expectTrue(pos.currentSale().isPresent() && sale.getStatus() == SaleStatus.OPEN, "sale still open");
-            expectThrows(() -> new SalesService(local, terminal).finalizeSale(paid), IllegalStateException.class);
+            expectThrows(() -> new SalesService(products, terminal).finalizeSale(paid), IllegalStateException.class);
         });
 
-        boolean db = databaseReachable();
         List<SaleRecord> saved = new ArrayList<>();
         int year = shared.PhTime.year(Instant.now());
         try {
             check("Cash sale is saved with invoice no. 000001, stock goes down, sale is logged", db, () -> {
-                SalesService pos = new SalesService(stock, new PricingService(), terminal, checkout);
+                SalesService pos = new SalesService(products, new PricingService(), terminal, checkout);
                 Sale sale = cart(pos, PAPER, "2");
                 pos.addItem(BALLPEN, q("6"));                             // wholesale
                 PaymentRecord pay = payments.recordPayment(sale, PaymentMethod.CASH, Money.of("1000"), null);
@@ -150,14 +153,14 @@ public class CheckoutCheck {
                 expect(rec.payments().get(0).change(), "372.80");
                 expectTrue(sale.getStatus() == SaleStatus.COMPLETED, "sale is COMPLETED");
                 expectTrue(pos.currentSale().isEmpty(), "no open sale afterwards");
-                expect(stock.stockOf("P-0001"), "38.000");
-                expect(stock.stockOf("P-0002"), "194.000");
+                expect(TestCatalog.stockOf("P-0001"), "38.000");
+                expect(TestCatalog.stockOf("P-0002"), "194.000");
                 expectTrue(auditLog.contains("SALE_COMPLETED " + rec.invoiceNo() + " by " + CASHIER), "logged");
                 expectTrue(repo.findById(rec.saleId()).orElseThrow().equals(rec), "reads back exactly as saved");
             });
 
             check("Next sale gets 000002; find by invoice number", db, () -> {
-                SalesService pos = new SalesService(stock, new PricingService(), terminal, checkout);
+                SalesService pos = new SalesService(products, new PricingService(), terminal, checkout);
                 Sale sale = cart(pos, BALLPEN, "1");
                 SaleRecord rec = pos.finalizeSale(payments.recordPayment(sale, PaymentMethod.CASH, Money.of("20"), null));
                 saved.add(rec);
@@ -170,7 +173,7 @@ public class CheckoutCheck {
                 StockRecorder soldOut = (reference, lines, tx) -> {
                     throw new InsufficientStockException("P-0001", "Bond Paper A4 (ream)", Quantity.of("1"), Quantity.of("2"));
                 };
-                SalesService pos = new SalesService(stock, new PricingService(), terminal,
+                SalesService pos = new SalesService(products, new PricingService(), terminal,
                         new CheckoutService(repo, new InvoiceNumberGenerator(), soldOut, audit));
                 Sale sale = cart(pos, PAPER, "2");
                 int nextBefore = nextNumber(terminal, year);
@@ -194,7 +197,7 @@ public class CheckoutCheck {
                 StockRecorder broken = (reference, lines, tx) -> {
                     throw new SQLException("simulated failure");
                 };
-                SalesService pos = new SalesService(stock, new PricingService(), terminal,
+                SalesService pos = new SalesService(products, new PricingService(), terminal,
                         new CheckoutService(repo, new InvoiceNumberGenerator(), broken, audit));
                 Sale sale = cart(pos, PAPER, "1");
                 int nextBefore = nextNumber(terminal, year);
@@ -205,7 +208,7 @@ public class CheckoutCheck {
             });
 
             check("No gap: the next good sale takes the number the failed ones did not use", db, () -> {
-                SalesService pos = new SalesService(stock, new PricingService(), terminal, checkout);
+                SalesService pos = new SalesService(products, new PricingService(), terminal, checkout);
                 Sale sale = cart(pos, PAPER, "1");
                 SaleRecord rec = pos.finalizeSale(payments.recordPayment(sale, PaymentMethod.CASH, Money.of("300"), null));
                 saved.add(rec);
@@ -213,7 +216,7 @@ public class CheckoutCheck {
             });
 
             check("GCash sale with VAT-exempt kg items reads back exactly", db, () -> {
-                SalesService pos = new SalesService(stock, new PricingService(), terminal, checkout);
+                SalesService pos = new SalesService(products, new PricingService(), terminal, checkout);
                 Sale sale = cart(pos, RICE, "1.5");                       // 78.75 VAT-exempt
                 pos.addItem(BALLPEN, q("2"));                             // 24.00 VATable + 2.88 VAT
                 SaleRecord rec = pos.finalizeSale(payments.recordPayment(sale, PaymentMethod.GCASH, null, "1009876543210"));
@@ -376,12 +379,15 @@ public class CheckoutCheck {
             return;
         }
         try {
+            TestCatalog.resetIfAvailable();   // every scenario starts from the seed products...
             body.run();
             passed++;
             System.out.println(" [PASS] " + name);
         } catch (Throwable t) {
             failed++;
             System.out.println(" [FAIL] " + name + "  ->  " + t);
+        } finally {
+            TestCatalog.resetIfAvailable();   // ...and leaves them as it found them
         }
     }
 

@@ -4,7 +4,8 @@ import auth.contract.User;
 import auth.contract.UserRole;
 import auth.contract.UserStatus;
 import auth.permission.AuthorizationService;
-import stubs.StubInventory;
+import stubs.StubStockRecorder;
+import stubs.TestCatalog;
 
 import java.time.Duration;
 import java.util.EnumSet;
@@ -53,14 +54,14 @@ public class AppCheck {
             AppConfig defaults = AppConfig.from(Map.of());
             expectText(defaults.store().name(), "NICKEL SALES CENTER");
             expectText(defaults.store().address(), "");
-            expectTrue(defaults.receiptWidth() == 42, "42 characters (80 mm) by default");
+            expectTrue(defaults.receiptWidth() == 32, "32 characters (58 mm) by default");
             AppConfig set = AppConfig.from(Map.of("NSC_STORE_NAME", "Nickel Sales Center - Branch 2",
                     "NSC_STORE_ADDRESS", "123 Rizal Ave.", "NSC_STORE_TIN", "000-123", "NSC_STORE_PHONE", "8123",
                     "NSC_RECEIPT_WIDTH", "32"));
             expectText(set.store().name() + "|" + set.store().address() + "|" + set.store().tin() + "|"
                     + set.store().phone(), "Nickel Sales Center - Branch 2|123 Rizal Ave.|000-123|8123");
             expectTrue(set.receiptWidth() == 32, "58 mm paper");
-            expectTrue(AppConfig.from(Map.of("NSC_RECEIPT_WIDTH", "80")).receiptWidth() == 42, "out of range -> 42");
+            expectTrue(AppConfig.from(Map.of("NSC_RECEIPT_WIDTH", "80")).receiptWidth() == 32, "out of range -> 32");
         });
 
         check("Every module has a unique title, a description and a permission", () -> {
@@ -78,12 +79,12 @@ public class AppCheck {
         check("Cashier (JDelaCruz) sees only Point of Sale", () ->
                 expectMenu(user("NSC-00002", UserStatus.ACTIVE, UserRole.CASHIER), "Point of Sale"));
 
-        check("Inventory staff (MSantaAna) sees Products & inventory and Reports, not POS or users", () ->
+        check("Inventory staff (MSantaAna) sees Products, Inventory and Reports, not POS or users", () ->
                 expectMenu(user("NSC-00003", UserStatus.ACTIVE, UserRole.INVENTORY_STAFF),
-                        "Products & inventory", "Reports"));
+                        "Products", "Inventory", "Reports"));
 
         check("Admin sees every button; an admin who is also cashier and inventory (JCubillan) too", () -> {
-            String[] everything = {"Point of Sale", "Products & inventory", "Reports", "Manage users", "System & sync"};
+            String[] everything = {"Point of Sale", "Products", "Inventory", "Reports", "Manage users", "System & sync"};
             expectMenu(user("NSC-09999", UserStatus.ACTIVE, UserRole.ADMIN), everything);
             expectMenu(user("NSC-00001", UserStatus.ACTIVE, UserRole.ADMIN, UserRole.CASHIER, UserRole.INVENTORY_STAFF),
                     everything);
@@ -109,8 +110,8 @@ public class AppCheck {
             expectTrue(!none.posAvailable() && none.salesService().isEmpty(), "no products -> no POS");
             expectTrue(none.saleExport() != null && none.saleHistory() != null, "Sync and Reports always get sales");
 
-            StubInventory stock = new StubInventory();
-            AppContext withProducts = AppContext.create(config, stock, stock);
+            // The real catalog: nothing is read from MySQL until a product is looked up.
+            AppContext withProducts = AppContext.create(config, TestCatalog.products(), new StubStockRecorder());
             expectTrue(withProducts.posAvailable(), "POS available");
             withProducts.salesService().orElseThrow().startSale("NSC-00002");
             expectText(withProducts.salesService().orElseThrow().currentSale().orElseThrow().getTerminalId(), "T07");

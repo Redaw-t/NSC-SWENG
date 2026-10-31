@@ -17,7 +17,9 @@ import pos.receipt.ReceiptBuilder;
 import pos.receipt.StoreInfo;
 import pos.repository.InvoiceNumberGenerator;
 import pos.repository.MySqlSaleRepository;
-import stubs.StubInventory;
+import product.service.ProductService;
+import stubs.StubStockRecorder;
+import stubs.TestCatalog;
 import shared.Database;
 import shared.Money;
 import shared.PhTime;
@@ -114,7 +116,7 @@ public class ReceiptCheck {
         check("Blank store details are left off; the default name is used", () -> {
             List<String> text = new Receipt(new StoreInfo(" ", null, "", null), cashSale, "Juan", false).toText(42);
             expectText(text.get(0).trim(), StoreInfo.DEFAULT_NAME);
-            expectTrue(text.get(1).startsWith("---"), "rule straight after the name");
+            expectTrue(text.get(1).startsWith("..."), "rule straight after the name");
         });
 
         check("No line is wider than the paper (58 mm, 80 mm, wide), long names wrap", () -> {
@@ -157,10 +159,10 @@ public class ReceiptCheck {
         String terminal = "RC" + (10000 + (int) (Math.random() * 90000));
         check("Reprint from the database matches the original receipt line for line", db, () -> {
             try {
-                StubInventory stock = new StubInventory();
+                ProductService products = TestCatalog.products();
                 MySqlSaleRepository repo = new MySqlSaleRepository();
-                SalesService pos = new SalesService(stock, new PricingService(), terminal,
-                        new CheckoutService(repo, new InvoiceNumberGenerator(), stock, (e, u) -> { }));
+                SalesService pos = new SalesService(products, new PricingService(), terminal,
+                        new CheckoutService(repo, new InvoiceNumberGenerator(), new StubStockRecorder(), (e, u) -> { }));
                 Sale open = pos.startSale("NSC-00002");
                 pos.addItem("4800000000019", Quantity.of("2"));
                 pos.addItem("4800000000026", Quantity.of("7"));
@@ -273,12 +275,15 @@ public class ReceiptCheck {
             return;
         }
         try {
+            TestCatalog.resetIfAvailable();   // every scenario starts from the seed products...
             body.run();
             passed++;
             System.out.println(" [PASS] " + name);
         } catch (Throwable t) {
             failed++;
             System.out.println(" [FAIL] " + name + "  ->  " + t);
+        } finally {
+            TestCatalog.resetIfAvailable();   // ...and leaves them as it found them
         }
     }
 

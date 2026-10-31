@@ -28,7 +28,7 @@ import java.util.Objects;
  */
 public record Receipt(StoreInfo store, SaleRecord sale, String cashierName, boolean reprint) {
 
-    public static final int DEFAULT_WIDTH = 32;   // characters per line on 80 mm paper
+    public static final int DEFAULT_WIDTH = 32;   // characters per line on 58 mm paper (Change to 42 if using 80mm thermal printer)
     public static final int MIN_WIDTH = 32;       // 58 mm paper
     public static final int MAX_WIDTH = 58;
 

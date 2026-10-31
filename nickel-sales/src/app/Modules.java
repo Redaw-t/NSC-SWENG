@@ -5,6 +5,7 @@ import auth.permission.AuthorizationService;
 import auth.permission.Permission;
 import auth.ui.UserAdminModule;
 import pos.ui.PosModule;
+import product.ui.ProductModule;
 
 import java.util.List;
 import java.util.Objects;
@@ -27,8 +28,10 @@ public final class Modules {
         return List.of(
                 // POS & Sales
                 new PosModule(),
-                // Product & Inventory: replace with your module
-                new ComingSoonModule("Products & inventory", "Products, prices, stock in/out, barcodes",
+                // Product Management (catalog, prices, categories, suppliers)
+                new ProductModule(),
+                // Inventory (stock in/out): replace with your module
+                new ComingSoonModule("Inventory", "Stock in/out, adjustments, stock levels",
                         Permission.UPDATE_INVENTORY),
                 // Transaction & Reports: replace with your module
                 new ComingSoonModule("Reports", "Sales and inventory reports", Permission.VIEW_REPORTS),

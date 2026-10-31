@@ -1,16 +1,18 @@
 package app;
 
-import stubs.StubInventory;
+import stubs.StubStockRecorder;
 
 /**
- * DEVELOPMENT launcher: the real app (same login, home screen and modules
- * as {@link Main}), but with the test products from StubInventory instead of
- * the Product &amp; Inventory module, so POS can be tried before that module
- * exists. Users and sales are the real MySQL ones; the test products and
- * their stock live in memory and start fresh every time.
+ * DEVELOPMENT launcher: the real app (same login, home screen, Product module and
+ * wiring as {@link Main}) plus a stand-in for the one part that does not exist yet:
+ * the Inventory module's StockRecorder.
  *
- * This is what double-clicking run-demo.bat starts. Replaced by Main once
- * the real inventory is connected (POS Phase 6).
+ * Users, products, categories, suppliers and sales are all the real MySQL ones
+ * (run the database setup first). A sale takes its quantities off the real
+ * Product.StockOnHand, through {@link StubStockRecorder}.
+ *
+ * This is what double-clicking run-demo.bat starts. Retire it once Main gets
+ * the real StockRecorder.
  */
 public final class DevApp {
 
@@ -18,10 +20,9 @@ public final class DevApp {
 
     public static void main(String[] args) {
         AppConfig config = AppConfig.fromEnvironment();
-        StubInventory testProducts = new StubInventory();
-        AppContext app = AppContext.create(config, testProducts, testProducts);
+        AppContext app = Main.wire(config, new StubStockRecorder());
         System.out.println("[DEV] Nickel Sales Center, terminal " + config.terminalId()
-                + ", with TEST products (StubInventory) - not the real inventory");
+                + ", real products from MySQL, TEST stock recorder (StubStockRecorder) - not the real inventory");
         NickelSalesApp.launch(app);
     }
 }

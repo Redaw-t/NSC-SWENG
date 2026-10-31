@@ -25,9 +25,11 @@ with a button for each part of the system your role may use:
   GCash / Maya / QRPh, and a printed receipt. See
   [Ringing up a sale](#ringing-up-a-sale).
 - **Manage users** (admins): add, edit and activate users.
-- **Products & inventory**, **Reports**, **System & sync**: not built yet
-  ("coming soon"). Until Products & inventory exists, Point of Sale uses a
-  few test products.
+- **Products** (admins and inventory staff): add, edit and discontinue products,
+  set retail and wholesale prices, and manage categories and suppliers. Point of Sale
+  sells these real products.
+- **Inventory**, **Reports**, **System & sync**: not built yet ("coming soon").
+  Until Inventory exists, stock is changed only by sales made through `run-demo`.
 
 Everyone can change their own password and log out.
 
@@ -139,7 +141,7 @@ The app stores its users and sales in MySQL, so you need it running on your comp
    | -------- | -------- | ---------- |
    | `JCubillan` | `Password123` | Home screen with every button (this account has every role) |
    | `JDelaCruz` | `Password123` | Home screen with **Point of Sale** |
-   | `MSantaAna` | `Password123` | Home screen with **Products & inventory** and **Reports** |
+   | `MSantaAna` | `Password123` | Home screen with **Products**, **Inventory** and **Reports** |
    | `RSantos` | `Password123` | "This account is inactive…" message |
    | `KRodriguez` | `Password123` | "This account is locked…" message |
 
@@ -185,8 +187,9 @@ details on it (Windows, then open a new window):
 `setx NSC_STORE_ADDRESS "123 Rizal Ave., Manila"`, and likewise
 `NSC_STORE_TIN`, `NSC_STORE_PHONE`, `NSC_STORE_NAME`. For 58 mm receipt
 paper: `setx NSC_RECEIPT_WIDTH 32`.
-Until the real inventory is connected, the products are test ones
-(barcodes `4800000000019`, `4800000000026`, `4800000000040`, ...).
+Products live in MySQL (`Product`, `Category`, `Supplier`). The database script adds nine test
+products (barcodes `4800000000019`, `4800000000026`, `4800000000040`, ...). If your database was
+created before the Products module, run `setup.bat` again to add the product tables.
 
 ## Looking at the database
 
@@ -246,7 +249,7 @@ bcrypt hashes, so it's two steps:
 | "Something went wrong while logging in" for **every** account | The app can't reach MySQL. Run `setup.bat` — it checks MySQL is running, the database exists and your saved password works |
 | "The database is out of date…", or errors **after you pulled new changes** | Close the app and run `setup.bat` — it adds any new tables and columns to your database and keeps your data. Still failing? A table changed shape: in MySQL Workbench run `DROP DATABASE NickelSales_Database;`, then run `setup.bat` and answer **Y** to create it again (this resets it to the demo users and removes saved sales) |
 | "A database error occurred…" | The black window shows the real cause on a line starting with `[DATABASE]` — send that line to the team |
-| "No printer is set up on this computer" when printing a receipt | Set a default printer in Windows Settings → Printers (any printer works, even *Microsoft Print to PDF*) |
+| "No printer is set up on this computer" when printing a receipt | Set a default printer in Windows Settings → Printers, or set the NSC_PRINTER_NAME environment variable to your receipt printer's exact Windows name (for example POS-58). It must be a thermal receipt printer; "Microsoft Print to PDF" will not print a readable receipt |
 | Receipt is cut off at the sides on a receipt printer | For 58 mm paper run `setx NSC_RECEIPT_WIDTH 32`, then open a new window |
 | "Invalid username or password." | Use the **username** (e.g. `JCubillan`), not the ID (`NSC-00001`), and check the password is `Password123` — passwords are case-sensitive (watch for the Caps Lock warning) |
 | "Your session expired. Please log in again." | Nobody used the app for 30 minutes, so it logged out for safety. Just log in again |
