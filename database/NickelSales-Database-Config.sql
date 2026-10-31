@@ -77,43 +77,35 @@ CREATE TABLE IF NOT EXISTS `Product` (
 -- INSERT IGNORE: skips what already exists, so this script can be re-run safely and never
 -- overwrites a price or stock figure changed later. Delete or deactivate these in a real store.
 INSERT IGNORE INTO `Category` (CategoryName) VALUES
-    ('Office Supplies'), ('Groceries'), ('Beverages'), ('Health & Cleaning');
+    ('School/Office Supplies'), ('Modiste Items'), ('Groceries'); -- Remove Groceries before Production. Finalize the initial lists of categories with partner before production.
 
 INSERT IGNORE INTO `Supplier` (SupplierName, ContactPerson, Phone) VALUES
-    ('Sample Paper Trading', 'Test Contact', '0000-000-0001'),
-    ('Sample Grocer Wholesale', 'Test Contact', '0000-000-0002'),
-    ('Sample Health Supply', 'Test Contact', '0000-000-0003');
+    ('Sample Supplier', 'Test Contact', '0000-000-0001');
 
 INSERT IGNORE INTO `Product`
     (ProductID, Barcode, ProductName, Unit, RetailPrice, WholesalePrice, Vatable, IsActive, CategoryID, SupplierID, StockOnHand)
 VALUES
     ('P-0001', '4800000000019', 'Bond Paper A4 (ream)', 'ream', 250.00, 235.00, TRUE, TRUE,
         (SELECT CategoryID FROM `Category` WHERE CategoryName = 'Office Supplies'),
-        (SELECT SupplierID FROM `Supplier` WHERE SupplierName = 'Sample Paper Trading'), 40),
+        (SELECT SupplierID FROM `Supplier` WHERE SupplierName = 'Sample Supplier'), 40),
     ('P-0002', '4800000000026', 'Ballpen Black', 'pc', 12.00, 10.00, TRUE, TRUE,
         (SELECT CategoryID FROM `Category` WHERE CategoryName = 'Office Supplies'),
-        (SELECT SupplierID FROM `Supplier` WHERE SupplierName = 'Sample Paper Trading'), 200),
+        (SELECT SupplierID FROM `Supplier` WHERE SupplierName = 'Sample Supplier'), 200),
     ('P-0003', '4800000000033', 'Notebook 80 leaves', 'pc', 45.00, NULL, TRUE, TRUE,              -- no wholesale price
         (SELECT CategoryID FROM `Category` WHERE CategoryName = 'Office Supplies'),
-        (SELECT SupplierID FROM `Supplier` WHERE SupplierName = 'Sample Paper Trading'), 60),
+        (SELECT SupplierID FROM `Supplier` WHERE SupplierName = 'Sample Supplier'), 60),
     ('P-0004', '4800000000040', 'Rice (per kg)', 'kg', 52.50, 50.00, FALSE, TRUE,                 -- VAT-exempt, sold by weight
         (SELECT CategoryID FROM `Category` WHERE CategoryName = 'Groceries'),
-        (SELECT SupplierID FROM `Supplier` WHERE SupplierName = 'Sample Grocer Wholesale'), 100.500),
+        (SELECT SupplierID FROM `Supplier` WHERE SupplierName = 'Sample Supplier'), 100.500),
     ('P-0005', '4800000000057', 'Masking Tape 1 inch', 'roll', 35.75, 32.00, TRUE, TRUE,          -- out of stock
         (SELECT CategoryID FROM `Category` WHERE CategoryName = 'Office Supplies'),
-        (SELECT SupplierID FROM `Supplier` WHERE SupplierName = 'Sample Paper Trading'), 0),
+        (SELECT SupplierID FROM `Supplier` WHERE SupplierName = 'Sample Supplier'), 0),
     ('P-0006', '4800000000064', 'Desk Calculator', 'pc', 499.00, NULL, TRUE, FALSE,               -- inactive (no longer sold)
         (SELECT CategoryID FROM `Category` WHERE CategoryName = 'Office Supplies'),
-        (SELECT SupplierID FROM `Supplier` WHERE SupplierName = 'Sample Paper Trading'), 5),
+        (SELECT SupplierID FROM `Supplier` WHERE SupplierName = 'Sample Supplier'), 5),
     ('P-0007', NULL, 'Glue Stick', 'pc', 18.00, 16.50, TRUE, TRUE,                                -- no barcode: found by search only
         (SELECT CategoryID FROM `Category` WHERE CategoryName = 'Office Supplies'),
-        (SELECT SupplierID FROM `Supplier` WHERE SupplierName = 'Sample Paper Trading'), 30),
-    ('P-0008', '6970340973798', 'Osmanthus Oolong Tea', 'box', 285.00, 255.00, TRUE, TRUE,
-        (SELECT CategoryID FROM `Category` WHERE CategoryName = 'Beverages'),
-        (SELECT SupplierID FROM `Supplier` WHERE SupplierName = 'Sample Grocer Wholesale'), 10),
-    ('P-0009', '4800067130063', 'Cleene Ethyl Alcohol', 'pc', 98.00, 76.00, TRUE, TRUE,
-        (SELECT CategoryID FROM `Category` WHERE CategoryName = 'Health & Cleaning'),
-        (SELECT SupplierID FROM `Supplier` WHERE SupplierName = 'Sample Health Supply'), 10);
+        (SELECT SupplierID FROM `Supplier` WHERE SupplierName = 'Sample Supplier'), 30);
 
 -- ================== TRANSACTION RECORDS ==================
 -- Owned by POS. Money is DECIMAL(12,2), quantities DECIMAL(12,3), times are UTC.
