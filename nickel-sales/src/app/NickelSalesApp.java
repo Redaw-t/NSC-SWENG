@@ -23,6 +23,10 @@ public class NickelSalesApp extends Application {
             throw new IllegalStateException("Start the app through app.Main, not NickelSalesApp directly");
         }
         DashboardRouter router = new DashboardRouter(stage, context, Modules.all());
+        java.io.InputStream icon = NickelSalesApp.class.getResourceAsStream("/images/nickel-logo-icon.png");
+        if (icon != null) {
+            stage.getIcons().add(new javafx.scene.image.Image(icon));
+        }
         stage.setTitle("Nickel Sales Center - POS (" + context.config().terminalId() + ")");
         router.showLogin();
         stage.show();
