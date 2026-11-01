@@ -1,42 +1,40 @@
 package auth.ui;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.Objects;
+import java.util.function.Consumer;
+
+import auth.login.AuthenticationException;
+import auth.login.AuthenticationService;
+import auth.login.LoginResult;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.geometry.Rectangle2D;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
-import javafx.scene.control.ContentDisplay;
 import javafx.scene.control.Label;
 import javafx.scene.control.PasswordField;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TextInputControl;
 import javafx.scene.control.ToggleButton;
-import javafx.scene.input.KeyCode;
-import javafx.scene.input.KeyEvent;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
+import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyEvent;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
-import javafx.scene.paint.Color;
-import javafx.scene.shape.Circle;
-import javafx.scene.shape.Ellipse;
 import javafx.scene.text.TextAlignment;
-import auth.login.AuthenticationException;
-import auth.login.AuthenticationService;
-import auth.login.LoginResult;
+import shared.Theme;
 import shared.UiErrors;
 
-import java.io.InputStream;
-import java.util.Objects;
-import java.util.function.Consumer;
-
 /**
- * LoginScreen — Sprint 1, owned by the SESSION/UI role.
- *
- * Styled after the team's login slide: logo, "NICKEL SALES CENTER" title,
- * pill-shaped "Username" and "Password" fields, and a red LOGIN pill button.
+ * LoginScreen: logo, "NICKEL SALES CENTER" title, pill-shaped Username and
+ * Password fields and a blue LOGIN pill button, in the app's palette and font
+ * (see {@link Theme}).
  *
  * Calls {@link AuthenticationService#login} and reports the outcome:
  *  - success: passes the {@link LoginResult} to {@code onLoginSuccess}. This
@@ -47,43 +45,47 @@ import java.util.function.Consumer;
  * "Username" is only the on-screen label: the value typed is the UserLoginName
  * (e.g. JCubillan), which is the login id in the authentication module.
  *
- * Usage:
- * <pre>
- *   LoginScreen login = new LoginScreen(auth, result -> router.openDashboardFor(result));
- *   stage.setTitle("Nickel Sales Center - POS");
- *   stage.setScene(new Scene(login.getView(), 1280, 720));
- * </pre>
- *
  * The password field has a SHOW/HIDE toggle and warns when Caps Lock is on.
  *
+ * The layout is drawn for a 1920 x 1080 window and scaled to fit the real window.
+ *
  * The logo is optional: put it at {@link #LOGO_RESOURCE} on the classpath
- * (src/main/resources/images/nickel-logo.png) and it appears above the title.
+ * (nickel-sales/resources/images/nickel-logo-ui.png) and it appears above the title.
  */
 public class LoginScreen {
 
     /** Classpath location of the logo image. If missing, the screen simply has no logo. */
-    public static final String LOGO_RESOURCE = "/images/nickel-logo.png";
+    public static final String LOGO_RESOURCE = "/images/nickel-logo-ui.png";
 
-    private static final String BLUE = "#29529a";
-    private static final String RED = "#d05c5c";
-    private static final String ERROR_RED = "#a61c1c";
-    private static final String WARNING_AMBER = "#8a5a00";
-    private static final double FIELD_WIDTH = 410;
-    private static final double FIELD_HEIGHT = 52;
+    // The design is 1920 x 1080; everything below is in those pixels and scaled to the window.
+    private static final double DESIGN_WIDTH = 1920;
+    private static final double DESIGN_HEIGHT = 1080;
+    private static final double FIELD_WIDTH = 400;
+    private static final double FIELD_HEIGHT = 50;
+    private static final double BUTTON_HEIGHT = 46;
+    private static final double LOGO_WIDTH = 168;
 
     private static final String FIELD_STYLE =
-            "-fx-background-color: white; -fx-background-radius: 30; "
-                    + "-fx-border-color: #b3b3b3; -fx-border-width: 3; -fx-border-radius: 30; "
-                    + "-fx-padding: 0 20 0 20; -fx-font-size: 18px; -fx-font-weight: bold; "
-                    + "-fx-prompt-text-fill: #222222; -fx-focus-color: transparent; -fx-faint-focus-color: transparent;";
+            "-fx-background-color: " + Theme.SURFACE + "; -fx-background-radius: 25; "
+                    + "-fx-border-color: " + Theme.BORDER + "; -fx-border-width: 2; -fx-border-radius: 25; "
+                    + "-fx-padding: 0 22 0 22; -fx-font-size: 20px; "
+                    + "-fx-text-fill: " + Theme.PRIMARY_TEXT + "; -fx-prompt-text-fill: " + Theme.SECONDARY_TEXT + "; "
+                    + "-fx-focus-color: transparent; -fx-faint-focus-color: transparent;";
     // Same field with a blue border, so keyboard focus stays visible.
-    private static final String FIELD_FOCUSED_STYLE = FIELD_STYLE.replace("-fx-border-color: #b3b3b3", "-fx-border-color: " + BLUE);
+    private static final String FIELD_FOCUSED_STYLE =
+            FIELD_STYLE.replace("-fx-border-color: " + Theme.BORDER, "-fx-border-color: " + Theme.PRIMARY_BLUE);
     // Password fields leave room on the right for the SHOW/HIDE toggle.
-    private static final String PASSWORD_PADDING = "-fx-padding: 0 90 0 20;";
+    private static final String PASSWORD_PADDING = "-fx-padding: 0 90 0 22;";
 
     private static final String TOGGLE_STYLE =
-            "-fx-background-color: transparent; -fx-text-fill: " + BLUE + "; "
-                    + "-fx-font-size: 13px; -fx-font-weight: bold; -fx-cursor: hand; -fx-padding: 4 8 4 8;";
+            "-fx-background-color: transparent; -fx-text-fill: " + Theme.PRIMARY_BLUE + "; "
+                    + "-fx-font-size: 14px; -fx-font-weight: bold; -fx-cursor: hand; -fx-padding: 4 8 4 8;";
+
+    private static final String BUTTON_STYLE =
+            "-fx-background-color: " + Theme.PRIMARY_BLUE + "; -fx-background-radius: 23; "
+                    + "-fx-text-fill: white; -fx-font-size: 26px; -fx-font-weight: bold; -fx-cursor: hand;";
+    private static final String BUTTON_HOVER_STYLE =
+            BUTTON_STYLE.replace(Theme.PRIMARY_BLUE, Theme.SECONDARY_BLUE);
 
     private final AuthenticationService auth;
     private final Consumer<LoginResult> onLoginSuccess;
@@ -133,7 +135,11 @@ public class LoginScreen {
 
     private void buildView() {
         Label title = new Label("NICKEL SALES CENTER");
-        title.setStyle("-fx-font-family: 'Arial'; -fx-font-size: 48px; -fx-font-weight: bold; -fx-text-fill: " + BLUE + ";");
+        title.setStyle("-fx-font-size: 64px; -fx-font-weight: bold; -fx-text-fill: " + Theme.PRIMARY_TEXT + ";");
+        Label subtitle = new Label("POS & Inventory Management System");
+        subtitle.setStyle("-fx-font-size: 28px; -fx-text-fill: " + Theme.PRIMARY_TEXT + ";");
+        Label signIn = new Label("Sign in to continue");
+        signIn.setStyle("-fx-font-size: 18px; -fx-text-fill: " + Theme.PRIMARY_TEXT + ";");
 
         userIdField.setPromptText("Username");
         passwordField.setPromptText("Password");
@@ -143,7 +149,7 @@ public class LoginScreen {
         styleField(visiblePasswordField, PASSWORD_PADDING);
         StackPane passwordBox = buildPasswordBox();
 
-        capsLockLabel.setStyle("-fx-text-fill: " + WARNING_AMBER + "; -fx-font-size: 14px; -fx-font-weight: bold;");
+        capsLockLabel.setStyle("-fx-text-fill: " + Theme.WARNING + "; -fx-font-size: 15px; -fx-font-weight: bold;");
         setCapsLockWarning(false);
         installCapsLockWarning();
 
@@ -151,33 +157,56 @@ public class LoginScreen {
         errorLabel.setMaxWidth(FIELD_WIDTH);
         errorLabel.setAlignment(Pos.CENTER);
         errorLabel.setTextAlignment(TextAlignment.CENTER);
-        errorLabel.setStyle("-fx-text-fill: " + ERROR_RED + "; -fx-font-size: 15px;");
+        errorLabel.setStyle("-fx-text-fill: " + Theme.ERROR + "; -fx-font-size: 16px;");
         hideError();
 
-        loginButton.setGraphic(buildUserIcon());
-        loginButton.setContentDisplay(ContentDisplay.RIGHT);
-        loginButton.setGraphicTextGap(28);
-        loginButton.setPrefSize(240, 60);
-        loginButton.setStyle("-fx-background-color: " + RED + "; -fx-background-radius: 30; "
-                + "-fx-text-fill: white; -fx-font-size: 20px; -fx-font-weight: bold; -fx-cursor: hand;");
+        loginButton.setPrefSize(FIELD_WIDTH, BUTTON_HEIGHT);
+        loginButton.setMinSize(FIELD_WIDTH, BUTTON_HEIGHT);
+        loginButton.setMaxSize(FIELD_WIDTH, BUTTON_HEIGHT);
+        loginButton.setStyle(BUTTON_STYLE);
+        loginButton.hoverProperty().addListener((obs, was, hover) ->
+                loginButton.setStyle(hover ? BUTTON_HOVER_STYLE : BUTTON_STYLE));
         loginButton.setDefaultButton(true);
         loginButton.setOnAction(e -> submit());
         // Pressing Enter in either field also submits.
-        userIdField.setOnAction(e -> submit());
+        userIdField.setOnAction(e -> {
+            // Enter after typing a username but no password yet: go to the password field first.
+            boolean hasUser = !userIdField.getText().trim().isEmpty();
+            boolean noPassword = passwordField.getText() == null || passwordField.getText().isEmpty();
+            if (hasUser && noPassword) {
+                focusPassword();
+            } else {
+                submit();
+            }
+        });
         passwordField.setOnAction(e -> submit());
         visiblePasswordField.setOnAction(e -> submit());
 
-        VBox form = new VBox(20);
+        VBox form = new VBox();
         form.setAlignment(Pos.CENTER);
         ImageView logo = loadLogo();
         if (logo != null) {
-            form.getChildren().add(logo);
+            form.getChildren().addAll(logo, gap(4));
         }
-        form.getChildren().addAll(title, gap(30), userIdField, passwordBox, capsLockLabel, errorLabel, gap(10), loginButton);
+        form.getChildren().addAll(title, gap(5), subtitle, gap(58), signIn, gap(30),
+                userIdField, gap(33), passwordBox, gap(12), capsLockLabel, errorLabel, gap(29), loginButton);
 
-        view.setStyle("-fx-background-color: white;");
+        view.setStyle("-fx-background-color: " + Theme.APP_BACKGROUND + "; -fx-font-family: '" + Theme.FONT_FAMILY + "';");
         view.setAlignment(Pos.CENTER);
         view.getChildren().add(form);
+        scaleToWindow(form);
+    }
+
+    /** Scales the 1920 x 1080 design to the window (never below half or above double size). */
+    private void scaleToWindow(Region content) {
+        Runnable apply = () -> {
+            double scale = Math.min(view.getWidth() / DESIGN_WIDTH, view.getHeight() / DESIGN_HEIGHT);
+            scale = Math.max(0.5, Math.min(2.0, scale));
+            content.setScaleX(scale);
+            content.setScaleY(scale);
+        };
+        view.widthProperty().addListener((obs, was, now) -> apply.run());
+        view.heightProperty().addListener((obs, was, now) -> apply.run());
     }
 
     private void styleField(TextInputControl field) {
@@ -190,6 +219,7 @@ public class LoginScreen {
         field.setMaxWidth(FIELD_WIDTH);
         field.setMinHeight(FIELD_HEIGHT);
         field.setPrefHeight(FIELD_HEIGHT);
+        field.setMaxHeight(FIELD_HEIGHT);
         field.setStyle(FIELD_STYLE + extraStyle);
         field.focusedProperty().addListener((obs, was, now) ->
                 field.setStyle((now ? FIELD_FOCUSED_STYLE : FIELD_STYLE) + extraStyle));
@@ -278,27 +308,26 @@ public class LoginScreen {
         capsLockLabel.setManaged(on);
     }
 
-    /** A white disc with a red person glyph, drawn with shapes so no image file is needed. */
-    private StackPane buildUserIcon() {
-        Circle disc = new Circle(22, Color.WHITE);
-        Circle head = new Circle(6.5, Color.web(RED));
-        head.setTranslateY(-6);
-        Ellipse body = new Ellipse(11, 7);
-        body.setFill(Color.web(RED));
-        body.setTranslateY(9);
-        return new StackPane(disc, head, body);
-    }
-
+    /** The logo, trimmed of its transparent border; null if the file is not on the classpath. */
     private ImageView loadLogo() {
-        InputStream in = LoginScreen.class.getResourceAsStream(LOGO_RESOURCE);
-        if (in == null) {
+        try (InputStream in = LoginScreen.class.getResourceAsStream(LOGO_RESOURCE)) {
+            if (in == null) {
+                return null;
+            }
+            Image image = new Image(in);
+            ImageView logo = new ImageView(image);
+            // The supplied 600 x 600 PNG has empty space around the mark (it fills x 126-476, y 91-493).
+            // Show only the mark. A differently cropped file is simply scaled to the same width.
+            if (image.getWidth() == 600 && image.getHeight() == 600) {
+                logo.setViewport(new Rectangle2D(126, 91, 351, 403));
+            }
+            logo.setFitWidth(LOGO_WIDTH);
+            logo.setPreserveRatio(true);
+            logo.setSmooth(true);
+            return logo;
+        } catch (IOException e) {
             return null;
         }
-        ImageView logo = new ImageView(new Image(in));
-        logo.setFitWidth(200);
-        logo.setPreserveRatio(true);
-        logo.setSmooth(true);
-        return logo;
     }
 
     private void submit() {
@@ -364,6 +393,7 @@ public class LoginScreen {
         Region spacer = new Region();
         spacer.setMinHeight(height);
         spacer.setPrefHeight(height);
+        spacer.setMaxHeight(height);
         return spacer;
     }
 }
