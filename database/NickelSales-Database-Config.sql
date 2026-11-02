@@ -80,6 +80,38 @@ CREATE TABLE IF NOT EXISTS `InvoiceSequence` (
     PRIMARY KEY (TerminalID, InvoiceYear)
 );
 
+
+-- Quantities are DECIMAL(12,3), times are UTC DATETIME(3).
+-- ProductID matches SaleLine.ProductID (VARCHAR(20)). There is no foreign key to the Product
+-- table yet: add one once the Product table is in this script (agree it with the Product owner).
+-- Current stock. A product gets its row the first time it is stocked.
+CREATE TABLE IF NOT EXISTS `Inventory` (
+    ProductID VARCHAR(20) PRIMARY KEY,
+    QuantityOnHand DECIMAL(12,3) NOT NULL DEFAULT 0,
+    ReorderLevel DECIMAL(12,3) NOT NULL DEFAULT 0,
+    UpdatedAt DATETIME(3) NOT NULL,
+    CONSTRAINT chk_inventory_quantity CHECK (QuantityOnHand >= 0),   -- stock can never go negative
+    CONSTRAINT chk_inventory_reorder CHECK (ReorderLevel >= 0)
+);
+
+-- Every change to stock, newest last. Only ever added to, never edited or deleted.
+CREATE TABLE IF NOT EXISTS `StockMovement` (
+    MovementID BIGINT AUTO_INCREMENT PRIMARY KEY,
+    ProductID VARCHAR(20) NOT NULL,
+    MovementType VARCHAR(12) NOT NULL,           -- STOCK_IN / STOCK_OUT / ADJUSTMENT / SALE
+    Quantity DECIMAL(12,3) NOT NULL,             -- SIGNED: +20 stock-in, -2 sale
+    QuantityBefore DECIMAL(12,3) NOT NULL,
+    QuantityAfter DECIMAL(12,3) NOT NULL,
+    Reason VARCHAR(20) NULL,                     -- SALE / DAMAGE / TRANSFER / COUNT_CORRECTION / OTHER
+    ReferenceNo VARCHAR(50) NULL,                -- invoice number for a SALE
+    Note VARCHAR(200) NULL,                      -- the stock-in "Reference / Note", adjustment note
+    PerformedBy VARCHAR(10) NULL,                -- UserID; NULL for sales for now
+    CreatedAt DATETIME(3) NOT NULL,
+    INDEX idx_movement_product (ProductID, CreatedAt),
+    INDEX idx_movement_created (CreatedAt)       -- history list, newest first
+);
+
+
 -- ============ UPGRADES FOR DATABASES MADE BY AN OLDER SCRIPT ============
 -- CREATE TABLE IF NOT EXISTS never changes a table that is already there, so
 -- columns and indexes added after a table was first created are added here,
