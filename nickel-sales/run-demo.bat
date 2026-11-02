@@ -83,6 +83,7 @@ call :check pos.PosContractCheck
 call :check pos.CartCheck
 call :check pos.CheckoutCheck
 call :check pos.ReceiptCheck
+call :check inventory.InventoryCheck
 call :check app.AppCheck
 call :check product.ProductCheck
 echo.

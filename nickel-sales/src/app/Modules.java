@@ -4,6 +4,7 @@ import auth.contract.User;
 import auth.permission.AuthorizationService;
 import auth.permission.Permission;
 import auth.ui.UserAdminModule;
+import inventory.ui.InventoryModule;
 import pos.ui.PosModule;
 import product.ui.ProductModule;
 
