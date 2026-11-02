@@ -107,6 +107,20 @@ public class UserAdminService {
         log(active ? "USER_ACTIVATED" : "USER_DEACTIVATED", actor, target);
     }
 
+    /**
+     * Sets a new (temporary) password for a user; admin only. The password must meet the same
+     * policy as any other. The user's status is not changed.
+     */
+    public void resetPassword(String sessionId, String userId, String newPassword) throws AccountException {
+        User actor = requireAdmin(sessionId);
+        User target = requireUser(userId);
+        if (!passwordPolicy.validate(newPassword)) {
+            throw new AccountException(PassPolicy.REQUIREMENTS);
+        }
+        userRepository.updatePassword(target.getUserId(), BCrypt.hashpw(newPassword, BCrypt.gensalt(10)));
+        log("PASSWORD_RESET", actor, target);
+    }
+
     private User requireAdmin(String sessionId) throws AccountException {
         User actor = auth.getCurrentUser(sessionId);
         if (actor == null) {

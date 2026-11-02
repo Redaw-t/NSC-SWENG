@@ -24,7 +24,13 @@ public final class UserAdminModule implements AppModule {
     }
 
     @Override
+    public boolean usesShell() {
+        return true;
+    }
+
+    @Override
     public Parent open(ScreenContext screen) {
-        return new UserManagementScreen(screen.app().admin(), screen.sessionId(), screen::goHome).getView();
+        return new UserManagementScreen(screen.app().admin(), screen.app().authz(), screen.sessionId(),
+                screen::goHome).getView();
     }
 }
