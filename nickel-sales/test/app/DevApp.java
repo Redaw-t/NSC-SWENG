@@ -1,5 +1,8 @@
 package app;
 
+import inventory.repository.MySqlInventoryRepository;
+import inventory.service.InventoryAccess;
+import inventory.service.InventoryService;
 import stubs.StubInventory;
 
 /**
@@ -8,6 +11,10 @@ import stubs.StubInventory;
  * the Product &amp; Inventory module, so POS can be tried before that module
  * exists. Users and sales are the real MySQL ones; the test products and
  * their stock live in memory and start fresh every time.
+ *
+ * The Inventory screens run on the real MySQL stock tables, with the test
+ * products as the catalog. (POS still deducts from the in-memory test stock,
+ * so the two are not connected until Product and Inventory are wired into Main.)
  *
  * This is what double-clicking run-demo.bat starts. Replaced by Main once
  * the real inventory is connected (POS Phase 6).
@@ -20,6 +27,8 @@ public final class DevApp {
         AppConfig config = AppConfig.fromEnvironment();
         StubInventory testProducts = new StubInventory();
         AppContext app = AppContext.create(config, testProducts, testProducts);
+        app.register(InventoryService.class, new InventoryService(new MySqlInventoryRepository(), testProducts,
+                InventoryAccess.of(app.auth(), app.authz()), app.audit()));
         System.out.println("[DEV] Nickel Sales Center, terminal " + config.terminalId()
                 + ", with TEST products (StubInventory) - not the real inventory");
         NickelSalesApp.launch(app);

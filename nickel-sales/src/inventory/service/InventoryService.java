@@ -9,6 +9,7 @@ import inventory.model.MovementType;
 import inventory.model.StockLevel;
 import inventory.model.StockMovement;
 import inventory.model.StockReason;
+import inventory.model.StockRow;
 import inventory.repository.InventoryRepository;
 import product.contract.ProductInfo;
 import product.contract.ProductLookup;
@@ -18,6 +19,10 @@ import java.math.BigDecimal;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -41,6 +46,7 @@ public class InventoryService implements StockRecorder {
     static final int MAX_NOTE_LENGTH = 200;
     private static final int MAX_DECIMALS = 3;
     private static final BigDecimal MAX_QUANTITY = new BigDecimal("999999999.999");
+    private static final int LIST_LIMIT = 5000;
 
     private final InventoryRepository repository;
     private final ProductLookup products;
@@ -53,6 +59,44 @@ public class InventoryService implements StockRecorder {
         this.products = Objects.requireNonNull(products, "products");
         this.access = Objects.requireNonNull(access, "access");
         this.auditLogger = auditLogger;
+    }
+
+    // ---- read-only, for the Inventory screen ---------------------------------
+
+    /**
+     * Current Stock screen: every active product (plus any product that has a stock row)
+     * with its stock and reorder level. A product never stocked shows 0 on hand.
+     */
+    public List<StockRow> listStock(String sessionId) throws InventoryException {
+        access.require(sessionId);
+        Map<String, StockLevel> levels = new HashMap<>();
+        for (StockLevel level : repository.findAll()) {
+            levels.put(level.productId(), level);
+        }
+        Map<String, ProductInfo> infos = new LinkedHashMap<>();
+        for (ProductInfo p : products.search("", LIST_LIMIT)) {
+            infos.put(p.productId(), p);
+        }
+        for (String id : levels.keySet()) {
+            if (!infos.containsKey(id)) {
+                products.findById(id).ifPresent(p -> infos.put(id, p));
+            }
+        }
+        List<StockRow> rows = new ArrayList<>();
+        for (ProductInfo p : infos.values()) {
+            StockLevel level = levels.get(p.productId());
+            rows.add(new StockRow(p.productId(), p.name(), p.barcode(), p.unit(),
+                    level == null ? BigDecimal.ZERO : level.quantityOnHand(),
+                    level == null ? BigDecimal.ZERO : level.reorderLevel()));
+        }
+        rows.sort(Comparator.comparing(StockRow::name, String.CASE_INSENSITIVE_ORDER));
+        return rows;
+    }
+
+    /** Stock Movement History screen: newest first, at most {@code limit}. */
+    public List<StockMovement> history(String sessionId, int limit) throws InventoryException {
+        access.require(sessionId);
+        return repository.findMovements(null, limit);
     }
 
     // ---- screen use cases ----------------------------------------------------

@@ -7,6 +7,7 @@ import shared.Database;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -24,6 +25,12 @@ public interface InventoryRepository {
 
     /** Current stock of a product, or empty if it has never been stocked. */
     Optional<StockLevel> find(String productId);
+
+    /** Every stock row, ordered by product ID (Current Stock screen). */
+    List<StockLevel> findAll();
+
+    /** Movement history, newest first; {@code productId} null = all products. */
+    List<StockMovement> findMovements(String productId, int limit);
 
     /**
      * Runs {@code work} as one all-or-nothing transaction: committed together,

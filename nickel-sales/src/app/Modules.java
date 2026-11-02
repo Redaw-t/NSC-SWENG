@@ -4,6 +4,7 @@ import auth.contract.User;
 import auth.permission.AuthorizationService;
 import auth.permission.Permission;
 import auth.ui.UserAdminModule;
+import inventory.ui.InventoryModule;
 import pos.ui.PosModule;
 
 import java.util.List;
@@ -27,9 +28,8 @@ public final class Modules {
         return List.of(
                 // POS & Sales
                 new PosModule(),
-                // Product & Inventory: replace with your module
-                new ComingSoonModule("Products & inventory", "Products, prices, stock in/out, barcodes",
-                        Permission.UPDATE_INVENTORY),
+                // Product & Inventory (inventory screens done; product screens will join this button later)
+                new InventoryModule(),
                 // Transaction & Reports: replace with your module
                 new ComingSoonModule("Reports", "Sales and inventory reports", Permission.VIEW_REPORTS),
                 // User & Access Management

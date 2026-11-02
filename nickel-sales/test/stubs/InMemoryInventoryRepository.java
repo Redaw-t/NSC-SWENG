@@ -33,6 +33,22 @@ public final class InMemoryInventoryRepository implements InventoryRepository {
     }
 
     @Override
+    public synchronized List<StockLevel> findAll() {
+        return new ArrayList<>(levels.values());
+    }
+
+    @Override
+    public synchronized List<StockMovement> findMovements(String productId, int limit) {
+        List<StockMovement> out = new ArrayList<>();
+        for (int i = movements.size() - 1; i >= 0 && out.size() < limit; i--) {
+            if (productId == null || movements.get(i).productId().equals(productId)) {
+                out.add(movements.get(i));
+            }
+        }
+        return out;
+    }
+
+    @Override
     public synchronized <T, E extends Exception> T inTransaction(Database.TransactionWork<T, E> work) throws E {
         Map<String, StockLevel> levelsBefore = new TreeMap<>(levels);
         List<StockMovement> movementsBefore = new ArrayList<>(movements);

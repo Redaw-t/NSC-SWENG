@@ -1,7 +1,9 @@
 package inventory.repository;
 
+import inventory.model.MovementType;
 import inventory.model.StockLevel;
 import inventory.model.StockMovement;
+import inventory.model.StockReason;
 import shared.Database;
 
 import java.sql.Connection;
@@ -12,6 +14,8 @@ import java.sql.Types;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -31,6 +35,49 @@ public class MySqlInventoryRepository implements InventoryRepository {
             ps.setString(1, productId);
             try (ResultSet rs = ps.executeQuery()) {
                 return rs.next() ? Optional.of(readLevel(rs)) : Optional.empty();
+            }
+        } catch (SQLException e) {
+            throw failure(e);
+        }
+    }
+
+    @Override
+    public List<StockLevel> findAll() {
+        try (Connection c = Database.getConnection();
+             PreparedStatement ps = c.prepareStatement(SELECT_LEVEL + " ORDER BY ProductID");
+             ResultSet rs = ps.executeQuery()) {
+            List<StockLevel> out = new ArrayList<>();
+            while (rs.next()) {
+                out.add(readLevel(rs));
+            }
+            return out;
+        } catch (SQLException e) {
+            throw failure(e);
+        }
+    }
+
+    @Override
+    public List<StockMovement> findMovements(String productId, int limit) {
+        String sql = "SELECT MovementID, ProductID, MovementType, Quantity, QuantityBefore, QuantityAfter, "
+                + "Reason, ReferenceNo, Note, PerformedBy, CreatedAt FROM StockMovement"
+                + (productId == null ? "" : " WHERE ProductID = ?") + " ORDER BY MovementID DESC LIMIT ?";
+        try (Connection c = Database.getConnection(); PreparedStatement ps = c.prepareStatement(sql)) {
+            int i = 1;
+            if (productId != null) {
+                ps.setString(i++, productId);
+            }
+            ps.setInt(i, limit);
+            try (ResultSet rs = ps.executeQuery()) {
+                List<StockMovement> out = new ArrayList<>();
+                while (rs.next()) {
+                    out.add(new StockMovement(rs.getLong(1), rs.getString(2),
+                            MovementType.valueOf(rs.getString(3)),
+                            rs.getBigDecimal(4), rs.getBigDecimal(5), rs.getBigDecimal(6),
+                            StockReason.fromDb(rs.getString(7)),
+                            rs.getString(8), rs.getString(9), rs.getString(10),
+                            rs.getObject(11, LocalDateTime.class).toInstant(ZoneOffset.UTC)));
+                }
+                return out;
             }
         } catch (SQLException e) {
             throw failure(e);
