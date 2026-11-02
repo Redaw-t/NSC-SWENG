@@ -31,9 +31,8 @@ public final class Modules {
                 new PosModule(),
                 // Product Management (catalog, prices, categories, suppliers)
                 new ProductModule(),
-                // Inventory (stock in/out): replace with your module
-                new ComingSoonModule("Inventory", "Stock in/out, adjustments, stock levels",
-                        Permission.UPDATE_INVENTORY),
+                // Inventory (stock in/out)
+                new InventoryModule(),
                 // Transaction & Reports: replace with your module
                 new ComingSoonModule("Reports", "Sales and inventory reports", Permission.VIEW_REPORTS),
                 // User & Access Management

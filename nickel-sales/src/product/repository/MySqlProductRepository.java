@@ -1,3 +1,4 @@
+
 package product.repository;
 
 import product.model.Product;
@@ -14,22 +15,21 @@ import java.util.Optional;
 
 /**
  * ProductRepository backed by the Product table (with the category and supplier
- * names joined in). All SQL for products lives here, and every value goes in
- * through a ? parameter.
+ * names joined in).
  *
- * Stock (Product.StockOnHand) is read here but never written: new products start
- * at zero, and {@link #update} leaves the column alone, so editing a product can
- * never overwrite stock the Inventory module has just changed.
+ * Stock is read from the Inventory table, which is the source of truth for
+ * stock quantities. Product.StockOnHand is no longer used for displaying stock.
  */
 public class MySqlProductRepository implements ProductRepository {
 
     private static final String SELECT =
             "SELECT p.ProductID, p.Barcode, p.ProductName, p.Unit, p.RetailPrice, p.WholesalePrice, "
                     + "p.Vatable, p.IsActive, p.CategoryID, c.CategoryName, p.SupplierID, s.SupplierName, "
-                    + "p.StockOnHand "
+                    + "COALESCE(i.QuantityOnHand, 0) AS StockOnHand "
                     + "FROM Product p "
                     + "LEFT JOIN Category c ON c.CategoryID = p.CategoryID "
-                    + "LEFT JOIN Supplier s ON s.SupplierID = p.SupplierID";
+                    + "LEFT JOIN Supplier s ON s.SupplierID = p.SupplierID "
+                    + "LEFT JOIN Inventory i ON i.ProductID = p.ProductID";
 
     /** Marks a LIKE pattern's own % and _ as plain characters. */
     private static final char LIKE_ESCAPE = '!';
@@ -54,33 +54,43 @@ public class MySqlProductRepository implements ProductRepository {
     public List<Product> search(String text, boolean activeOnly, int limit) {
         String needle = text == null ? "" : text.trim();
         StringBuilder sql = new StringBuilder(SELECT).append(" WHERE 1 = 1");
+
         if (activeOnly) {
             sql.append(" AND p.IsActive = TRUE");
         }
+
         if (!needle.isEmpty()) {
             sql.append(" AND (p.ProductName LIKE ? ESCAPE '").append(LIKE_ESCAPE)
                     .append("' OR p.Barcode LIKE ? ESCAPE '").append(LIKE_ESCAPE).append("')");
         }
+
         sql.append(" ORDER BY p.ProductName, p.ProductID LIMIT ?");
 
         List<Product> found = new ArrayList<>();
+
         try (Connection c = Database.getConnection();
              PreparedStatement ps = c.prepareStatement(sql.toString())) {
+
             int i = 1;
+
             if (!needle.isEmpty()) {
                 String pattern = "%" + escapeLike(needle) + "%";
                 ps.setString(i++, pattern);
                 ps.setString(i++, pattern);
             }
+
             ps.setInt(i, Math.max(0, limit));
+
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
                     found.add(map(rs));
                 }
             }
+
         } catch (SQLException e) {
             throw new RuntimeException("Could not search products", e);
         }
+
         return found;
     }
 
@@ -88,11 +98,14 @@ public class MySqlProductRepository implements ProductRepository {
     public String nextProductId() {
         String sql = "SELECT COALESCE(MAX(CAST(SUBSTRING(ProductID, 3) AS UNSIGNED)), 0) "
                 + "FROM Product WHERE ProductID REGEXP '^P-[0-9]+$'";
+
         try (Connection c = Database.getConnection();
              PreparedStatement ps = c.prepareStatement(sql);
              ResultSet rs = ps.executeQuery()) {
+
             rs.next();
             return String.format("P-%04d", rs.getLong(1) + 1);
+
         } catch (SQLException e) {
             throw new RuntimeException("Could not work out the next product ID", e);
         }
@@ -101,9 +114,12 @@ public class MySqlProductRepository implements ProductRepository {
     @Override
     public void insert(Product p) {
         String sql = "INSERT INTO Product (ProductID, Barcode, ProductName, Unit, RetailPrice, WholesalePrice, "
-                + "Vatable, IsActive, CategoryID, SupplierID, StockOnHand) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                + "Vatable, IsActive, CategoryID, SupplierID, StockOnHand) "
+                + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+
         try (Connection c = Database.getConnection();
              PreparedStatement ps = c.prepareStatement(sql)) {
+
             ps.setString(1, p.productId());
             ps.setString(2, p.barcode());
             ps.setString(3, p.name());
@@ -115,7 +131,9 @@ public class MySqlProductRepository implements ProductRepository {
             setNullableInt(ps, 9, p.categoryId());
             setNullableInt(ps, 10, p.supplierId());
             ps.setBigDecimal(11, p.stockOnHand());
+
             ps.executeUpdate();
+
         } catch (SQLException e) {
             throw MySqlErrors.translate(e, "Could not save product " + p.productId());
         }
@@ -125,9 +143,11 @@ public class MySqlProductRepository implements ProductRepository {
     public void update(Product p) {
         String sql = "UPDATE Product SET Barcode = ?, ProductName = ?, Unit = ?, RetailPrice = ?, "
                 + "WholesalePrice = ?, Vatable = ?, IsActive = ?, CategoryID = ?, SupplierID = ? "
-                + "WHERE ProductID = ?";   // StockOnHand is deliberately not here
+                + "WHERE ProductID = ?";
+
         try (Connection c = Database.getConnection();
              PreparedStatement ps = c.prepareStatement(sql)) {
+
             ps.setString(1, p.barcode());
             ps.setString(2, p.name());
             ps.setString(3, p.unit());
@@ -138,9 +158,11 @@ public class MySqlProductRepository implements ProductRepository {
             setNullableInt(ps, 8, p.categoryId());
             setNullableInt(ps, 9, p.supplierId());
             ps.setString(10, p.productId());
+
             if (ps.executeUpdate() == 0) {
                 throw new RuntimeException("No such product: " + p.productId());
             }
+
         } catch (SQLException e) {
             throw MySqlErrors.translate(e, "Could not update product " + p.productId());
         }
@@ -149,10 +171,13 @@ public class MySqlProductRepository implements ProductRepository {
     private Optional<Product> queryOne(String sql, String param) {
         try (Connection c = Database.getConnection();
              PreparedStatement ps = c.prepareStatement(sql)) {
+
             ps.setString(1, param);
+
             try (ResultSet rs = ps.executeQuery()) {
                 return rs.next() ? Optional.of(map(rs)) : Optional.empty();
             }
+
         } catch (SQLException e) {
             throw new RuntimeException("Database error while reading Product", e);
         }
@@ -180,7 +205,8 @@ public class MySqlProductRepository implements ProductRepository {
         return rs.wasNull() ? null : value;
     }
 
-    private static void setNullableInt(PreparedStatement ps, int index, Integer value) throws SQLException {
+    private static void setNullableInt(PreparedStatement ps, int index, Integer value)
+            throws SQLException {
         if (value == null) {
             ps.setNull(index, Types.INTEGER);
         } else {
