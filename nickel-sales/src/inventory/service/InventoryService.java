@@ -87,7 +87,8 @@ public class InventoryService implements StockRecorder {
             StockLevel level = levels.get(p.productId());
             rows.add(new StockRow(p.productId(), p.name(), p.barcode(), p.unit(),
                     level == null ? BigDecimal.ZERO : level.quantityOnHand(),
-                    level == null ? BigDecimal.ZERO : level.reorderLevel()));
+                    level == null ? BigDecimal.ZERO : level.reorderLevel(),
+                    level == null ? null : level.updatedAt()));
         }
         rows.sort(Comparator.comparing(StockRow::name, String.CASE_INSENSITIVE_ORDER));
         return rows;
