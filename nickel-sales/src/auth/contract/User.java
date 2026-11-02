@@ -23,17 +23,24 @@ public class User {
     private final String lastName;
     private final Set<UserRole> roles;   // e.g. [ADMIN, CASHIER] — multi-role is normal
     private final UserStatus status;
+    private final java.time.LocalDateTime lastSignIn;   // null = has never signed in
 
     public User(String userId, String loginName, String passwordHash, String firstName, String lastName,
-            Set<UserRole> roles, UserStatus status) {
-    this.userId = userId;
-    this.loginName = loginName;
-    this.passwordHash = passwordHash;
-    this.firstName = firstName;
-    this.lastName = lastName;
-    this.roles = roles == null ? Collections.emptySet() : Collections.unmodifiableSet(roles);
-    this.status = status;
-}
+                Set<UserRole> roles, UserStatus status) {
+        this(userId, loginName, passwordHash, firstName, lastName, roles, status, null);
+    }
+
+    public User(String userId, String loginName, String passwordHash, String firstName, String lastName,
+                Set<UserRole> roles, UserStatus status, java.time.LocalDateTime lastSignIn) {
+        this.userId = userId;
+        this.loginName = loginName;
+        this.passwordHash = passwordHash;
+        this.firstName = firstName;
+        this.lastName = lastName;
+        this.roles = roles == null ? Collections.emptySet() : Collections.unmodifiableSet(roles);
+        this.status = status;
+        this.lastSignIn = lastSignIn;
+    }
 
     public String getUserId() {
         return userId;
@@ -75,6 +82,11 @@ public class User {
 
     public UserStatus getStatus() {
         return status;
+    }
+
+    /** When this user last signed in, or null if never. */
+    public java.time.LocalDateTime getLastSignIn() {
+        return lastSignIn;
     }
 
     public boolean isActive() {

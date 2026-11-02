@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS `Users` (
     UserLastname VARCHAR(30) NOT NULL,
     UserRole VARCHAR(5) NOT NULL, -- Admin = A / Cashier = C / Inventory = I
     UserStatus VARCHAR(8) NOT NULL, -- Active/Inactive/Locked
+    LastSignIn TIMESTAMP NULL DEFAULT NULL, -- set on every successful login
     CreatedAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UpdatedAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
@@ -86,25 +87,25 @@ INSERT IGNORE INTO `Product`
     (ProductID, Barcode, ProductName, Unit, RetailPrice, WholesalePrice, Vatable, IsActive, CategoryID, SupplierID, StockOnHand)
 VALUES
     ('P-0001', '4800000000019', 'Bond Paper A4 (ream)', 'ream', 250.00, 235.00, TRUE, TRUE,
-        (SELECT CategoryID FROM `Category` WHERE CategoryName = 'Office Supplies'),
+        (SELECT CategoryID FROM `Category` WHERE CategoryName = 'School/Office Supplies'),
         (SELECT SupplierID FROM `Supplier` WHERE SupplierName = 'Sample Supplier'), 40),
     ('P-0002', '4800000000026', 'Ballpen Black', 'pc', 12.00, 10.00, TRUE, TRUE,
-        (SELECT CategoryID FROM `Category` WHERE CategoryName = 'Office Supplies'),
+        (SELECT CategoryID FROM `Category` WHERE CategoryName = 'School/Office Supplies'),
         (SELECT SupplierID FROM `Supplier` WHERE SupplierName = 'Sample Supplier'), 200),
     ('P-0003', '4800000000033', 'Notebook 80 leaves', 'pc', 45.00, NULL, TRUE, TRUE,              -- no wholesale price
-        (SELECT CategoryID FROM `Category` WHERE CategoryName = 'Office Supplies'),
+        (SELECT CategoryID FROM `Category` WHERE CategoryName = 'School/Office Supplies'),
         (SELECT SupplierID FROM `Supplier` WHERE SupplierName = 'Sample Supplier'), 60),
     ('P-0004', '4800000000040', 'Rice (per kg)', 'kg', 52.50, 50.00, FALSE, TRUE,                 -- VAT-exempt, sold by weight
         (SELECT CategoryID FROM `Category` WHERE CategoryName = 'Groceries'),
         (SELECT SupplierID FROM `Supplier` WHERE SupplierName = 'Sample Supplier'), 100.500),
     ('P-0005', '4800000000057', 'Masking Tape 1 inch', 'roll', 35.75, 32.00, TRUE, TRUE,          -- out of stock
-        (SELECT CategoryID FROM `Category` WHERE CategoryName = 'Office Supplies'),
+        (SELECT CategoryID FROM `Category` WHERE CategoryName = 'School/Office Supplies'),
         (SELECT SupplierID FROM `Supplier` WHERE SupplierName = 'Sample Supplier'), 0),
     ('P-0006', '4800000000064', 'Desk Calculator', 'pc', 499.00, NULL, TRUE, FALSE,               -- inactive (no longer sold)
-        (SELECT CategoryID FROM `Category` WHERE CategoryName = 'Office Supplies'),
+        (SELECT CategoryID FROM `Category` WHERE CategoryName = 'School/Office Supplies'),
         (SELECT SupplierID FROM `Supplier` WHERE SupplierName = 'Sample Supplier'), 5),
     ('P-0007', NULL, 'Glue Stick', 'pc', 18.00, 16.50, TRUE, TRUE,                                -- no barcode: found by search only
-        (SELECT CategoryID FROM `Category` WHERE CategoryName = 'Office Supplies'),
+        (SELECT CategoryID FROM `Category` WHERE CategoryName = 'School/Office Supplies'),
         (SELECT SupplierID FROM `Supplier` WHERE SupplierName = 'Sample Supplier'), 30);
 
 -- ================== TRANSACTION RECORDS ==================
@@ -217,4 +218,10 @@ PREPARE upgrade FROM @ddl; EXECUTE upgrade; DEALLOCATE PREPARE upgrade;
 SET @missing = (SELECT COUNT(*) = 0 FROM information_schema.STATISTICS
     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'SaleLine' AND INDEX_NAME = 'idx_saleline_product');
 SET @ddl = IF(@missing, 'ALTER TABLE `SaleLine` ADD INDEX idx_saleline_product (ProductID)', 'DO 0');
+PREPARE upgrade FROM @ddl; EXECUTE upgrade; DEALLOCATE PREPARE upgrade;
+
+-- Users.LastSignIn (Auth: time of the user's last successful sign in)
+SET @missing = (SELECT COUNT(*) = 0 FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'Users' AND COLUMN_NAME = 'LastSignIn');
+SET @ddl = IF(@missing, 'ALTER TABLE `Users` ADD COLUMN LastSignIn TIMESTAMP NULL DEFAULT NULL AFTER UserStatus', 'DO 0');
 PREPARE upgrade FROM @ddl; EXECUTE upgrade; DEALLOCATE PREPARE upgrade;

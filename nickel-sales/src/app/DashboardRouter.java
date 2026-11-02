@@ -6,6 +6,7 @@ import auth.ui.ChangePasswordDialog;
 import auth.ui.LoginScreen;
 import auth.ui.LogoutAction;
 import javafx.application.Platform;
+import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
@@ -18,6 +19,8 @@ import shared.UiErrors;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Moves the window between the login screen, the home screen and the
@@ -113,7 +116,16 @@ public class DashboardRouter {
             return;
         }
         try {
-            show(module.open(new ScreenContext(stage, sessionId, user, app, () -> showHome(sessionId))));
+            Parent screen = module.open(new ScreenContext(stage, sessionId, user, app, () -> showHome(sessionId)));
+            if (module.usesShell()) {
+                Set<String> available = Modules.visibleFor(user, app.authz(), modules).stream()
+                        .map(AppModule::title).collect(Collectors.toSet());
+                screen = AppShell.wrap(user, module.title(), available, screen,
+                        () -> showHome(sessionId),
+                        title -> openByTitle(sessionId, title),
+                        () -> logoutAction.logout(sessionId));
+            }
+            show(screen);
         } catch (RuntimeException e) {
             System.out.println("[APP] could not open " + module.title() + ": " + e);
             Alert error = new Alert(Alert.AlertType.ERROR,
@@ -124,6 +136,11 @@ public class DashboardRouter {
             error.initOwner(stage);
             error.show();
         }
+    }
+
+    /** A sidebar click: opens the module with this title (its permission is checked again in {@link #open}). */
+    private void openByTitle(String sessionId, String title) {
+        modules.stream().filter(m -> m.title().equals(title)).findFirst().ifPresent(m -> open(sessionId, m));
     }
 
     /**
@@ -145,7 +162,7 @@ public class DashboardRouter {
         }
     }
 
-    private void show(javafx.scene.Parent root) {
+    private void show(Parent root) {
         if (stage.getScene() == null) {
             stage.setScene(new Scene(root, 1280, 720));
         } else {

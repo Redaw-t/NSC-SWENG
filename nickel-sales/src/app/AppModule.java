@@ -23,6 +23,15 @@ public interface AppModule {
     Permission permission();
 
     /**
+     * True if the router should show this module's screen inside the sidebar frame
+     * ({@link AppShell}). The screen then needs no Back button: the sidebar's Dashboard
+     * entry goes home. Default false, so existing screens look exactly as before.
+     */
+    default boolean usesShell() {
+        return false;
+    }
+
+    /**
      * Builds the module's screen. Called each time the button is pressed.
      * Use {@code screen.goHome()} for your Back button.
      */

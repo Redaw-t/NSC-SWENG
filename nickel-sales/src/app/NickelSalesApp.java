@@ -28,6 +28,7 @@ public class NickelSalesApp extends Application {
             stage.getIcons().add(new javafx.scene.image.Image(icon));
         }
         stage.setTitle("Nickel Sales Center - POS (" + context.config().terminalId() + ")");
+        stage.setMaximized(true);  
         router.showLogin();
         stage.show();
     }
