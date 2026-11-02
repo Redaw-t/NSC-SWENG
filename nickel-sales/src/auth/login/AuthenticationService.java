@@ -103,6 +103,13 @@ public class AuthenticationService {
 
         Session session = sessionManager == null ? null : sessionManager.createSession(user.getUserId());
 
+        // Remember when this user signed in. A database problem here must not stop a valid login.
+        try {
+            userRepository.recordSignIn(user.getUserId());
+        } catch (RuntimeException e) {
+            // the user is signed in anyway; the time just isn't updated this once
+        }
+
         log("LOGIN_SUCCESS", user.getUserId());
         return new LoginResult(user, session);
     }

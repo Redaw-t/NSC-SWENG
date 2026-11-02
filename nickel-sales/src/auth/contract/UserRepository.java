@@ -34,4 +34,7 @@ public interface UserRepository {
 
     /** All users (used by user management screens, not by login). */
     List<User> findAll();
+
+    /** Records that this user just signed in successfully. Default does nothing (fakes, tests). */
+    default void recordSignIn(String userId) { }
 }

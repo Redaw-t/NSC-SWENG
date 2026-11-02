@@ -19,7 +19,7 @@ import java.util.Locale;
 public class MySqlUserRepository implements UserRepository {
 
 	private static final String SELECT_COLUMNS =
-	        "SELECT UserID, UserLoginName, UserPassword, UserName, UserLastname, UserRole, UserStatus FROM Users";
+	        "SELECT UserID, UserLoginName, UserPassword, UserName, UserLastname, UserRole, UserStatus, LastSignIn FROM Users";
 
     @Override
     public User findById(String userId) {
@@ -109,6 +109,20 @@ public class MySqlUserRepository implements UserRepository {
         return users;
     }
 
+    @Override
+    public void recordSignIn(String userId) {
+        // UpdatedAt = UpdatedAt stops the column's ON UPDATE CURRENT_TIMESTAMP from also changing,
+        // so UpdatedAt keeps meaning "the user's record was edited", not "the user logged in".
+        String sql = "UPDATE Users SET LastSignIn = CURRENT_TIMESTAMP, UpdatedAt = UpdatedAt WHERE UserID = ?";
+        try (Connection c = Database.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setString(1, userId);
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            throw new RuntimeException("Could not record sign in for " + userId, e);
+        }
+    }
+
     private User queryOne(String sql, String param) {
         try (Connection c = Database.getConnection();
              PreparedStatement ps = c.prepareStatement(sql)) {
@@ -122,13 +136,15 @@ public class MySqlUserRepository implements UserRepository {
     }
 
     private User map(ResultSet rs) throws SQLException {
-    	return new User(
-    	        rs.getString("UserID"),
-    	        rs.getString("UserLoginName"),
-    	        rs.getString("UserPassword"),
-    	        rs.getString("UserName"),
-    	        rs.getString("UserLastname"),
-    	        UserRole.parseDbRoles(rs.getString("UserRole")),
-    	        UserStatus.fromDbString(rs.getString("UserStatus")));
+        java.sql.Timestamp lastSignIn = rs.getTimestamp("LastSignIn");
+        return new User(
+                rs.getString("UserID"),
+                rs.getString("UserLoginName"),
+                rs.getString("UserPassword"),
+                rs.getString("UserName"),
+                rs.getString("UserLastname"),
+                UserRole.parseDbRoles(rs.getString("UserRole")),
+                UserStatus.fromDbString(rs.getString("UserStatus")),
+                lastSignIn == null ? null : lastSignIn.toLocalDateTime());
     }
 }

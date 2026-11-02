@@ -13,7 +13,7 @@ products by ID, name or barcode.
 | `model/` | `Product`, `Category`, `Supplier` (records that validate their own fields) and `ProductDraft` (what the add/edit form submits). |
 | `repository/` | `ProductRepository`, `CategoryRepository`, `SupplierRepository` (interfaces) and the `MySql...Repository` classes. All SQL lives here. A duplicate barcode / name comes back as `DuplicateValueException`. |
 | `service/` | `ProductService` (**implements `ProductLookup`** + create / edit / discontinue), `CategoryService`, `SupplierService`, and `ProductException` (messages are safe to show). Rules and permission checks live here. |
-| `ui/` | `ProductModule` (registered in `app.Modules`), `ProductScreen`, `ProductFormDialog`, `CategoryDialog`, `SupplierDialog`. |
+| `ui/` | `ProductModule` (registered in `app.Modules`), `ProductScreen` (the tab strip: Products / Categories / Suppliers / Barcode) with `ProductsPane`, `CategoriesPane`, `SuppliersPane`, the dialogs (the pop-ups (`Modal`, `ProductFormDialog`, `SupplierFormDialog`, `NameDialog`, `ProductDetailsDialog`, plus `ProductUi.confirm` / `notice`)) and small shared helpers (`ProductUi`, `Pager`). Barcode is a "Coming soon" card. The screen is drawn inside the sidebar frame `app.AppShell` and styled in Java by `shared.Styles` (colours from `shared.Theme`). `CategoryDialog` / `SupplierDialog` are the old pop-up lists, no longer opened. |
 
 **May depend on:** `shared`, `auth.contract` / `auth.permission` (roles), its own folders.
 **Must not depend on:** `pos.*`, `inventory.*` internals, `test/`.
