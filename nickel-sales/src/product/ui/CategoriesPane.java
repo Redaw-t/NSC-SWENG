@@ -14,7 +14,10 @@ import javafx.stage.Window;
 import product.model.Category;
 import product.service.CategoryService;
 import product.service.ProductException;
+import shared.Modal;
 import shared.Styles;
+import shared.TablePager;
+import shared.Tables;
 import shared.UiErrors;
 
 import java.util.ArrayList;
@@ -36,8 +39,8 @@ final class CategoriesPane {
     private final ActorSource actor;
 
     private final TextField search = new TextField();
-    private final TableView<Category> table = ProductUi.table();
-    private final Pager pager = new Pager(this::showPage);
+    private final TableView<Category> table = Tables.create();
+    private final TablePager pager = TablePager.links(this::showPage);
     private final Label message = new Label();
     private final VBox view = new VBox(16);
 
@@ -48,12 +51,12 @@ final class CategoriesPane {
         this.service = service;
         this.actor = actor;
 
-        table.getColumns().add(ProductUi.<Category>numberColumn(pager));
-        table.getColumns().add(ProductUi.<Category>textColumn("Category", 400, Category::name));
-        table.getColumns().add(ProductUi.<Category>nodeColumn("Status", 120, 100, c -> ProductUi.pill(c.active())));
-        table.getColumns().add(ProductUi.<Category>nodeColumn("Actions", 260, 210, this::actions));
+        table.getColumns().add(Tables.<Category>numberColumn(pager));
+        table.getColumns().add(Tables.<Category>textColumn("Category", 400, Category::name));
+        table.getColumns().add(Tables.<Category>nodeColumn("Status", 120, 100, c -> ProductUi.pill(c.active())));
+        table.getColumns().add(Tables.<Category>nodeColumn("Actions", 260, 210, this::actions));
         table.setPlaceholder(new Label("No categories found."));
-        ProductUi.fitPageToHeight(table, pager, this::showPage);
+        pager.fitToHeight(table, Tables.HEADER_HEIGHT, Tables.ROW_HEIGHT, this::showPage);
 
         search.setPromptText("Search Category...");
         search.setPrefWidth(300);
@@ -103,7 +106,7 @@ final class CategoriesPane {
     }
 
     private void toggle(Category c) {
-        if (c.active() && !ProductUi.confirm(owner(), "Deactivate category",
+        if (c.active() && !Modal.confirm(owner(), "Deactivate category",
                 "Deactivate \"" + c.name() + "\"?\n\nIt will no longer be offered when adding or editing a product. "
                         + "Products already in it keep it.", "Deactivate")) {
             return;
@@ -118,7 +121,7 @@ final class CategoriesPane {
             message.setText(e.getMessage());
             return;
         } catch (RuntimeException e) {
-            message.setText(UiErrors.message(e, ProductUi.FALLBACK));
+            message.setText(UiErrors.message(e));
             return;
         }
         reload();
@@ -132,7 +135,7 @@ final class CategoriesPane {
         } catch (ProductException e) {
             message.setText(e.getMessage());
         } catch (RuntimeException e) {
-            message.setText(UiErrors.message(e, ProductUi.FALLBACK));
+            message.setText(UiErrors.message(e));
         }
     }
 

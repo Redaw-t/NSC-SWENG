@@ -1,5 +1,8 @@
 package pos.receipt;
 
+import barcode.service.Code128;
+import barcode.service.EscPosBarcode;
+
 import javax.print.DocFlavor;
 import javax.print.DocPrintJob;
 import javax.print.PrintException;
@@ -16,7 +19,8 @@ import java.util.List;
  *
  * Uses the Windows printer named in the environment variable NSC_PRINTER_NAME
  * (e.g. POS-58), or the default printer when it is not set.
- * Text only (plain ASCII; anything else prints as '?').
+ * Text is plain ASCII (anything else prints as '?'). The invoice-number barcode is sent
+ * as a raster picture (GS v 0), which 58 mm and 80 mm ESC/POS printers support.
  */
 public class EscPosReceiptPrinter implements PrinterPort {
 
@@ -33,7 +37,7 @@ public class EscPosReceiptPrinter implements PrinterPort {
     @Override
     public void printReceipt(Receipt receipt) throws ReceiptPrintException {
         PrintService service = findPrinter();
-        byte[] data = toBytes(receipt.toText(width));
+        byte[] data = toBytes(receipt.toParts(width), width);
         try {
             DocPrintJob job = service.createPrintJob();
             job.print(new SimpleDoc(data, DocFlavor.BYTE_ARRAY.AUTOSENSE, null), null);
@@ -60,14 +64,29 @@ public class EscPosReceiptPrinter implements PrinterPort {
         return def;
     }
 
-    private static byte[] toBytes(List<String> lines) {
+    private static byte[] toBytes(List<Receipt.Part> parts, int width) {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         out.write(0x1B);                       // ESC @  : reset the printer
         out.write(0x40);
-        for (String line : lines) {
-            byte[] text = line.getBytes(StandardCharsets.US_ASCII);   // non-ASCII becomes '?'
-            out.write(text, 0, text.length);
-            out.write('\n');
+        for (Receipt.Part part : parts) {
+            if (part instanceof Receipt.TextBlock block) {
+                for (String line : block.lines()) {
+                    byte[] text = line.getBytes(StandardCharsets.US_ASCII);   // non-ASCII becomes '?'
+                    out.write(text, 0, text.length);
+                    out.write('\n');
+                }
+            } else if (part instanceof Receipt.BarcodeBlock code) {
+                boolean[] modules = Code128.modules(code.value());
+                byte[] picture = EscPosBarcode.raster(modules, ReceiptBarcode.moduleDots(code.value(), width),
+                        ReceiptBarcode.HEIGHT_DOTS);
+                out.write(0x1B);               // ESC a 1 : center, so the paper margins are the quiet zone
+                out.write(0x61);
+                out.write(1);
+                out.write(picture, 0, picture.length);
+                out.write(0x1B);               // ESC a 0 : back to left
+                out.write(0x61);
+                out.write(0);
+            }
         }
         out.write(0x1B);                       // ESC d n : feed n lines
         out.write(0x64);

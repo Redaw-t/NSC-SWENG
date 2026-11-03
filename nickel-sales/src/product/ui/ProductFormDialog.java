@@ -14,7 +14,9 @@ import product.model.Product;
 import product.model.ProductDraft;
 import product.model.Supplier;
 import product.service.ProductException;
+import shared.Modal;
 import shared.Quantity;
+import shared.SearchPicker;
 import shared.Styles;
 import shared.Theme;
 import shared.UiErrors;
@@ -163,7 +165,7 @@ final class ProductFormDialog {
             } catch (ProductException ex) {
                 error.setText(ex.getMessage());
             } catch (RuntimeException ex) {
-                error.setText(UiErrors.message(ex, ProductUi.FALLBACK));
+                error.setText(UiErrors.message(ex));
             }
         });
 

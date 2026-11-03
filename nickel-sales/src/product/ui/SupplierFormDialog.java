@@ -7,6 +7,7 @@ import javafx.scene.layout.GridPane;
 import javafx.stage.Window;
 import product.model.Supplier;
 import product.service.ProductException;
+import shared.Modal;
 import shared.Styles;
 import shared.Theme;
 import shared.UiErrors;
@@ -60,7 +61,7 @@ final class SupplierFormDialog {
             } catch (ProductException ex) {
                 error.setText(ex.getMessage());
             } catch (RuntimeException ex) {
-                error.setText(UiErrors.message(ex, ProductUi.FALLBACK));
+                error.setText(UiErrors.message(ex));
             }
         });
 

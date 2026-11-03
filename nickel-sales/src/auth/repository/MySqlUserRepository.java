@@ -11,6 +11,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -136,7 +137,6 @@ public class MySqlUserRepository implements UserRepository {
     }
 
     private User map(ResultSet rs) throws SQLException {
-        java.sql.Timestamp lastSignIn = rs.getTimestamp("LastSignIn");
         return new User(
                 rs.getString("UserID"),
                 rs.getString("UserLoginName"),
@@ -145,6 +145,19 @@ public class MySqlUserRepository implements UserRepository {
                 rs.getString("UserLastname"),
                 UserRole.parseDbRoles(rs.getString("UserRole")),
                 UserStatus.fromDbString(rs.getString("UserStatus")),
-                lastSignIn == null ? null : lastSignIn.toLocalDateTime());
+                readLocalTime(rs, "LastSignIn"));
+    }
+
+    /**
+     * Reads a date-time column exactly as MySQL shows it, with no time zone conversion.
+     *
+     * LastSignIn is written with CURRENT_TIMESTAMP, i.e. in the database server's own (local) time, so
+     * the stored value is already the local time to show. getTimestamp() must not be used here: the JDBC
+     * URL says serverTimezone=UTC, so the driver would treat that local time as UTC and the screen would
+     * show it shifted by the offset (8 hours in the Philippines).
+     */
+    private static LocalDateTime readLocalTime(ResultSet rs, String column) throws SQLException {
+        String text = rs.getString(column);   // "2026-11-04 10:30:15"
+        return text == null ? null : LocalDateTime.parse(text.trim().replace(' ', 'T'));
     }
 }

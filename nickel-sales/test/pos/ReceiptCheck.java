@@ -1,5 +1,7 @@
 package pos;
 
+import barcode.service.Code128;
+import barcode.service.EscPosBarcode;
 import pos.cart.PricingService;
 import pos.cart.Sale;
 import pos.cart.SaleLineItem;
@@ -142,6 +144,67 @@ public class ReceiptCheck {
             expect(amountAtEnd(only(text, l -> l.startsWith("GCash"), "GCash")), "280.00");   // 250.00 + VAT
             only(text, l -> l.startsWith("Ref. no.") && l.endsWith("1009876543210"), "reference");
             expectTrue(text.stream().noneMatch(l -> l.startsWith("Change") || l.startsWith("Cash ")), "no change");
+        });
+
+        check("Barcode: Code 128 of the invoice number, just above the not-official notice", () -> {
+            for (boolean reprint : new boolean[]{false, true}) {
+                List<Receipt.Part> parts = new Receipt(STORE, cashSale, "Juan Dela Cruz", reprint).toParts(32);
+                long barcodes = parts.stream().filter(p -> p instanceof Receipt.BarcodeBlock).count();
+                expectTrue(barcodes == 1, "exactly one barcode, found " + barcodes);
+                int at = -1;
+                for (int i = 0; i < parts.size(); i++) {
+                    if (parts.get(i) instanceof Receipt.BarcodeBlock) {
+                        at = i;
+                    }
+                }
+                Receipt.BarcodeBlock code = (Receipt.BarcodeBlock) parts.get(at);
+                expectText(code.value(), cashSale.invoiceNo());
+                expectText(Code128.decode(Code128.modules(code.value())), cashSale.invoiceNo());
+                List<String> after = ((Receipt.TextBlock) parts.get(at + 1)).lines();
+                expectText(after.get(0).trim(), cashSale.invoiceNo());                // readable number under the bars
+                expectTrue(after.stream().anyMatch(l -> l.trim().equals(Receipt.NOT_OFFICIAL)), "notice after barcode");
+                List<String> before = ((Receipt.TextBlock) parts.get(at - 1)).lines();
+                expectTrue(before.stream().noneMatch(l -> l.trim().equals(Receipt.NOT_OFFICIAL)), "notice not before barcode");
+            }
+        });
+
+        check("Code 128: bars decode back to the text (invoice numbers, letters, digits, odd lengths)", () -> {
+            String[] samples = {"T01-2026-000042", "T01-2026-000123", "ABCDEFGH-2026-999999", "T1-2026-000001", "1234",
+                    "12345", "123456", "A", "a-b c~", "0000", "T01-2027-1234567"};
+            for (String sample : samples) {
+                boolean[] bars = Code128.modules(sample);
+                expectText(Code128.decode(bars), sample);
+                expectTrue(bars[0] && bars[bars.length - 1], "starts and ends with a bar");
+            }
+            expectTrue(Code128.moduleCount("T01-2026-000123") == 178, "digit runs packed: 178 modules");
+            expectTrue(Code128.moduleCount("T01-2026-000123") * 2 <= 384, "2-dot bars fit 58 mm paper");
+            // independent reference: "A" = start B + 'A' + check 34 + stop, as published in the Code 128 spec
+            StringBuilder bits = new StringBuilder();
+            for (boolean bar : Code128.modules("A")) {
+                bits.append(bar ? '1' : '0');
+            }
+            expectText(bits.toString(), "11010010000" + "10100011000" + "10001011000" + "1100011101011");
+            expectTrue(!Code128.canEncode("") && !Code128.canEncode(null) && !Code128.canEncode("caf\u00e9"), "rejects empty / non-ASCII");
+            expectThrows(() -> Code128.modules("caf\u00e9"), IllegalArgumentException.class);
+        });
+
+        check("Printer picture: ESC/POS raster header, size and bars match the barcode", () -> {
+            boolean[] bars = Code128.modules(cashSale.invoiceNo());
+            int dots = EscPosBarcode.moduleDots(bars.length, 384 - 16, 3);
+            expectTrue(dots == 2, "2 dots per bar on 58 mm");
+            byte[] b = EscPosBarcode.raster(bars, dots, 80);
+            int widthBytes = (bars.length * dots + 7) / 8;
+            expectTrue((b[0] & 0xFF) == 0x1D && b[1] == 0x76 && b[2] == 0x30 && b[3] == 0, "GS v 0");
+            expectTrue((b[4] & 0xFF) == (widthBytes & 0xFF) && (b[5] & 0xFF) == (widthBytes >> 8), "width bytes");
+            expectTrue((b[6] & 0xFF) == 80 && b[7] == 0, "height 80 dots");
+            expectTrue(b.length == 8 + widthBytes * 80, "data length");
+            boolean[] back = new boolean[bars.length];
+            for (int m = 0; m < bars.length; m++) {
+                int dot = m * dots;
+                back[m] = (b[8 + dot / 8] & (0x80 >> (dot % 8))) != 0;
+            }
+            expectText(Code128.decode(back), cashSale.invoiceNo());
+            expectTrue(EscPosBarcode.moduleDots(400, 368, 3) == 1, "very long number falls back to 1 dot");
         });
 
         check("Reprints are marked REPRINT; the cashier's ID is used if the name can't be found", () -> {

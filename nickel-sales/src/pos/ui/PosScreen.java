@@ -19,7 +19,6 @@ import javafx.scene.control.Label;
 import javafx.scene.control.MenuItem;
 import javafx.scene.control.OverrunStyle;
 import javafx.scene.control.TableColumn;
-import javafx.scene.control.TableRow;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextField;
 import javafx.scene.control.Tooltip;
@@ -93,7 +92,7 @@ import java.util.regex.Pattern;
  * notice. Search this file for "TODO(skeleton)" to find the methods to fill in.
  *
  * The layout is drawn for a 1920 px wide window and scaled to fit (see shared.ScaledPane);
- * the look comes from resources/css/pos.css. All rules live in SalesService and
+ * the look is in PosStyle. All rules live in SalesService and
  * PaymentService; this screen only shows their results and messages.
  */
 public final class PosScreen {
@@ -104,7 +103,6 @@ public final class PosScreen {
     static final String PESO = "₱";
 
     private static final double DESIGN_WIDTH = 1920;
-    private static final String STYLESHEET = "/css/pos.css";
     private static final String STATUS_BAR = "#C8D1D9";
     private static final String ONLINE_GREEN = "#1FBA42";
     private static final String DARK = Theme.PRIMARY_TEXT;
@@ -555,19 +553,12 @@ public final class PosScreen {
     /* ------------------------------- layout ------------------------------- */
 
     private void buildView() {
-        content.getStyleClass().add("pos-root");
+        PosStyle.root(content);
         message.setId("pos-message");
         barcodeField.setId("pos-barcode");
         totalValue.setId("pos-total");
         payHint.setId("pos-hint");
         itemCount.setId("pos-items");
-        var css = PosScreen.class.getResource(STYLESHEET);
-        if (css != null) {
-            content.getStylesheets().add(css.toExternalForm());
-        } else {
-            System.err.println("[POS] " + STYLESHEET + " was not found on the classpath; the screen will look unstyled. "
-                    + "Put resources/css/pos.css on the classpath (resources is a source folder).");
-        }
 
         BorderPane main = new BorderPane();
         main.setTop(buildStatusBar());
@@ -628,14 +619,13 @@ public final class PosScreen {
 
         Button menu = new Button();
         menu.setGraphic(hamburgerIcon());
-        menu.getStyleClass().add("pos-btn-plain");
+        PosStyle.plainButton(menu, "");
         menu.setFocusTraversable(false);
         menu.setPadding(new Insets(8));
         menu.setOnAction(e -> showMenu(menu));
         Button logout = new Button("Logout");
-        logout.getStyleClass().add("pos-btn-plain");
+        PosStyle.plainButton(logout, "-fx-font-size: 22px; -fx-text-fill: " + DARK + "; -fx-padding: 6 12 6 12;");
         logout.setFocusTraversable(false);
-        logout.setStyle("-fx-font-size: 22px; -fx-text-fill: " + DARK + "; -fx-padding: 6 12 6 12;");
         logout.setOnAction(e -> logout());
 
         HBox bar = new HBox(12, dot, online, spacer(24), cashier, message, menu, logout);
@@ -654,10 +644,10 @@ public final class PosScreen {
 
         Node summary = buildSummary();
         VBox.setVgrow(summary, Priority.ALWAYS);
-        Button reprint = keyButton("Reprint Receipt", "F6", "pos-btn-secondary", DARK, 26, this::reprint);
-        Button retrieve = keyButton("Retrieve Transaction", "F7", "pos-btn-secondary", DARK, 26, this::retrieveTransaction);
-        Button newTransaction = keyButton("New Transaction", "F8", "pos-btn-secondary", DARK, 26, this::newTransaction);
-        Button cancel = keyButton("Cancel Transaction", "F9", "pos-btn-danger", "white", 26, this::cancelSale);
+        Button reprint = keyButton("Reprint Receipt", "F6", PosStyle.Kind.SECONDARY, DARK, 26, this::reprint);
+        Button retrieve = keyButton("Retrieve Transaction", "F7", PosStyle.Kind.SECONDARY, DARK, 26, this::retrieveTransaction);
+        Button newTransaction = keyButton("New Transaction", "F8", PosStyle.Kind.SECONDARY, DARK, 26, this::newTransaction);
+        Button cancel = keyButton("Cancel Transaction", "F9", PosStyle.Kind.DANGER, "white", 26, this::cancelSale);
         for (Button b : List.of(reprint, retrieve, newTransaction, cancel)) {
             fixHeight(b, 70);
             b.setMaxWidth(Double.MAX_VALUE);
@@ -674,9 +664,11 @@ public final class PosScreen {
 
     private Node buildTable() {
         table.setItems(rows);
-        table.getStyleClass().add("pos-table");
+        PosStyle.table(table);
         table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
-        table.setPlaceholder(new Label("No items yet. Scan a barcode to start."));
+        Label empty = new Label("No items yet. Scan a barcode to start.");
+        PosStyle.placeholder(empty);
+        table.setPlaceholder(empty);
         table.getColumns().add(column("#", 73, r -> String.valueOf(r.no())));
         table.getColumns().add(column("Item", 503, r -> r.line().productName()));
         table.getColumns().add(column("Qty", 99, r -> Quantity.format(r.line().quantity()) + " " + r.line().unit()));
@@ -685,13 +677,7 @@ public final class PosScreen {
                 r -> r.line().priceType() == PriceType.WHOLESALE ? "WHOLESALE" : "RETAIL"));
         table.getColumns().add(column("Amount", 270, r -> Money.format(r.line().lineTotal())));
         // A line with a stock problem is tinted red; the sentence is in the summary card above Payment.
-        table.setRowFactory(t -> new TableRow<>() {
-            @Override
-            protected void updateItem(Row row, boolean empty) {
-                super.updateItem(row, empty);
-                setStyle(!empty && row != null && row.problem() != null ? "-fx-background-color: #fbe3e3;" : "");
-            }
-        });
+        table.setRowFactory(t -> new PosStyle.CartRow<Row>(row -> row.problem() != null));
         table.addEventFilter(KeyEvent.KEY_PRESSED, e -> {
             switch (e.getCode()) {
                 case ENTER -> { askQuantity(); e.consume(); }
@@ -715,7 +701,7 @@ public final class PosScreen {
         c.setPrefWidth(width);
         c.setSortable(false);
         c.setReorderable(false);
-        c.setStyle("-fx-alignment: CENTER;");
+        c.setCellFactory(col -> new PosStyle.GridCell<Row>());
         return c;
     }
 
@@ -748,13 +734,13 @@ public final class PosScreen {
         HBox searchRow = new HBox(6, label("Search Product", 15, true), searchIcon());
         searchRow.setAlignment(Pos.CENTER);
         search.setGraphic(keyed(searchRow, "F1", DARK));
-        decorate(search, "pos-btn-secondary", this::addFromSearch);
+        decorate(search, PosStyle.Kind.SECONDARY, this::addFromSearch);
         fixSize(search, 166, 70);
 
-        Button openItem = keyButton("Open Item", "F2", "pos-btn-secondary", DARK, 26, this::openItem);
-        Button editQty = keyButton("Edit Qty", "F3", "pos-btn-secondary", DARK, 26, this::askQuantity);
-        Button editPrice = keyButton("Edit Price", "F4", "pos-btn-secondary", DARK, 26, this::editPrice);
-        Button remove = keyButton("Remove Item", "Del", "pos-btn-danger", "white", 22, this::removeSelected);
+        Button openItem = keyButton("Open Item", "F2", PosStyle.Kind.SECONDARY, DARK, 26, this::openItem);
+        Button editQty = keyButton("Edit Qty", "F3", PosStyle.Kind.SECONDARY, DARK, 26, this::askQuantity);
+        Button editPrice = keyButton("Edit Price", "F4", PosStyle.Kind.SECONDARY, DARK, 26, this::editPrice);
+        Button remove = keyButton("Remove Item", "Del", PosStyle.Kind.DANGER, "white", 22, this::removeSelected);
         fixSize(openItem, 165, 70);
         fixSize(editQty, 164, 70);
         fixSize(editPrice, 165, 70);
@@ -788,7 +774,7 @@ public final class PosScreen {
 
         payHint.setWrapText(true);
         payHint.setStyle("-fx-font-size: 16px; -fx-text-fill: " + RED + ";");
-        payButton = keyButton("PAYMENT", "F5", "pos-btn-primary", "white", 32, this::pay);
+        payButton = keyButton("PAYMENT", "F5", PosStyle.Kind.PRIMARY, "white", 32, this::pay);
         payButton.setMaxWidth(Double.MAX_VALUE);
         fixHeight(payButton, 68);
         Region grow = new Region();
@@ -852,19 +838,19 @@ public final class PosScreen {
     }
 
     /** A button with its name and the key underneath, e.g. "Open Item" over "[F2]". */
-    private static Button keyButton(String name, String key, String styleClass, String color, int size, Runnable onClick) {
+    private static Button keyButton(String name, String key, PosStyle.Kind kind, String color, int size, Runnable onClick) {
         Label main = new Label(name);
         main.setStyle("-fx-font-size: " + size + "px; -fx-font-weight: bold; -fx-text-fill: " + color + ";");
         Button b = new Button();
         b.setGraphic(keyed(main, key, color));
-        decorate(b, styleClass, onClick);
+        decorate(b, kind, onClick);
         return b;
     }
 
     private static Button iconKeyButton(Node icon, String key, Runnable onClick) {
         Button b = new Button();
         b.setGraphic(keyed(icon, key, DARK));
-        decorate(b, "pos-btn-secondary", onClick);
+        decorate(b, PosStyle.Kind.SECONDARY, onClick);
         return b;
     }
 
@@ -876,8 +862,8 @@ public final class PosScreen {
         return box;
     }
 
-    private static void decorate(Button b, String styleClass, Runnable onClick) {
-        b.getStyleClass().addAll("pos-btn", styleClass);
+    private static void decorate(Button b, PosStyle.Kind kind, Runnable onClick) {
+        PosStyle.button(b, kind);
         b.setContentDisplay(ContentDisplay.GRAPHIC_ONLY);
         b.setFocusTraversable(false);   // the keyboard stays in the barcode box and the cart
         b.setOnAction(e -> onClick.run());

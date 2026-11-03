@@ -21,8 +21,12 @@ import product.service.CategoryService;
 import product.service.ProductException;
 import product.service.ProductService;
 import product.service.SupplierService;
+import shared.Modal;
 import shared.Money;
+import shared.SearchPicker;
 import shared.Styles;
+import shared.TablePager;
+import shared.Tables;
 import shared.Theme;
 import shared.UiErrors;
 
@@ -71,8 +75,8 @@ final class ProductsPane {
     private final SearchPicker<Category> categoryFilter = new SearchPicker<>(false);
     private final SearchPicker<StatusFilter> statusFilter = new SearchPicker<>(false, false);   // same look as the others, no search box
     private final SearchPicker<Supplier> supplierFilter = new SearchPicker<>(false);
-    private final TableView<Product> table = ProductUi.table();
-    private final Pager pager = new Pager(this::showPage);
+    private final TableView<Product> table = Tables.create();
+    private final TablePager pager = TablePager.links(this::showPage);
     private final Label message = new Label();
     private final VBox view = new VBox(16);
 
@@ -89,21 +93,21 @@ final class ProductsPane {
         this.suppliers = suppliers;
         this.actor = actor;
 
-        table.getColumns().add(ProductUi.<Product>numberColumn(pager));
-        table.getColumns().add(ProductUi.<Product>nodeColumn("Code", 120, 100, this::codeCell));
-        table.getColumns().add(ProductUi.<Product>textColumn("Description", 220, Product::name));
-        table.getColumns().add(ProductUi.<Product>textColumn("Category", 110,
+        table.getColumns().add(Tables.<Product>numberColumn(pager));
+        table.getColumns().add(Tables.<Product>nodeColumn("Code", 120, 100, this::codeCell));
+        table.getColumns().add(Tables.<Product>textColumn("Description", 220, Product::name));
+        table.getColumns().add(Tables.<Product>textColumn("Category", 110,
                 p -> p.categoryName() == null ? "" : p.categoryName()));
-        table.getColumns().add(ProductUi.<Product>textColumn("Supplier", 120,
+        table.getColumns().add(Tables.<Product>textColumn("Supplier", 120,
                 p -> p.supplierName() == null ? "" : p.supplierName()));
-        table.getColumns().add(ProductUi.<Product>textColumn("Retail\nPrice", 80,
+        table.getColumns().add(Tables.<Product>textColumn("Retail\nPrice", 80,
                 p -> Money.format(p.retailPrice())));
-        table.getColumns().add(ProductUi.<Product>textColumn("Wholesale\nPrice", 90,
+        table.getColumns().add(Tables.<Product>textColumn("Wholesale\nPrice", 90,
                 p -> p.wholesalePrice() == null ? "" : Money.format(p.wholesalePrice())));
-        table.getColumns().add(ProductUi.<Product>nodeColumn("Status", 90, 90, p -> ProductUi.pill(p.active())));
-        table.getColumns().add(ProductUi.<Product>nodeColumn("Actions", 250, 230, this::actions));
+        table.getColumns().add(Tables.<Product>nodeColumn("Status", 90, 90, p -> ProductUi.pill(p.active())));
+        table.getColumns().add(Tables.<Product>nodeColumn("Actions", 250, 230, this::actions));
         table.setPlaceholder(new Label("No products found."));
-        ProductUi.fitPageToHeight(table, pager, this::showPage);
+        pager.fitToHeight(table, Tables.HEADER_HEIGHT, Tables.ROW_HEIGHT, this::showPage);
 
         search.setPromptText("Search Product...");
         search.setPrefWidth(300);
@@ -203,7 +207,7 @@ final class ProductsPane {
             message.setText(e.getMessage());
             return;
         } catch (RuntimeException e) {
-            message.setText(UiErrors.message(e, ProductUi.FALLBACK));
+            message.setText(UiErrors.message(e));
             return;
         }
         if (existing == null) {
@@ -215,7 +219,7 @@ final class ProductsPane {
     }
 
     private void toggle(Product p) {
-        if (p.active() && !ProductUi.confirm(owner(), "Deactivate product",
+        if (p.active() && !Modal.confirm(owner(), "Deactivate product",
                 "Deactivate \"" + p.name() + "\"?\n\nPOS will stop selling it. You can reactivate it at any time.",
                 "Deactivate")) {
             return;
@@ -232,7 +236,7 @@ final class ProductsPane {
             message.setText(e.getMessage());    // otherwise say why it failed
             return;
         } catch (RuntimeException e) {
-            message.setText(UiErrors.message(e, ProductUi.FALLBACK));
+            message.setText(UiErrors.message(e));
             return;
         }
         reload(true);
@@ -252,7 +256,7 @@ final class ProductsPane {
         User current = actor.current();
         if (leaveIfDenied && (current == null
                 || !screen.app().authz().checkAccess(current, Permission.MANAGE_PRODUCTS))) {
-            ProductUi.notice(owner(), "Access changed",
+            Modal.notice(owner(), "Access changed",
                     "You can no longer manage products.\n\nYou will be returned to the home screen.");
             screen.goHome();
             return;
@@ -269,7 +273,7 @@ final class ProductsPane {
         } catch (ProductException e) {
             message.setText(e.getMessage());
         } catch (RuntimeException e) {
-            message.setText(UiErrors.message(e, ProductUi.FALLBACK));
+            message.setText(UiErrors.message(e));
         }
     }
 

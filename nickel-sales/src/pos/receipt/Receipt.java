@@ -1,5 +1,6 @@
 package pos.receipt;
 
+import barcode.service.Code128;
 import pos.contract.PaymentMethod;
 import pos.contract.PaymentRecord;
 import pos.contract.PriceType;
@@ -16,8 +17,11 @@ import java.util.Objects;
 /**
  * A receipt for one completed sale (Receipt in the class diagram), built by
  * {@link ReceiptBuilder} from the SAVED sale, so it can only show what was
- * saved. {@link #toText(int)} lays it out as fixed-width lines; the on-screen
- * preview and the printer both use exactly these lines.
+ * saved. {@link #toParts(int)} lays it out as fixed-width text blocks with a
+ * Code 128 barcode of the invoice number just above the "not an official
+ * receipt" notice; the on-screen preview and the printer both use exactly these
+ * parts. {@link #toText(int)} is the same receipt as text lines only (the barcode
+ * is a picture, so it is left out; its invoice-number caption is kept).
  *
  * Amounts are in pesos without the sign (receipt printer fonts may not have
  * the peso sign). Item prices are before VAT; VAT is added under Subtotal. Not BIR-accredited: every receipt says it is not an
@@ -45,8 +49,28 @@ public record Receipt(StoreInfo store, SaleRecord sale, String cashierName, bool
         return sale.invoiceNo();
     }
 
-    /** The receipt as lines of at most {@code width} characters. */
+    /** One piece of the receipt: a block of text lines, or the barcode picture. */
+    public sealed interface Part permits TextBlock, BarcodeBlock { }
+
+    /** Lines of at most the receipt width, printed as text. */
+    public record TextBlock(List<String> lines) implements Part { }
+
+    /** A Code 128 barcode of {@code value}, centered on its own, drawn as a picture. */
+    public record BarcodeBlock(String value) implements Part { }
+
+    /** The receipt as lines of at most {@code width} characters (no barcode picture). */
     public List<String> toText(int width) {
+        List<String> all = new ArrayList<>();
+        for (Part part : toParts(width)) {
+            if (part instanceof TextBlock block) {
+                all.addAll(block.lines());
+            }
+        }
+        return all;
+    }
+
+    /** The receipt as text blocks and the barcode, in print order, for the printer and the preview. */
+    public List<Part> toParts(int width) {
         if (width < MIN_WIDTH || width > MAX_WIDTH) {
             throw new IllegalArgumentException("Receipt width must be " + MIN_WIDTH + "-" + MAX_WIDTH);
         }
@@ -105,9 +129,14 @@ public record Receipt(StoreInfo store, SaleRecord sale, String cashierName, bool
                     + (exempt ? "E = VAT-exempt" : ""));
         }
         out.blank();
+        if (Code128.canEncode(sale.invoiceNo())) {
+            out.barcode(sale.invoiceNo());       // scan this to find the transaction again
+            out.centerWrapped(sale.invoiceNo());
+            out.blank();
+        }
         out.centerWrapped(NOT_OFFICIAL);
         out.center("Thank you!");
-        return out.lines;
+        return out.finish();
     }
 
     private static String label(PaymentMethod method) {
@@ -123,9 +152,28 @@ public record Receipt(StoreInfo store, SaleRecord sale, String cashierName, bool
     private static final class Lines {
         final int width;
         final List<String> lines = new ArrayList<>();
+        final List<Part> parts = new ArrayList<>();
 
         Lines(int width) {
             this.width = width;
+        }
+
+        /** The barcode goes here: the lines so far become one block, then the barcode. */
+        void barcode(String value) {
+            flush();
+            parts.add(new BarcodeBlock(value));
+        }
+
+        private void flush() {
+            if (!lines.isEmpty()) {
+                parts.add(new TextBlock(List.copyOf(lines)));
+                lines.clear();
+            }
+        }
+
+        List<Part> finish() {
+            flush();
+            return parts;
         }
 
         void blank() {

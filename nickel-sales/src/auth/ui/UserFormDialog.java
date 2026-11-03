@@ -90,7 +90,7 @@ final class UserFormDialog {
             } catch (AccountException ex) {
                 error.setText(ex.getMessage());
             } catch (RuntimeException ex) {
-                error.setText(UiErrors.message(ex, "Something went wrong. Try again, or contact the system administrator."));
+                error.setText(UiErrors.message(ex));
             }
         });
 

@@ -5,6 +5,7 @@ import javafx.scene.control.Label;
 import javafx.scene.layout.GridPane;
 import javafx.stage.Window;
 import product.model.Product;
+import shared.Modal;
 import shared.Money;
 import shared.Quantity;
 import shared.Styles;
