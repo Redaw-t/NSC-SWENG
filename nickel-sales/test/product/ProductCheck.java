@@ -176,7 +176,7 @@ public class ProductCheck {
                 yes(listNames(categories.listCategories(ADMIN, true)).contains("ZZ Test Games"), "still in the full list");
                 categories.setActive(ADMIN, toys.categoryId(), true);
                 yes(listNames(categories.listCategories(ADMIN, false)).contains("ZZ Test Games"), "active again");
-                yes(listNames(categories.listCategories(ADMIN, false)).contains("Office Supplies"), "seed categories exist");
+                yes(listNames(categories.listCategories(ADMIN, false)).contains("School/Office Supplies"), "seed categories exist");
             });
 
             check("Suppliers: create with details, update, duplicate refused, deactivate", db, () -> {
