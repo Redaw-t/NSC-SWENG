@@ -2,14 +2,12 @@ package app;
 
 import auth.contract.User;
 import auth.login.LoginResult;
-import auth.ui.ChangePasswordDialog;
 import auth.ui.LoginScreen;
 import auth.ui.LogoutAction;
 import javafx.application.Platform;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.control.Alert;
-import javafx.scene.control.Button;
 import javafx.scene.layout.Region;
 import javafx.stage.Stage;
 import javafx.stage.Window;
@@ -23,10 +21,14 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * Moves the window between the login screen, the home screen and the
+ * Moves the window between the login screen, the Dashboard and the
  * modules' screens, for the logged-in session.
  *
- * - After login, and every time the user comes back home, the user is
+ * - After login the user lands on the Dashboard ("Coming soon"). Dashboard, Settings and the
+ *   modules all sit in the sidebar frame ({@link AppShell}): open on the Dashboard and on
+ *   Settings (including System & sync, which is opened from it), collapsed (auto-hidden) on
+ *   every other screen.
+ * - After login, and every time the user comes back to the Dashboard, the user is
  *   re-read from the database, so role changes take effect at once.
  * - Pressing a module's button re-checks its permission before opening.
  * - If the database can't be reached, the session ends and the login screen
@@ -74,7 +76,7 @@ public class DashboardRouter {
         showHome(loginResult.session().getSessionId());
     }
 
-    /** Shows the home screen with the buttons the user may use right now. */
+    /** Shows the Dashboard (a "Coming soon" screen in the sidebar frame) for a user who may use something. */
     public void showHome(String sessionId) {
         User user = currentUser(sessionId);
         if (user == null) {
@@ -94,14 +96,37 @@ public class DashboardRouter {
             idleTimer.start();
         }
 
-        Button changePassword = new Button("Change password");
-        changePassword.setOnAction(e -> new ChangePasswordDialog(stage, app.accounts(), sessionId).show());
-        Button logout = logoutAction.createButton(sessionId);
+        show(inShell(user, sessionId, null, ComingSoonView.create("Dashboard", "This screen isn't built yet.")));
+    }
 
-        HomeScreen home = new HomeScreen(user, app.config().terminalId(), visible,
-                module -> open(sessionId, module), changePassword, logout);
-        show(home.getView());
-        home.focusFirst();
+    /** Settings: Change password for everyone, and System & sync for users who may open it. */
+    private void openSettings(String sessionId) {
+        User user = currentUser(sessionId);
+        if (user == null) {
+            return;
+        }
+        Runnable system = null;
+        if (modules.stream().anyMatch(m -> m.title().equals(AppShell.SYSTEM)
+                && app.authz().checkAccess(user, m.permission()))) {
+            system = () -> openByTitle(sessionId, AppShell.SYSTEM);
+        }
+        show(inShell(user, sessionId, AppShell.SETTINGS, SettingsScreen.create(stage, app, sessionId, system)));
+    }
+
+    /** The sidebar is open on the Dashboard (null) and on Settings (and System & sync under it), hidden elsewhere. */
+    private static boolean staysOpen(String activeTitle) {
+        return activeTitle == null || AppShell.SETTINGS.equals(activeTitle) || AppShell.SYSTEM.equals(activeTitle);
+    }
+
+    /** Puts {@code screen} in the sidebar frame; {@code activeTitle} is the highlighted entry (null = Dashboard). */
+    private Parent inShell(User user, String sessionId, String activeTitle, Parent screen) {
+        Set<String> available = Modules.visibleFor(user, app.authz(), modules).stream()
+                .map(AppModule::title).collect(Collectors.toSet());
+        return AppShell.wrap(user, activeTitle, available, screen,
+                () -> showHome(sessionId),
+                title -> openByTitle(sessionId, title),
+                () -> logoutAction.logout(sessionId),
+                staysOpen(activeTitle));
     }
 
     /** Opens a module's screen after checking, again, that the user may use it. */
@@ -118,12 +143,7 @@ public class DashboardRouter {
         try {
             Parent screen = module.open(new ScreenContext(stage, sessionId, user, app, () -> showHome(sessionId)));
             if (module.usesShell()) {
-                Set<String> available = Modules.visibleFor(user, app.authz(), modules).stream()
-                        .map(AppModule::title).collect(Collectors.toSet());
-                screen = AppShell.wrap(user, module.title(), available, screen,
-                        () -> showHome(sessionId),
-                        title -> openByTitle(sessionId, title),
-                        () -> logoutAction.logout(sessionId));
+                screen = inShell(user, sessionId, module.title(), screen);
             }
             show(screen);
         } catch (RuntimeException e) {
@@ -140,6 +160,10 @@ public class DashboardRouter {
 
     /** A sidebar click: opens the module with this title (its permission is checked again in {@link #open}). */
     private void openByTitle(String sessionId, String title) {
+        if (AppShell.SETTINGS.equals(title)) {
+            openSettings(sessionId);
+            return;
+        }
         modules.stream().filter(m -> m.title().equals(title)).findFirst().ifPresent(m -> open(sessionId, m));
     }
 

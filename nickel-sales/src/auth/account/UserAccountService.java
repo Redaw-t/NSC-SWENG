@@ -42,7 +42,7 @@ public class UserAccountService {
         // Verified before the policy so the rules can't be probed without knowing the password.
         if (!auth.validateCredentials(user.getUsername(), currentPassword)) {
             log("PASSWORD_CHANGE_FAILED", user.getUserId());
-            throw new PasswordChangeException("Current password is incorrect.");
+            throw new IncorrectCurrentPasswordException();
         }
 
         if (!passwordPolicy.validate(newPassword)) {
