@@ -88,7 +88,18 @@ function Main {
     $count = 0
     if ($r.Code -eq 0) { [int]::TryParse(($r.Text -split "`n")[-1].Trim(), [ref]$count) | Out-Null }
     if ($count -gt 0) {
-        Write-Step "Database        : NickelSales_Database is ready ($count users)."
+        # Re-apply the script: it only creates what is missing (new tables from
+        # other modules) and skips existing demo users, so existing data is kept.
+        $sql = [IO.File]::ReadAllText($SqlFile)
+        $r = Invoke-MySql @() $sql
+        if ($r.Code -ne 0) {
+            Write-Step "Database        : could not bring NickelSales_Database up to date:"
+            Write-Host $r.Text
+            Write-Step "If a table changed shape, rebuild it: in MySQL Workbench run"
+            Write-Step "  DROP DATABASE NickelSales_Database;   then run setup again."
+            return 1
+        }
+        Write-Step "Database        : NickelSales_Database is ready and up to date ($count users)."
     } else {
         Write-Step "Database        : NickelSales_Database has not been created yet."
         if (-not (Ask-YesNo "Create it now from database\NickelSales-Database-Config.sql?")) {
