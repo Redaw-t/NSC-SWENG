@@ -181,11 +181,13 @@ public class CartCheck {
             expectTrue(pos.canCheckout(), "on after removing the line");
         });
 
-        check("A product deactivated after it was added blocks Pay until removed", () -> {
+        check("A product deactivated after it was added can't be raised and blocks Pay until removed", () -> {
             SalesService pos = new SalesService(TestCatalog.products(), "T01");
             pos.startSale("NSC-00002");
             pos.addItem(NOTEBOOK);
             TestCatalog.setActive("P-0003", false);
+            expectMessage(() -> pos.updateQuantity("P-0003", q("2")), "Notebook 80 leaves is no longer sold.");
+            expect(pos.updateQuantity("P-0003", q("1")).quantity(), "1.000");   // keeping or lowering is still allowed
             expectText(pos.findStockProblems().get(0).message(),
                     "Notebook 80 leaves is no longer sold. Remove it from the sale.");
             expectTrue(!pos.canCheckout(), "Pay is off");
