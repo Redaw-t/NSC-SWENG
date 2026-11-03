@@ -97,7 +97,7 @@ Paths are relative to `nickel-sales/src/` (sections 1 to 10), `nickel-sales/test
 | `pos/receipt/PrinterPort.java`, `EscPosReceiptPrinter.java` | Printer interface and the JavaFX implementation. A different printer plugs in through `PrinterPort`. | POS | Created by `AppContext`; passed to `SaleCompleteDialog` by `PosScreen`. | SAFE TO EXTEND (new `PrinterPort` implementation). |
 | `pos/ui/PosModule.java` | "Point of Sale" home-screen entry; explains when POS is unavailable (no products connected, or old tables). | POS | Implements `AppModule`; uses `AppContext.salesService()`, `PosTables`. | COORDINATE BEFORE CHANGING |
 | `pos/ui/PosScreen.java` | The cashier screen (keyboard-driven, barcode scanner acts as a keyboard). | POS | Uses `SalesService`, `PaymentService`, `ProductLookup`. | COORDINATE BEFORE CHANGING. Large (626 lines): no SQL and no pricing rules here. **Barcode starting point** for scan input. |
-| `pos/ui/PaymentDialog.java`, `ProductSearchDialog.java`, `QuantityDialog.java`, `ReceiptDialog.java`, `ReprintDialog.java`, `SaleCompleteDialog.java` | Cashier dialogs. | POS | Used by `PosScreen`. | COORDINATE BEFORE CHANGING |
+| `pos/ui/PaymentOverlay.java`, `ProductSearchDialog.java`, `QuantityDialog.java`, `ReceiptDialog.java`, `ReprintDialog.java`, `SaleCompleteDialog.java` | Cashier dialogs. | POS | Used by `PosScreen`. | COORDINATE BEFORE CHANGING |
 
 ## 6. barcode (Iteration 2: Barcode Management)
 
