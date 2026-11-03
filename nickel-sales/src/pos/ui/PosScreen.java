@@ -349,6 +349,7 @@ public final class PosScreen {
                         + sale.get().invoiceNo(), null, receipt, screen.app().receiptPrinter(),
                         screen.app().config().receiptWidth());
                 if (printed) {
+                    auditReprint(sale.get().invoiceNo());
                     showInfo("Reprinted the receipt for " + sale.get().invoiceNo() + ".");
                 }
             } catch (RuntimeException e) {
@@ -357,6 +358,18 @@ public final class PosScreen {
             }
         }
         focusBarcode();
+    }
+
+    /**
+     * Records who printed a copy of which receipt (audit event RECEIPT_REPRINTED). A logging
+     * problem must not stop the cashier: the copy has already been printed.
+     */
+    private void auditReprint(String invoiceNo) {
+        try {
+            screen.app().audit().log("RECEIPT_REPRINTED " + invoiceNo, screen.user().getUserId());
+        } catch (RuntimeException logFailure) {
+            System.err.println("[AUDIT] could not log the reprint of " + invoiceNo + ": " + logFailure);
+        }
     }
 
     /* ------------------------------ display ------------------------------- */
@@ -696,7 +709,8 @@ public final class PosScreen {
             switch (e.getCode()) {
                 case ENTER -> { askQuantity(); e.consume(); }
                 case DELETE, BACK_SPACE -> { removeSelected(); e.consume(); }
-                case ADD, PLUS -> { stepQuantity(1); e.consume(); }
+                // EQUALS: the main-row "+" is Shift + "=", which JavaFX reports as the EQUALS key
+                case ADD, PLUS, EQUALS -> { stepQuantity(1); e.consume(); }
                 case SUBTRACT, MINUS -> { stepQuantity(-1); e.consume(); }
                 default -> {
                     // typing digits in the cart goes back to the barcode box (scanner while table has focus)
@@ -724,6 +738,8 @@ public final class PosScreen {
         Label title = label("Scan or Enter Barcode", 20, true);
         barcodeField.setAccessibleText("Barcode");
         barcodeField.setTooltip(new Tooltip("Scan, or type a barcode and press Enter.\nTo add several: 5*4800000000019"));
+        // Shown while the box is empty and has no cursor, so the cashier can see where scans go.
+        barcodeField.setPromptText("Click here, then scan or type a barcode");
         barcodeField.setStyle("-fx-background-color: transparent; -fx-padding: 0; -fx-font-size: 22px; -fx-font-weight: bold; "
                 + "-fx-text-fill: " + DARK + "; -fx-focus-color: transparent; -fx-faint-focus-color: transparent;");
         barcodeField.setOnAction(e -> addFromBarcode());
