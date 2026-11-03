@@ -2,21 +2,16 @@ package product.ui;
 
 import app.ComingSoonView;
 import app.ScreenContext;
-import javafx.geometry.Pos;
 import javafx.scene.Parent;
-import javafx.scene.control.Button;
-import javafx.scene.control.Label;
 import javafx.scene.layout.BorderPane;
-import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import product.service.CategoryService;
 import product.service.ProductService;
 import product.service.SupplierService;
-import shared.Styles;
+import shared.TabBar;
 
-import java.util.EnumMap;
-import java.util.Map;
+import java.util.Arrays;
 
 /**
  * Product management, laid out like the design: a tab strip (Products | Categories |
@@ -44,7 +39,8 @@ public class ProductScreen {
     private final Parent barcodePlaceholder = ComingSoonView.create("Barcode",
             "Barcode generation and label printing aren't built yet.");
 
-    private final Map<Tab, Button> tabButtons = new EnumMap<>(Tab.class);
+    private final TabBar tabs = new TabBar(Arrays.stream(Tab.values()).map(t -> t.label).toList(),
+            number -> show(Tab.values()[number]));
     private final BorderPane body = new BorderPane();
     private final VBox view = new VBox(20);
 
@@ -56,27 +52,7 @@ public class ProductScreen {
         this.categoriesPane = new CategoriesPane(categories, actor);
         this.suppliersPane = new SuppliersPane(suppliers, actor);
 
-        HBox bar = new HBox();
-        Styles.tabBar(bar);
-        bar.setAlignment(Pos.CENTER);
-        boolean first = true;
-        for (Tab tab : Tab.values()) {
-            if (!first) {
-                Label divider = new Label("|");
-                Styles.tabDivider(divider);
-                bar.getChildren().add(divider);
-            }
-            first = false;
-            Button button = new Button(tab.label);
-            Styles.tab(button, false);
-            button.setMaxWidth(Double.MAX_VALUE);
-            HBox.setHgrow(button, Priority.ALWAYS);
-            button.setOnAction(e -> show(tab));
-            tabButtons.put(tab, button);
-            bar.getChildren().add(button);
-        }
-
-        view.getChildren().addAll(bar, body);
+        view.getChildren().addAll(tabs.getView(), body);
         VBox.setVgrow(body, Priority.ALWAYS);
         show(Tab.PRODUCTS);   // if loading fails, the message shows and the other tabs and the sidebar still work
     }
@@ -86,9 +62,7 @@ public class ProductScreen {
     }
 
     private void show(Tab tab) {
-        tabButtons.forEach((t, button) -> {
-            Styles.tab(button, t == tab);
-        });
+        tabs.select(tab.ordinal());
         switch (tab) {
             case PRODUCTS -> {
                 body.setCenter(productsPane.getView());

@@ -61,7 +61,7 @@ public class ChangePasswordDialog {
                 fail(e.getMessage(), error, current, next, confirm);
                 event.consume();
             } catch (RuntimeException e) {
-                fail(UiErrors.message(e, "Something went wrong. Try again, or contact the system administrator."),
+                fail(UiErrors.message(e),
                         error, current, next, confirm);
                 event.consume();
             }

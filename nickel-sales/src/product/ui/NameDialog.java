@@ -6,6 +6,7 @@ import javafx.scene.control.TextField;
 import javafx.scene.layout.GridPane;
 import javafx.stage.Window;
 import product.service.ProductException;
+import shared.Modal;
 import shared.Styles;
 import shared.Theme;
 import shared.UiErrors;
@@ -50,7 +51,7 @@ final class NameDialog {
             } catch (ProductException ex) {
                 error.setText(ex.getMessage());
             } catch (RuntimeException ex) {
-                error.setText(UiErrors.message(ex, ProductUi.FALLBACK));
+                error.setText(UiErrors.message(ex));
             }
         });
 

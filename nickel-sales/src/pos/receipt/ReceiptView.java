@@ -1,6 +1,11 @@
 package pos.receipt;
 
+import barcode.ui.BarcodeView;
+import javafx.geometry.Pos;
 import javafx.geometry.VPos;
+import javafx.scene.Node;
+import javafx.scene.layout.StackPane;
+import javafx.scene.layout.VBox;
 import javafx.scene.text.Font;
 import javafx.scene.text.Text;
 
@@ -24,6 +29,35 @@ public final class ReceiptView {
         text.setFont(Font.font(FONT, fontSize));
         text.setTextOrigin(VPos.TOP);   // place by the top edge, so nothing is cut off at the top of a page
         return text;
+    }
+
+    /**
+     * The whole receipt for the preview: text blocks plus the barcode picture,
+     * lined up on one paper width. The barcode takes the same share of the paper
+     * as it does on the printer.
+     *
+     * @param width characters per line (the same value used for {@code toParts})
+     */
+    public static Node node(List<Receipt.Part> parts, double fontSize, int width) {
+        double paper = widthOf(width, fontSize);
+        VBox box = new VBox();
+        box.setAlignment(Pos.TOP_LEFT);
+        for (Receipt.Part part : parts) {
+            if (part instanceof Receipt.TextBlock block) {
+                box.getChildren().add(text(block.lines(), fontSize));
+            } else if (part instanceof Receipt.BarcodeBlock code) {
+                double scale = paper / ReceiptBarcode.paperDots(width);
+                double barsWidth = ReceiptBarcode.barcodeDots(code.value(), width) * scale;
+                double barsHeight = ReceiptBarcode.HEIGHT_DOTS * scale;
+                StackPane centered = new StackPane(BarcodeView.node(code.value(), barsWidth, barsHeight));
+                centered.setAlignment(Pos.CENTER);
+                centered.setMinWidth(paper);
+                centered.setPrefWidth(paper);
+                centered.setMaxWidth(paper);
+                box.getChildren().add(centered);
+            }
+        }
+        return box;
     }
 
     /** Width in points of {@code chars} characters at {@code fontSize}. */

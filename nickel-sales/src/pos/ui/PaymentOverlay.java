@@ -131,8 +131,8 @@ final class PaymentOverlay {
         errorBox.setPrefHeight(65);
         errorBox.setMaxHeight(65);
 
-        Button cancel = action("Cancel", "ESC", "pos-btn-secondary", DARK, 150, this::cancel);
-        Button complete = action("Complete Transaction", "ENTER", "pos-btn-primary", "white", 308, this::complete);
+        Button cancel = action("Cancel", "ESC", PosStyle.Kind.SECONDARY, DARK, 150, this::cancel);
+        Button complete = action("Complete Transaction", "ENTER", PosStyle.Kind.PRIMARY, "white", 308, this::complete);
         HBox buttons = new HBox(40, cancel, complete);
         buttons.setAlignment(Pos.CENTER);
 
@@ -365,14 +365,13 @@ final class PaymentOverlay {
 
     /** A method choice (Cash, Online Payment, GCash ...): blue when chosen, grey otherwise. */
     private static Button option(String name, String key, double width, Runnable onClick) {
-        Button b = action(name, key, "pos-btn-secondary", DARK, width, onClick);
+        Button b = action(name, key, PosStyle.Kind.SECONDARY, DARK, width, onClick);
         b.setUserData(name);
         return b;
     }
 
     private static void mark(Button b, boolean selected) {
-        b.getStyleClass().removeAll("pos-btn-primary", "pos-btn-secondary");
-        b.getStyleClass().add(selected ? "pos-btn-primary" : "pos-btn-secondary");
+        PosStyle.button(b, selected ? PosStyle.Kind.PRIMARY : PosStyle.Kind.SECONDARY);
         String color = selected ? "white" : DARK;
         for (javafx.scene.Node n : ((VBox) b.getGraphic()).getChildren()) {
             ((Label) n).setStyle(((Label) n).getStyle().replaceAll("-fx-text-fill: [^;]+;", "-fx-text-fill: " + color + ";"));
@@ -380,7 +379,7 @@ final class PaymentOverlay {
     }
 
     /** A 55 px button with the name and its key underneath, like the mockup. */
-    private static Button action(String name, String key, String styleClass, String color, double width, Runnable onClick) {
+    private static Button action(String name, String key, PosStyle.Kind kind, String color, double width, Runnable onClick) {
         Label main = new Label(name);
         main.setStyle("-fx-font-size: 28px; -fx-text-fill: " + color + ";");
         Label hint = new Label("[" + key + "]");
@@ -389,7 +388,7 @@ final class PaymentOverlay {
         graphic.setAlignment(Pos.CENTER);
         Button b = new Button();
         b.setGraphic(graphic);
-        b.getStyleClass().addAll("pos-btn", styleClass);
+        PosStyle.button(b, kind);
         b.setFocusTraversable(false);
         b.setMinSize(width, 55);
         b.setPrefSize(width, 55);

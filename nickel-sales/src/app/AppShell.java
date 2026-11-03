@@ -45,7 +45,7 @@ public final class AppShell {
             new Entry("Dashboard", null),
             new Entry("POS", "Point of Sale"),
             new Entry("Products", "Products"),
-            new Entry("Inventory", "Inventory"),
+            new Entry("Inventory", "Products & inventory"),   // InventoryModule.title()
             new Entry("Reports", "Reports"),
             new Entry("Users", "Manage users"),
             new Entry("Settings", "System & sync"));

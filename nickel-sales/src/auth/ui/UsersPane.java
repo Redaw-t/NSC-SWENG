@@ -6,7 +6,6 @@ import auth.contract.User;
 import auth.contract.UserRole;
 import auth.contract.UserStatus;
 import auth.permission.AuthorizationService;
-import javafx.application.Platform;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.Parent;
@@ -20,9 +19,11 @@ import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.stage.Window;
 import shared.Modal;
+import shared.PhTime;
 import shared.SearchPicker;
 import shared.Styles;
 import shared.TablePager;
+import shared.Tables;
 import shared.Theme;
 import shared.UiErrors;
 
@@ -40,10 +41,7 @@ import java.util.Set;
  */
 final class UsersPane {
 
-    private static final double ROW_HEIGHT = 50;
-    private static final double HEADER_HEIGHT = 52;   // matches Styles.table(...)
     private static final int RECENT_DAYS = 30;
-    private static final String FALLBACK = "Something went wrong. Try again, or contact the system administrator.";
 
     private enum RoleFilter {
         ALL("All Roles", null),
@@ -101,8 +99,8 @@ final class UsersPane {
     private final TextField search = new TextField();
     private final SearchPicker<RoleFilter> roleFilter = new SearchPicker<>(false, false);
     private final SearchPicker<StatusFilter> statusFilter = new SearchPicker<>(false, false);
-    private final TableView<User> table = new TableView<>();
-    private final TablePager pager = new TablePager(this::showPage);
+    private final TableView<User> table = Tables.create();
+    private final TablePager pager = TablePager.boxed(this::showPage);
     private final Label message = new Label();
     private final VBox view = new VBox(16);
 
@@ -150,18 +148,14 @@ final class UsersPane {
         filters.setAlignment(Pos.CENTER_LEFT);
 
         // ---- table
-        Styles.table(table);
-        table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
-        table.setFixedCellSize(ROW_HEIGHT);
-        table.setMinHeight(HEADER_HEIGHT + ROW_HEIGHT * 3 + 2);
         table.setPlaceholder(new Label("No users found."));
-        table.getColumns().add(UserUi.<User>nodeColumn("User", 260, 200, true, this::userCell));
-        table.getColumns().add(UserUi.<User>textColumn("Username", 150, User::getLoginName));
-        table.getColumns().add(UserUi.<User>nodeColumn("Role", 200, 170, false, UserUi::roleCell));
-        table.getColumns().add(UserUi.<User>nodeColumn("Status", 150, 130, false, this::statusCell));
-        table.getColumns().add(UserUi.<User>nodeColumn("Last Sign-in", 190, 150, false, UserUi::lastSignInCell));
-        table.getColumns().add(UserUi.<User>nodeColumn("Actions", 250, 230, false, this::actionsCell));
-        fitPageToHeight();
+        table.getColumns().add(Tables.<User>nodeColumn("User", 260, 200, true, this::userCell));
+        table.getColumns().add(Tables.<User>textColumn("Username", 150, User::getLoginName));
+        table.getColumns().add(Tables.<User>nodeColumn("Role", 200, 170, false, UserUi::roleCell));
+        table.getColumns().add(Tables.<User>nodeColumn("Status", 150, 130, false, this::statusCell));
+        table.getColumns().add(Tables.<User>nodeColumn("Last Sign-in", 190, 150, false, UserUi::lastSignInCell));
+        table.getColumns().add(Tables.<User>nodeColumn("Actions", 250, 230, false, this::actionsCell));
+        pager.fitToHeight(table, Tables.HEADER_HEIGHT, Tables.ROW_HEIGHT, this::showPage);
 
         message.setWrapText(true);
         Styles.error(message);
@@ -290,7 +284,7 @@ final class UsersPane {
             message.setText(e.getMessage());    // otherwise say why it failed
             return;
         } catch (RuntimeException e) {
-            message.setText(UiErrors.message(e, FALLBACK));
+            message.setText(UiErrors.message(e));
             return;
         }
         reload(true);
@@ -321,7 +315,7 @@ final class UsersPane {
                 message.setText(e.getMessage());
             }
         } catch (RuntimeException e) {
-            message.setText(UiErrors.message(e, FALLBACK));
+            message.setText(UiErrors.message(e));
         }
     }
 
@@ -330,7 +324,7 @@ final class UsersPane {
         long admins = 0;
         long recent = 0;
         long locked = 0;
-        LocalDateTime cutoff = LocalDateTime.now().minusDays(RECENT_DAYS);
+        LocalDateTime cutoff = LocalDateTime.now(PhTime.ZONE).minusDays(RECENT_DAYS);
         for (User u : loaded) {
             rolesInUse.addAll(u.getRoles());
             if (u.isActive() && u.hasRole(UserRole.ADMIN)) {
@@ -377,16 +371,6 @@ final class UsersPane {
     private void showPage() {
         pager.setTotal(filtered.size());
         table.getItems().setAll(pager.slice(filtered));
-    }
-
-    /** Shows exactly as many rows as fit the table's height, so it never needs a scroll bar. */
-    private void fitPageToHeight() {
-        table.heightProperty().addListener((obs, old, height) -> Platform.runLater(() -> {
-            double usable = table.getHeight() - HEADER_HEIGHT - 2;   // 2 = the table's border
-            if (usable >= ROW_HEIGHT && pager.setPageSize((int) Math.floor(usable / ROW_HEIGHT))) {
-                showPage();
-            }
-        }));
     }
 
     private Window owner() {

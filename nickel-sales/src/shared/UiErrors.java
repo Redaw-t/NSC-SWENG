@@ -31,6 +31,10 @@ public final class UiErrors {
             "The database is out of date. Close the app, double-click setup.bat (in the nickel-sales "
                     + "folder) to update it, then start the app again. Your data is kept.";
 
+    /** What most screens show for an unexpected error that is not a database problem. */
+    public static final String GENERIC =
+            "Something went wrong. Try again, or contact the system administrator.";
+
     /** MySQL error codes for a missing table (1146) or column (1054). */
     private static final int NO_SUCH_TABLE = 1146;
     private static final int NO_SUCH_COLUMN = 1054;
@@ -43,6 +47,11 @@ public final class UiErrors {
      * problems, otherwise {@code fallback}. Database problems are also printed
      * to the console with their real cause, for whoever has to fix them.
      */
+    public static String message(Throwable error) {
+        return message(error, GENERIC);
+    }
+
+    /** Same as {@link #message(Throwable)} with your own fallback text. */
     public static String message(Throwable error, String fallback) {
         if (isConnectionProblem(error)) {
             logCause(error);

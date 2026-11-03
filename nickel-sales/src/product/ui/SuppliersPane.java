@@ -14,7 +14,10 @@ import javafx.stage.Window;
 import product.model.Supplier;
 import product.service.ProductException;
 import product.service.SupplierService;
+import shared.Modal;
 import shared.Styles;
+import shared.TablePager;
+import shared.Tables;
 import shared.UiErrors;
 
 import java.util.ArrayList;
@@ -36,8 +39,8 @@ final class SuppliersPane {
     private final ActorSource actor;
 
     private final TextField search = new TextField();
-    private final TableView<Supplier> table = ProductUi.table();
-    private final Pager pager = new Pager(this::showPage);
+    private final TableView<Supplier> table = Tables.create();
+    private final TablePager pager = TablePager.links(this::showPage);
     private final Label message = new Label();
     private final VBox view = new VBox(16);
 
@@ -48,16 +51,16 @@ final class SuppliersPane {
         this.service = service;
         this.actor = actor;
 
-        table.getColumns().add(ProductUi.<Supplier>numberColumn(pager));
-        table.getColumns().add(ProductUi.<Supplier>textColumn("Supplier", 170, Supplier::name));
-        table.getColumns().add(ProductUi.<Supplier>textColumn("Contact Person", 130, s -> blank(s.contactPerson())));
-        table.getColumns().add(ProductUi.<Supplier>textColumn("Phone", 110, s -> blank(s.phone())));
-        table.getColumns().add(ProductUi.<Supplier>textColumn("Email", 170, s -> blank(s.email())));
-        table.getColumns().add(ProductUi.<Supplier>textColumn("Address", 200, s -> blank(s.address())));
-        table.getColumns().add(ProductUi.<Supplier>nodeColumn("Status", 90, 90, s -> ProductUi.pill(s.active())));
-        table.getColumns().add(ProductUi.<Supplier>nodeColumn("Actions", 220, 200, this::actions));
+        table.getColumns().add(Tables.<Supplier>numberColumn(pager));
+        table.getColumns().add(Tables.<Supplier>textColumn("Supplier", 170, Supplier::name));
+        table.getColumns().add(Tables.<Supplier>textColumn("Contact Person", 130, s -> blank(s.contactPerson())));
+        table.getColumns().add(Tables.<Supplier>textColumn("Phone", 110, s -> blank(s.phone())));
+        table.getColumns().add(Tables.<Supplier>textColumn("Email", 170, s -> blank(s.email())));
+        table.getColumns().add(Tables.<Supplier>textColumn("Address", 200, s -> blank(s.address())));
+        table.getColumns().add(Tables.<Supplier>nodeColumn("Status", 90, 90, s -> ProductUi.pill(s.active())));
+        table.getColumns().add(Tables.<Supplier>nodeColumn("Actions", 220, 200, this::actions));
         table.setPlaceholder(new Label("No suppliers found."));
-        ProductUi.fitPageToHeight(table, pager, this::showPage);
+        pager.fitToHeight(table, Tables.HEADER_HEIGHT, Tables.ROW_HEIGHT, this::showPage);
 
         search.setPromptText("Search Supplier...");
         search.setPrefWidth(300);
@@ -107,7 +110,7 @@ final class SuppliersPane {
     }
 
     private void toggle(Supplier s) {
-        if (s.active() && !ProductUi.confirm(owner(), "Deactivate supplier",
+        if (s.active() && !Modal.confirm(owner(), "Deactivate supplier",
                 "Deactivate \"" + s.name() + "\"?\n\nIt will no longer be offered when adding or editing a product. "
                         + "Products already linked to it keep it.", "Deactivate")) {
             return;
@@ -122,7 +125,7 @@ final class SuppliersPane {
             message.setText(e.getMessage());
             return;
         } catch (RuntimeException e) {
-            message.setText(UiErrors.message(e, ProductUi.FALLBACK));
+            message.setText(UiErrors.message(e));
             return;
         }
         reload();
@@ -136,7 +139,7 @@ final class SuppliersPane {
         } catch (ProductException e) {
             message.setText(e.getMessage());
         } catch (RuntimeException e) {
-            message.setText(UiErrors.message(e, ProductUi.FALLBACK));
+            message.setText(UiErrors.message(e));
         }
     }
 

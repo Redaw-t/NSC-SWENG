@@ -2,7 +2,6 @@ package auth.ui;
 
 import auth.contract.User;
 import auth.contract.UserRole;
-import javafx.beans.property.ReadOnlyObjectWrapper;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Cursor;
@@ -10,8 +9,6 @@ import javafx.scene.Group;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
-import javafx.scene.control.TableCell;
-import javafx.scene.control.TableColumn;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.StackPane;
@@ -21,6 +18,7 @@ import javafx.scene.shape.Arc;
 import javafx.scene.shape.ArcType;
 import javafx.scene.shape.Circle;
 import javafx.scene.shape.Rectangle;
+import shared.PhTime;
 import shared.Styles;
 import shared.Theme;
 
@@ -28,7 +26,6 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
-import java.util.function.Function;
 
 /** Small builders for the User Management screens: avatar, switch, role pills, stat cards, table columns. */
 final class UserUi {
@@ -83,7 +80,7 @@ final class UserUi {
         if (time == null) {
             return "Never";
         }
-        LocalDate today = LocalDate.now();
+        LocalDate today = PhTime.today();
         String clock = time.format(DateTimeFormatter.ofPattern("h:mm a", Locale.ENGLISH));
         if (time.toLocalDate().equals(today)) {
             return "Today \u00B7 " + clock;
@@ -194,45 +191,5 @@ final class UserUi {
                     + (alert ? Theme.ERROR : Theme.PRIMARY_TEXT) + ";");
             note.setText(caption);
         }
-    }
-
-    /* ---------------------------------- columns ---------------------------------- */
-
-    /** A plain text column, centred. */
-    static <S> TableColumn<S, String> textColumn(String title, double width, Function<S, String> value) {
-        TableColumn<S, String> col = new TableColumn<>(title);
-        col.setCellValueFactory(cell -> new javafx.beans.property.ReadOnlyStringWrapper(value.apply(cell.getValue())));
-        col.setCellFactory(c -> new Styles.GridCell<S>());
-        col.setPrefWidth(width);
-        col.setSortable(false);
-        return col;
-    }
-
-    /** A column whose cell shows a node built from the row. */
-    static <S> TableColumn<S, S> nodeColumn(String title, double width, double minWidth, boolean leftAligned,
-                                            Function<S, Node> factory) {
-        TableColumn<S, S> col = new TableColumn<>(title);
-        col.setCellValueFactory(cell -> new ReadOnlyObjectWrapper<>(cell.getValue()));
-        col.setCellFactory(c -> new TableCell<S, S>() {
-            @Override
-            protected void updateItem(S item, boolean empty) {
-                super.updateItem(item, empty);
-                setStyle(cellStyle(empty, leftAligned));
-                setText(null);
-                setGraphic(empty || item == null ? null : factory.apply(item));
-            }
-        });
-        col.setPrefWidth(width);
-        col.setMinWidth(minWidth);
-        col.setSortable(false);
-        return col;
-    }
-
-    private static String cellStyle(boolean empty, boolean leftAligned) {
-        String style = Styles.cellStyle(empty);
-        if (!leftAligned) {
-            return style;
-        }
-        return style.replace("-fx-alignment: CENTER;", "-fx-alignment: CENTER_LEFT;") + " -fx-padding: 0 0 0 16;";
     }
 }

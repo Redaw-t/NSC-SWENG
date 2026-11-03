@@ -40,7 +40,7 @@ final class ReceiptDialog {
         dialog.setTitle(title);
         dialog.setHeaderText(header);
 
-        StackPane paper = new StackPane(ReceiptView.text(receipt.toText(width), 13));
+        StackPane paper = new StackPane(ReceiptView.node(receipt.toParts(width), 13, width));
         paper.setPadding(new Insets(16));
         paper.setStyle("-fx-background-color: white; -fx-border-color: #c8c8c8;");
         ScrollPane scroll = new ScrollPane(paper);
