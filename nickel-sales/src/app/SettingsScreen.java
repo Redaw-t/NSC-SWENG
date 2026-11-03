@@ -14,17 +14,13 @@ import shared.Theme;
 /**
  * The Settings screen (sidebar, bottom entry). Open to every logged-in user:
  * - Change password: the user's own password.
- * - System &amp; sync: only for users who may open it (admins); it is a "coming soon"
- *   module, reached from here.
+ * (Audit logs, sync and backup have their own sidebar entry, Audit Logs.)
  */
 public final class SettingsScreen {
 
     private SettingsScreen() { }
 
-    /**
-     * @param openSystem opens the System &amp; sync module; null if this user may not open it
-     */
-    public static Parent create(Stage stage, AppContext app, String sessionId, Runnable openSystem) {
+    public static Parent create(Stage stage, AppContext app, String sessionId) {
         Label heading = new Label("Settings");
         Styles.cardTitle(heading);
 
@@ -34,12 +30,6 @@ public final class SettingsScreen {
 
         VBox view = new VBox(20, heading,
                 section("Account", "Change the password you use to log in.", changePassword));
-        if (openSystem != null) {
-            Button system = new Button("Open System & sync");
-            Styles.primaryButton(system);
-            system.setOnAction(e -> openSystem.run());
-            view.getChildren().add(section("System & sync", "Terminal sync, logs and backup.", system));
-        }
         view.setAlignment(Pos.TOP_LEFT);
         return view;
     }

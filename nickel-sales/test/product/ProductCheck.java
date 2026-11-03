@@ -277,6 +277,9 @@ public class ProductCheck {
                 Product cleared = productRepo.findById(widget.productId()).orElseThrow();
                 yes(cleared.wholesalePrice() == null && cleared.categoryId() == null, "cleared values are stored as NULL");
                 eq(cleared.stockOnHand().toPlainString(), "25.500");
+                // Price changes are audited with the old and new prices (only the ones that changed).
+                yes(auditLog.contains("PRICE_CHANGED target=" + widget.productId() + " wholesale=100.26>none by "
+                        + ADMIN.getUserId()), "price change audited with before and after: " + auditLog);
                 // Taking another product's barcode is refused.
                 refusedWith("already used by", () -> products.updateProduct(ADMIN, widget.productId(), draft(PAPER, "ZZTEST Widget Deluxe", "5", null)));
                 refusedWith("no longer exists", () -> products.updateProduct(ADMIN, "P-NOPE", draft("ZZTEST-0020", "x", "5", null)));

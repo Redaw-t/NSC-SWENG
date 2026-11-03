@@ -37,4 +37,11 @@ final class CatalogAccess {
             audit.log(event + " target=" + target, actor.getUserId());
         }
     }
+
+    /** As above, with extra words, e.g. before/after pairs "retail=250.00>260.00" (read by the activity log). */
+    void log(String event, User actor, String target, String details) {
+        if (audit != null) {
+            audit.log(event + " target=" + target + " " + details, actor.getUserId());
+        }
+    }
 }

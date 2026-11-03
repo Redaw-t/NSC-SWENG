@@ -83,12 +83,12 @@ public class AuthenticationService {
         User user = userRepository.findByUsername(username);
         if (user == null) {
             bcryptCheck(String.valueOf(password), DUMMY_HASH);
-            log("LOGIN_FAILED", String.valueOf(username));
+            log("LOGIN_FAILED_UNKNOWN_USER", String.valueOf(username));   // no account: pass the name that was typed
             throw new InvalidCredentialsException();
         }
 
         if (!bcryptCheck(String.valueOf(password), user.getPasswordHash())) {
-            log("LOGIN_FAILED", user.getUserId());
+            log("LOGIN_FAILED_WRONG_PASSWORD", user.getUserId());
             throw new InvalidCredentialsException();
         }
 

@@ -3,6 +3,7 @@
 | Path | What it is |
 |---|---|
 | `NickelSales-Database-Config.sql` | The schema and starter users. Safe to run again: it only creates what is missing and adds columns/indexes that older databases lack. The setup scripts (`nickel-sales/setup.*`, `setup-database.*`) run it. |
+| Audit and System tables | `ActivityLog` (append-only, never updated or deleted), `SyncLog` and `BackupRecord`. Owned by `nickel-sales/src/system/`. |
 | `migrations/` | TODO. Placeholder for versioned changes, once the schema outgrows one script. |
 | `seed/` | TODO. Placeholder for sample data (products, stock) for development. |
 
