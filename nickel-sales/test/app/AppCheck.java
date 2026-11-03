@@ -81,10 +81,10 @@ public class AppCheck {
 
         check("Inventory staff (MSantaAna) sees Products, Inventory and Reports, not POS or users", () ->
                 expectMenu(user("NSC-00003", UserStatus.ACTIVE, UserRole.INVENTORY_STAFF),
-                        "Products", "Products & inventory", "Reports"));
+                        "Products", "Inventory", "Reports"));
 
         check("Admin sees every button; an admin who is also cashier and inventory (JCubillan) too", () -> {
-            String[] everything = {"Point of Sale", "Products", "Products & inventory", "Reports", "Manage users", "System & sync"};
+            String[] everything = {"Point of Sale", "Products", "Inventory", "Reports", "Manage users", "System & sync"};
             expectMenu(user("NSC-09999", UserStatus.ACTIVE, UserRole.ADMIN), everything);
             expectMenu(user("NSC-00001", UserStatus.ACTIVE, UserRole.ADMIN, UserRole.CASHIER, UserRole.INVENTORY_STAFF),
                     everything);
