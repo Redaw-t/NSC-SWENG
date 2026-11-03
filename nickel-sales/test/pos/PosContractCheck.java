@@ -6,6 +6,10 @@ import shared.Quantity;
 import shared.Database;
 import inventory.contract.InsufficientStockException;
 import inventory.contract.StockLine;
+import inventory.contract.StockRecorder;
+import inventory.repository.MySqlInventoryRepository;
+import inventory.service.InventoryException;
+import inventory.service.InventoryService;
 import pos.contract.PaymentMethod;
 import pos.contract.PaymentRecord;
 import pos.contract.PriceType;
@@ -13,7 +17,6 @@ import pos.contract.SaleLineRecord;
 import pos.contract.SaleRecord;
 import product.contract.ProductInfo;
 import product.service.ProductService;
-import stubs.StubStockRecorder;
 import stubs.TestCatalog;
 
 import java.math.BigDecimal;
@@ -31,7 +34,8 @@ import java.util.UUID;
 /**
  * SELF-TEST for POS Phase 0: shared money/quantity/time rules, the POS
  * contracts (and the rules their records enforce), the real product lookup and the
- * test stock recorder, the POS tables, and Database.inTransaction.
+ * real stock recorder (the Inventory module's InventoryService on MySQL), the POS
+ * tables, and Database.inTransaction.
  *
  * Run after any run-demo build, from nickel-sales/:
  *   java -cp "out;lib\jbcrypt-0.4.jar;lib\mysql-connector-j-9.4.0.jar" pos.PosContractCheck
@@ -174,7 +178,7 @@ public class PosContractCheck {
 
         boolean db = databaseReachable();
         ProductService products = TestCatalog.products();
-        StubStockRecorder recorder = new StubStockRecorder();
+        StockRecorder recorder = realStockRecorder(products);
 
         check("Product catalog: find by barcode, by ID, and search (ProductLookup contract)", db, () -> {
             expectText(products.findByBarcode("4800000000019").orElseThrow().name(), "Bond Paper A4 (ream)");
@@ -187,10 +191,16 @@ public class PosContractCheck {
                     "inactive products are still found by barcode");
         });
 
-        check("Stock recorder: stock-out deducts stock (inside the sale's transaction)", db, () -> {
-            recordSale(recorder, List.of(line(1, "P-0002", "5"), line(2, "P-0004", "1.5")));
-            expect(TestCatalog.stockOf("P-0002"), "195.000");
-            expect(TestCatalog.stockOf("P-0004"), "99.000");
+        check("Stock recorder: stock-out deducts stock and writes one SALE movement per product", db, () -> {
+            try {
+                recordSale(recorder, List.of(line(1, "P-0002", "5"), line(2, "P-0004", "1.5")));
+                expect(TestCatalog.stockOf("P-0002"), "195.000");
+                expect(TestCatalog.stockOf("P-0004"), "99.000");
+                expectTrue(saleMovements("P-0002", "-5.000") == 1, "one SALE movement of -5 for P-0002");
+                expectTrue(saleMovements("P-0004", "-1.500") == 1, "one SALE movement of -1.5 for P-0004");
+            } finally {
+                deleteTestMovements();
+            }
         });
 
         check("Stock recorder: refuses the whole sale if any line is short, and nothing is deducted", db, () -> {
@@ -261,14 +271,49 @@ public class PosContractCheck {
                 PriceType.RETAIL, true, Money.round(q));
     }
 
-    /** What CheckoutService hands to Inventory for a sale's lines. */
+    /** The reference these checks give their stock-outs, so their movements can be found and removed. */
+    static final String TEST_REFERENCE = "ZZ-POSCHECK-000001";
+
+    /**
+     * The Inventory module's real StockRecorder, as Main wires it. recordSale never asks who is
+     * logged in, so the access check (used only by Inventory's screens) refuses everything.
+     */
+    static StockRecorder realStockRecorder(ProductService products) {
+        return new InventoryService(new MySqlInventoryRepository(), products,
+                sessionId -> { throw new InventoryException("not used by recordSale"); }, null);
+    }
+
     /** Runs the recorder in a real transaction, exactly as checkout does: if it throws, everything is rolled back. */
-    static void recordSale(StubStockRecorder recorder, List<SaleLineRecord> lines)
+    static void recordSale(StockRecorder recorder, List<SaleLineRecord> lines)
             throws InsufficientStockException, SQLException {
         Database.<Void, InsufficientStockException>inTransaction(tx -> {
-            recorder.recordSale("T99-2026-000001", stockOut(lines), tx);
+            recorder.recordSale(TEST_REFERENCE, stockOut(lines), tx);
             return null;
         });
+    }
+
+    /** SALE movements with this check's reference for one product and quantity (e.g. "-5.000"). */
+    static int saleMovements(String productId, String quantity) throws SQLException {
+        try (Connection c = Database.getConnection(); PreparedStatement ps = c.prepareStatement(
+                "SELECT COUNT(*) FROM StockMovement WHERE MovementType = 'SALE' AND ReferenceNo = ? "
+                        + "AND ProductID = ? AND Quantity = ?")) {
+            ps.setString(1, TEST_REFERENCE);
+            ps.setString(2, productId);
+            ps.setBigDecimal(3, new BigDecimal(quantity));
+            try (ResultSet rs = ps.executeQuery()) {
+                rs.next();
+                return rs.getInt(1);
+            }
+        }
+    }
+
+    /** Removes the movements these checks wrote (the history table is otherwise never edited). */
+    static void deleteTestMovements() throws SQLException {
+        try (Connection c = Database.getConnection();
+             PreparedStatement ps = c.prepareStatement("DELETE FROM StockMovement WHERE ReferenceNo = ?")) {
+            ps.setString(1, TEST_REFERENCE);
+            ps.executeUpdate();
+        }
     }
 
     static List<StockLine> stockOut(List<SaleLineRecord> lines) {

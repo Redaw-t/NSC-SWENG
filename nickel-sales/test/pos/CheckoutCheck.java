@@ -3,6 +3,9 @@ package pos;
 import auth.contract.AuditLogger;
 import inventory.contract.InsufficientStockException;
 import inventory.contract.StockRecorder;
+import inventory.repository.MySqlInventoryRepository;
+import inventory.service.InventoryException;
+import inventory.service.InventoryService;
 import pos.cart.CartException;
 import pos.cart.PricingService;
 import pos.cart.Sale;
@@ -20,7 +23,6 @@ import shared.Database;
 import shared.Money;
 import shared.Quantity;
 import product.service.ProductService;
-import stubs.StubStockRecorder;
 import stubs.TestCatalog;
 
 import java.math.BigDecimal;
@@ -39,7 +41,9 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
 /**
- * SELF-TEST for POS Phase 2: payments, invoice numbers and checkout.
+ * SELF-TEST for POS Phase 2: payments, invoice numbers and checkout, with the
+ * Inventory module's real StockRecorder (InventoryService on MySQL), so a sale,
+ * its invoice number and its stock-out are tested in one transaction.
  *
  * Everything here needs MySQL (the real product catalog and the sale tables) and
  * is skipped, not failed, when it is not reachable. The nine seed products are
@@ -73,7 +77,10 @@ public class CheckoutCheck {
         String terminal = "CK" + (10000 + (int) (Math.random() * 90000));
         boolean db = databaseReachable();
         ProductService products = TestCatalog.products();
-        StubStockRecorder stock = new StubStockRecorder();
+        // The Inventory module's real StockRecorder, as Main wires it. recordSale never asks who is
+        // logged in, so the access check (used only by Inventory's screens) refuses everything.
+        StockRecorder stock = new InventoryService(new MySqlInventoryRepository(), products,
+                sessionId -> { throw new InventoryException("not used by recordSale"); }, null);
         MySqlSaleRepository repo = new MySqlSaleRepository();
         CheckoutService checkout = new CheckoutService(repo, new InvoiceNumberGenerator(), stock, audit);
 
@@ -155,6 +162,14 @@ public class CheckoutCheck {
                 expectTrue(pos.currentSale().isEmpty(), "no open sale afterwards");
                 expect(TestCatalog.stockOf("P-0001"), "38.000");
                 expect(TestCatalog.stockOf("P-0002"), "194.000");
+                expectTrue(count("SELECT COUNT(*) FROM StockMovement WHERE MovementType = 'SALE' AND ReferenceNo = ?",
+                        rec.invoiceNo()) == 2, "one SALE movement per product, with the invoice number");
+                expectTrue(count("SELECT COUNT(*) FROM StockMovement WHERE MovementType = 'SALE' AND ReferenceNo = ? "
+                        + "AND ProductID = 'P-0001' AND Quantity = -2", rec.invoiceNo()) == 1, "paper: -2");
+                expectTrue(count("SELECT COUNT(*) FROM StockMovement WHERE MovementType = 'SALE' AND ReferenceNo = ? "
+                        + "AND ProductID = 'P-0002' AND Quantity = -6", rec.invoiceNo()) == 1, "ballpens: -6");
+                expectTrue(rec.lines().stream().map(l -> l.productId()).toList().equals(List.of("P-0001", "P-0002")),
+                        "the saved lines reference the real product IDs");
                 expectTrue(auditLog.contains("SALE_COMPLETED " + rec.invoiceNo() + " by " + CASHIER), "logged");
                 expectTrue(repo.findById(rec.saleId()).orElseThrow().equals(rec), "reads back exactly as saved");
             });
@@ -205,6 +220,32 @@ public class CheckoutCheck {
                         Money.of("300"), null)), RuntimeException.class);
                 expectTrue(count("SELECT COUNT(*) FROM Sale WHERE SaleID = ?", sale.getSaleId()) == 0, "no sale");
                 expectTrue(nextNumber(terminal, year) == nextBefore, "invoice number not used up");
+            });
+
+            check("Real inventory: one product short rolls back the sale AND the other product's deduction", db, () -> {
+                // The cart is fine when built; the ballpens then "sell at another terminal". Checkout is called
+                // directly so the cart's own re-check doesn't stop it first: Inventory must refuse it inside the
+                // transaction, after it has already deducted the paper (products are locked in ID order).
+                SalesService cartOnly = new SalesService(products, terminal);
+                Sale sale = cart(cartOnly, PAPER, "2");
+                cartOnly.addItem(BALLPEN, q("10"));
+                PaymentRecord pay = payments.recordPayment(sale, PaymentMethod.CASH, Money.of("1000"), null);
+                TestCatalog.setStock("P-0002", "3");
+                int nextBefore = nextNumber(terminal, year);
+                int movementsBefore = count("SELECT COUNT(*) FROM StockMovement WHERE ReferenceNo LIKE ?", terminal + "%");
+                try {
+                    checkout.complete(sale, pay);
+                    throw new AssertionError("expected InsufficientStockException");
+                } catch (InsufficientStockException e) {
+                    expectText(e.getMessage(), "Not enough stock for Ballpen Black: 3 left, 10 needed.");
+                }
+                expect(TestCatalog.stockOf("P-0001"), "40.000");          // the paper deduction was rolled back
+                expect(TestCatalog.stockOf("P-0002"), "3.000");
+                expectTrue(count("SELECT COUNT(*) FROM Sale WHERE SaleID = ?", sale.getSaleId()) == 0, "no sale");
+                expectTrue(count("SELECT COUNT(*) FROM Payment WHERE SaleID = ?", sale.getSaleId()) == 0, "no payment");
+                expectTrue(nextNumber(terminal, year) == nextBefore, "invoice number not used up");
+                expectTrue(count("SELECT COUNT(*) FROM StockMovement WHERE ReferenceNo LIKE ?", terminal + "%")
+                        == movementsBefore, "no stock movement left behind");
             });
 
             check("No gap: the next good sale takes the number the failed ones did not use", db, () -> {
@@ -353,7 +394,8 @@ public class CheckoutCheck {
                     "DELETE FROM Payment WHERE SaleID IN (SELECT * FROM (" + sub + ") s)",
                     "DELETE FROM SaleLine WHERE SaleID IN (SELECT * FROM (" + sub + ") s)",
                     "DELETE FROM Sale WHERE TerminalID LIKE ?",
-                    "DELETE FROM InvoiceSequence WHERE TerminalID LIKE ?")) {
+                    "DELETE FROM InvoiceSequence WHERE TerminalID LIKE ?",
+                    "DELETE FROM StockMovement WHERE ReferenceNo LIKE ?")) {   // the test sales' SALE movements
                 try (PreparedStatement ps = c.prepareStatement(sql)) {
                     ps.setString(1, like);
                     ps.executeUpdate();
