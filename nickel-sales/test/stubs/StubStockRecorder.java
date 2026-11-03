@@ -14,29 +14,24 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * TEST STAND-IN for the Inventory module's StockRecorder (delete it when the real
- * one exists). It does what the contract asks, in the simplest way: inside the
- * sale's own transaction it re-checks and deducts {@code Product.StockOnHand}.
- *
- * It works on the REAL products in MySQL, so after a sale in DevApp the stock
- * really goes down. It writes no stock-movement history: that is
- * the real Inventory module's job. The real recorder can copy the two statements
- * below as its starting point.
+ * TEST STAND-IN for the Inventory module's StockRecorder. Inside the sale's own transaction it
+ * re-checks and deducts Inventory.QuantityOnHand (the source of truth for stock). It writes no
+ * stock-movement history: the real InventoryService does that.
  */
 public class StubStockRecorder implements StockRecorder {
 
     @Override
     public void recordSale(String reference, List<StockLine> lines, Connection tx)
             throws InsufficientStockException, SQLException {
-        // The same product may appear on several lines: deduct it once, in total.
         Map<String, BigDecimal> totals = new LinkedHashMap<>();
         for (StockLine line : lines) {
             totals.merge(line.productId(), line.quantity(), BigDecimal::add);
         }
         for (Map.Entry<String, BigDecimal> entry : totals.entrySet()) {
-            // FOR UPDATE: another terminal selling the same product waits for this sale to finish.
             try (PreparedStatement read = tx.prepareStatement(
-                    "SELECT ProductName, StockOnHand FROM Product WHERE ProductID = ? FOR UPDATE")) {
+                    "SELECT p.ProductName, COALESCE(i.QuantityOnHand, 0) AS StockOnHand "
+                            + "FROM Product p LEFT JOIN Inventory i ON i.ProductID = p.ProductID "
+                            + "WHERE p.ProductID = ? FOR UPDATE")) {
                 read.setString(1, entry.getKey());
                 try (ResultSet rs = read.executeQuery()) {
                     if (!rs.next()) {
@@ -51,7 +46,7 @@ public class StubStockRecorder implements StockRecorder {
                 }
             }
             try (PreparedStatement deduct = tx.prepareStatement(
-                    "UPDATE Product SET StockOnHand = StockOnHand - ? WHERE ProductID = ?")) {
+                    "UPDATE Inventory SET QuantityOnHand = QuantityOnHand - ? WHERE ProductID = ?")) {
                 deduct.setBigDecimal(1, entry.getValue());
                 deduct.setString(2, entry.getKey());
                 deduct.executeUpdate();

@@ -14,7 +14,7 @@ import javafx.scene.layout.VBox;
 import java.util.Optional;
 
 /**
- * "Products &amp; inventory" on the home screen (inventory staff and admins).
+ * "Inventory" on the home screen (inventory staff and admins): opens {@link InventoryScreen}.
  * Needs an {@link InventoryService} registered in the AppContext
  * ({@code app.register(InventoryService.class, ...)}); says so if it is missing.
  */
@@ -22,12 +22,12 @@ public final class InventoryModule implements AppModule {
 
     @Override
     public String title() {
-        return "Products & inventory";
+        return "Inventory";
     }
 
     @Override
     public String description() {
-        return "Products, prices, stock in/out, barcodes";
+        return "Stock in/out, adjustments, movement history";
     }
 
     @Override

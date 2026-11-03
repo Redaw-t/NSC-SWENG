@@ -15,18 +15,15 @@ import java.sql.SQLException;
 
 /**
  * TEST SUPPORT: the real product catalog (ProductService on MySQL) plus what the
- * self-tests need to use it as a fixture (it replaced the old in-memory StubInventory).
+ * self-tests need to use it as a fixture. Stock lives in the Inventory table.
  *
  * The checks that use it assume the nine seed products of
  * database/NickelSales-Database-Config.sql (P-0001 to P-0009). {@link #reset()}
- * puts exactly those nine back to their seed values (name, barcode, prices, VAT flag,
- * active flag, stock) before every scenario, so a sale or an edit made by one check
- * never leaks into the next. Run the checks on a development database, not a live one.
- * Any other product is left alone, apart from the throw-away P-0099.
+ * puts exactly those nine back to their seed values (including stock) before every
+ * scenario. Run the checks on a development database, not a live one.
  */
 public final class TestCatalog {
 
-    /** The seed products, exactly as the SQL script inserts them. */
     private static final Object[][] SEED = {
             {"P-0001", "4800000000019", "Bond Paper A4 (ream)", "ream", "250.00", "235.00", true, true, "40"},
             {"P-0002", "4800000000026", "Ballpen Black", "pc", "12.00", "10.00", true, true, "200"},
@@ -41,9 +38,11 @@ public final class TestCatalog {
     /** The only extra product a check may add (see {@link #addTestProduct}); reset() removes it. */
     public static final String THROWAWAY_ID = "P-0099";
 
+    private static final String PUT_STOCK = "INSERT INTO Inventory (ProductID, QuantityOnHand, ReorderLevel, UpdatedAt) "
+            + "VALUES (?, ?, 0, UTC_TIMESTAMP(3)) ON DUPLICATE KEY UPDATE QuantityOnHand = VALUES(QuantityOnHand)";
+
     private TestCatalog() { }
 
-    /** The real product service, with no audit log (the checks do not need one). */
     public static ProductService products() {
         return new ProductService(new MySqlProductRepository(), new MySqlCategoryRepository(),
                 new MySqlSupplierRepository(), new AuthorizationService(), null);
@@ -51,7 +50,6 @@ public final class TestCatalog {
 
     private static Boolean reachable;
 
-    /** True when MySQL can be reached (asked once); checks that need products are skipped when it is not. */
     public static synchronized boolean available() {
         if (reachable == null) {
             try (Connection c = Database.getConnection()) {
@@ -63,22 +61,33 @@ public final class TestCatalog {
         return reachable;
     }
 
-    /** {@link #reset()} when MySQL is reachable, nothing otherwise. The checks call this around every scenario. */
     public static void resetIfAvailable() {
         if (available()) {
             reset();
         }
     }
 
-    /** Puts the nine seed products back to their seed values and removes the throw-away product. */
+    private static void putStock(Connection c, String productId, BigDecimal qty) throws SQLException {
+        try (PreparedStatement ps = c.prepareStatement(PUT_STOCK)) {
+            ps.setString(1, productId);
+            ps.setBigDecimal(2, qty);
+            ps.executeUpdate();
+        }
+    }
+
+    /** Puts the nine seed products (and their stock) back to their seed values and removes the throw-away product. */
     public static void reset() {
         String upsert = "INSERT INTO Product (ProductID, Barcode, ProductName, Unit, RetailPrice, WholesalePrice, "
-                + "Vatable, IsActive, StockOnHand) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) "
+                + "Vatable, IsActive, StockOnHand) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0) "
                 + "ON DUPLICATE KEY UPDATE Barcode = VALUES(Barcode), ProductName = VALUES(ProductName), "
                 + "Unit = VALUES(Unit), RetailPrice = VALUES(RetailPrice), WholesalePrice = VALUES(WholesalePrice), "
-                + "Vatable = VALUES(Vatable), IsActive = VALUES(IsActive), StockOnHand = VALUES(StockOnHand)";
+                + "Vatable = VALUES(Vatable), IsActive = VALUES(IsActive)";
         try {
             Database.inTransaction(tx -> {
+                try (PreparedStatement drop = tx.prepareStatement("DELETE FROM Inventory WHERE ProductID = ?")) {
+                    drop.setString(1, THROWAWAY_ID);
+                    drop.executeUpdate();
+                }
                 try (PreparedStatement drop = tx.prepareStatement("DELETE FROM Product WHERE ProductID = ?")) {
                     drop.setString(1, THROWAWAY_ID);
                     drop.executeUpdate();
@@ -93,9 +102,11 @@ public final class TestCatalog {
                         ps.setBigDecimal(6, p[5] == null ? null : new BigDecimal((String) p[5]));
                         ps.setBoolean(7, (Boolean) p[6]);
                         ps.setBoolean(8, (Boolean) p[7]);
-                        ps.setBigDecimal(9, new BigDecimal((String) p[8]));
                         ps.executeUpdate();
                     }
+                }
+                for (Object[] p : SEED) {
+                    putStock(tx, (String) p[0], new BigDecimal((String) p[8]));
                 }
                 return null;
             });
@@ -106,10 +117,13 @@ public final class TestCatalog {
 
     /** What the Inventory module does: sets a product's stock directly (e.g. "sold at another terminal"). */
     public static void setStock(String productId, String quantity) {
-        update("UPDATE Product SET StockOnHand = ? WHERE ProductID = ?", new BigDecimal(quantity), productId);
+        try (Connection c = Database.getConnection()) {
+            putStock(c, productId, new BigDecimal(quantity));
+        } catch (SQLException e) {
+            throw new RuntimeException("Could not set the stock of " + productId, e);
+        }
     }
 
-    /** Discontinues or reactivates a product directly. */
     public static void setActive(String productId, boolean active) {
         update("UPDATE Product SET IsActive = ? WHERE ProductID = ?", active, productId);
     }
@@ -118,7 +132,7 @@ public final class TestCatalog {
     public static void addTestProduct(String barcode, String name, String unit, String retail,
                                       String wholesale, boolean vatable, boolean active, String stock) {
         String sql = "INSERT INTO Product (ProductID, Barcode, ProductName, Unit, RetailPrice, WholesalePrice, "
-                + "Vatable, IsActive, StockOnHand) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                + "Vatable, IsActive, StockOnHand) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)";
         try (Connection c = Database.getConnection(); PreparedStatement ps = c.prepareStatement(sql)) {
             ps.setString(1, THROWAWAY_ID);
             ps.setString(2, barcode);
@@ -128,21 +142,20 @@ public final class TestCatalog {
             ps.setBigDecimal(6, wholesale == null ? null : new BigDecimal(wholesale));
             ps.setBoolean(7, vatable);
             ps.setBoolean(8, active);
-            ps.setBigDecimal(9, new BigDecimal(stock));
             ps.executeUpdate();
+            putStock(c, THROWAWAY_ID, new BigDecimal(stock));
         } catch (SQLException e) {
             throw new RuntimeException("Could not add the test product", e);
         }
     }
 
-    /** Current stock of a product, read straight from MySQL. */
+    /** Current stock of a product, read straight from the Inventory table. */
     public static BigDecimal stockOf(String productId) {
         try (Connection c = Database.getConnection();
-             PreparedStatement ps = c.prepareStatement("SELECT StockOnHand FROM Product WHERE ProductID = ?")) {
+             PreparedStatement ps = c.prepareStatement("SELECT QuantityOnHand FROM Inventory WHERE ProductID = ?")) {
             ps.setString(1, productId);
             try (ResultSet rs = ps.executeQuery()) {
-                rs.next();
-                return rs.getBigDecimal(1);
+                return rs.next() ? rs.getBigDecimal(1) : new BigDecimal("0.000");
             }
         } catch (SQLException e) {
             throw new RuntimeException("Could not read the stock of " + productId, e);

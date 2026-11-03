@@ -438,19 +438,23 @@ public class ProductCheck {
         }
     }
 
-    /** What the Inventory module does: sets the stock figure directly. */
+    /** What the Inventory module does: sets the stock figure directly (in the Inventory table). */
     static void setStockAsInventory(String productId, String qty) throws SQLException {
         try (Connection c = Database.getConnection();
-             PreparedStatement ps = c.prepareStatement("UPDATE Product SET StockOnHand = ? WHERE ProductID = ?")) {
-            ps.setBigDecimal(1, new BigDecimal(qty));
-            ps.setString(2, productId);
+             PreparedStatement ps = c.prepareStatement(
+                     "INSERT INTO Inventory (ProductID, QuantityOnHand, ReorderLevel, UpdatedAt) "
+                             + "VALUES (?, ?, 0, UTC_TIMESTAMP(3)) "
+                             + "ON DUPLICATE KEY UPDATE QuantityOnHand = VALUES(QuantityOnHand)")) {
+            ps.setString(1, productId);
+            ps.setBigDecimal(2, new BigDecimal(qty));
             ps.executeUpdate();
         }
     }
 
     static BigDecimal stockOf(String productId) throws SQLException {
         try (Connection c = Database.getConnection();
-             PreparedStatement ps = c.prepareStatement("SELECT StockOnHand FROM Product WHERE ProductID = ?")) {
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT COALESCE(SUM(QuantityOnHand), 0) FROM Inventory WHERE ProductID = ?")) {
             ps.setString(1, productId);
             try (ResultSet rs = ps.executeQuery()) {
                 rs.next();
@@ -468,6 +472,7 @@ public class ProductCheck {
                 {"DELETE FROM Sale WHERE TerminalID = ?", terminal},
                 {"DELETE FROM InvoiceSequence WHERE TerminalID = ?", terminal},
                 {"DELETE FROM Product WHERE Barcode LIKE ? OR ProductName LIKE ?", "ZZTEST%"},
+                {"DELETE FROM Inventory WHERE ProductID NOT IN (SELECT ProductID FROM Product)", "x"},
                 {"DELETE FROM Category WHERE CategoryName LIKE ?", "ZZ Test%"},
                 {"DELETE FROM Supplier WHERE SupplierName LIKE ?", "ZZ Test%"}};
         try (Connection c = Database.getConnection()) {

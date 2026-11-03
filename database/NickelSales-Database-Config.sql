@@ -196,6 +196,15 @@ CREATE TABLE IF NOT EXISTS `StockMovement` (
     INDEX idx_movement_created (CreatedAt)       -- history list, newest first
 );
 
+-- Starting stock for the test catalog (Inventory is the source of truth for stock).
+INSERT IGNORE INTO `Inventory` (ProductID, QuantityOnHand, ReorderLevel, UpdatedAt) VALUES
+    ('P-0001', 40, 0, UTC_TIMESTAMP(3)),
+    ('P-0002', 200, 0, UTC_TIMESTAMP(3)),
+    ('P-0003', 60, 0, UTC_TIMESTAMP(3)),
+    ('P-0004', 100.500, 0, UTC_TIMESTAMP(3)),
+    ('P-0005', 0, 0, UTC_TIMESTAMP(3)),
+    ('P-0006', 5, 0, UTC_TIMESTAMP(3)),
+    ('P-0007', 30, 0, UTC_TIMESTAMP(3));
 
 -- ============ UPGRADES FOR DATABASES MADE BY AN OLDER SCRIPT ============
 -- CREATE TABLE IF NOT EXISTS never changes a table that is already there, so

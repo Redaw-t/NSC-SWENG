@@ -86,6 +86,7 @@ call :check pos.ReceiptCheck
 call :check inventory.InventoryCheck
 call :check app.AppCheck
 call :check product.ProductCheck
+call :check barcode.BarcodeCheck
 echo.
 echo =================================================================
 if defined FAILED (
