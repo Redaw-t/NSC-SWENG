@@ -23,14 +23,16 @@ import java.util.Set;
 import java.util.function.Consumer;
 
 /**
- * The frame around a module's screen: a left sidebar (logo and name, Dashboard, POS, Products,
- * Inventory, Reports, Users, Settings, who is logged in, Logout) with the module's own screen
+ * The frame around a screen: a left sidebar (logo and name, Dashboard, POS, Products,
+ * Inventory, Reports, Users, Settings, who is logged in, Logout) with the screen itself
  * on the right.
  *
- * <p>The router wraps a module in this when {@link AppModule#usesShell()} is true. The
- * sidebar only lists screens the user may open ({@code availableTitles}); the router
- * checks the permission again when one is clicked. It starts collapsed to a thin strip;
- * the hamburger button opens and closes it.
+ * <p>The router wraps the Dashboard, Settings and every module whose
+ * {@link AppModule#usesShell()} is true in this. The sidebar lists Dashboard and Settings
+ * for everyone and the other screens only if the user may open them ({@code availableTitles});
+ * the router checks the permission again when one is clicked. The sidebar is open on the
+ * Dashboard (so it is open after login) and on Settings, and collapses to a thin strip on every other screen;
+ * the hamburger button opens or closes it by hand until the next screen change.
  */
 public final class AppShell {
 
@@ -38,44 +40,62 @@ public final class AppShell {
     private static final double COLLAPSED_WIDTH = 64;
     private static final String LOGO_RESOURCE = "/images/nickel-logo-icon.png";
 
-    /** One sidebar row: its label, and the {@link AppModule#title()} it opens (null = home screen). */
+    /** Title of the Settings entry; the router opens it as a screen, not as a module. */
+    public static final String SETTINGS = "Settings";
+    /** The \"System & sync\" module (see {@link Modules}); it is reached from Settings. */
+    public static final String SYSTEM = "System & sync";
+
+    /** One sidebar row: its label, and the {@link AppModule#title()} it opens (null = Dashboard, SETTINGS = Settings). */
     private record Entry(String label, String moduleTitle) { }
 
     private static final List<Entry> ENTRIES = List.of(
             new Entry("Dashboard", null),
             new Entry("POS", "Point of Sale"),
             new Entry("Products", "Products"),
-            new Entry("Inventory", "Products & inventory"),   // InventoryModule.title()
+            new Entry("Inventory", "Inventory"),
             new Entry("Reports", "Reports"),
             new Entry("Users", "Manage users"),
-            new Entry("Settings", "System & sync"));
+            new Entry("Settings", SETTINGS));
 
     private AppShell() { }
 
     /**
-     * @param activeTitle     the title of the module being shown (highlighted in the sidebar)
+     * @param activeTitle     the title of the module being shown (highlighted in the sidebar);
+     *                        null for the Dashboard, {@link #SETTINGS} for Settings
      * @param availableTitles titles of the modules this user may open
-     * @param content         the module's own screen
+     * @param content         the screen itself
      * @param goHome          Dashboard was clicked
      * @param openModule      another entry was clicked; called with that module's title
+     *                        (or {@link #SETTINGS})
      * @param logout          Logout was clicked
+     * @param startOpen       true to show the sidebar open, false collapsed (the router opens it
+     *                        on the Dashboard only)
      */
     public static Parent wrap(User user, String activeTitle, Set<String> availableTitles, Parent content,
-                              Runnable goHome, Consumer<String> openModule, Runnable logout) {
+                              Runnable goHome, Consumer<String> openModule, Runnable logout,
+                              boolean startOpen) {
         VBox nav = new VBox();
         for (Entry entry : ENTRIES) {
             boolean dashboard = entry.moduleTitle() == null;
-            if (!dashboard && !availableTitles.contains(entry.moduleTitle())) {
+            boolean settings = SETTINGS.equals(entry.moduleTitle());
+            if (!dashboard && !settings && !availableTitles.contains(entry.moduleTitle())) {
                 continue;
             }
-            boolean active = !dashboard && entry.moduleTitle().equals(activeTitle);
+            // Settings also stays highlighted on the System & sync screen, which is opened from it.
+            boolean active = dashboard ? activeTitle == null
+                    : settings ? SETTINGS.equals(activeTitle) || SYSTEM.equals(activeTitle)
+                    : entry.moduleTitle().equals(activeTitle);
+            boolean here = dashboard ? activeTitle == null : entry.moduleTitle().equals(activeTitle);
             Button item = new Button(entry.label());
             item.setMaxWidth(Double.MAX_VALUE);
             Styles.navItem(item, active);
             item.setOnAction(e -> {
+                if (here) {
+                    return;   // already on this screen
+                }
                 if (dashboard) {
                     goHome.run();
-                } else if (!active) {
+                } else {
                     openModule.accept(entry.moduleTitle());
                 }
             });
@@ -129,7 +149,7 @@ public final class AppShell {
         VBox sidebar = new VBox(top, nav, spacer, footer);
         Styles.sidebar(sidebar);
 
-        boolean[] expanded = {false};   // hidden by default
+        boolean[] expanded = {startOpen};
         Runnable applyState = () -> {
             boolean open = expanded[0];
             brand.setVisible(open);
