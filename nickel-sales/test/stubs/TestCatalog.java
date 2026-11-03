@@ -23,6 +23,11 @@ import java.sql.SQLException;
  * active flag, stock) before every scenario, so a sale or an edit made by one check
  * never leaks into the next. Run the checks on a development database, not a live one.
  * Any other product is left alone, apart from the throw-away P-0099.
+ *
+ * Stock lives in the Inventory table (Inventory.QuantityOnHand): that is what
+ * ProductLookup reports as ProductInfo.stockOnHand and what the Inventory module
+ * deducts at checkout. {@link #setStock} and {@link #stockOf} use that table.
+ * The StockMovement history is never touched here.
  */
 public final class TestCatalog {
 
@@ -40,6 +45,16 @@ public final class TestCatalog {
 
     /** The only extra product a check may add (see {@link #addTestProduct}); reset() removes it. */
     public static final String THROWAWAY_ID = "P-0099";
+
+    /**
+     * Sets a product's stock, creating its Inventory row if it has none. Times are UTC, like
+     * MySqlInventoryRepository; an existing row keeps its reorder level.
+     * Quantity first, then the product ID: matches {@link #update(String, Object, String)}.
+     */
+    private static final String STOCK_UPSERT =
+            "INSERT INTO Inventory (QuantityOnHand, ProductID, ReorderLevel, UpdatedAt) "
+                    + "VALUES (?, ?, 0, UTC_TIMESTAMP(3)) "
+                    + "ON DUPLICATE KEY UPDATE QuantityOnHand = VALUES(QuantityOnHand), UpdatedAt = VALUES(UpdatedAt)";
 
     private TestCatalog() { }
 
@@ -70,8 +85,12 @@ public final class TestCatalog {
         }
     }
 
-    /** Puts the nine seed products back to their seed values and removes the throw-away product. */
+    /**
+     * Puts the nine seed products back to their seed values, including their stock in the
+     * Inventory table, and removes the throw-away product. All in one transaction.
+     */
     public static void reset() {
+        // TODO remove StockOnHand here when Product.StockOnHand is retired; ProductCheck still reads it.
         String upsert = "INSERT INTO Product (ProductID, Barcode, ProductName, Unit, RetailPrice, WholesalePrice, "
                 + "Vatable, IsActive, StockOnHand) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) "
                 + "ON DUPLICATE KEY UPDATE Barcode = VALUES(Barcode), ProductName = VALUES(ProductName), "
@@ -80,6 +99,10 @@ public final class TestCatalog {
         try {
             Database.inTransaction(tx -> {
                 try (PreparedStatement drop = tx.prepareStatement("DELETE FROM Product WHERE ProductID = ?")) {
+                    drop.setString(1, THROWAWAY_ID);
+                    drop.executeUpdate();
+                }
+                try (PreparedStatement drop = tx.prepareStatement("DELETE FROM Inventory WHERE ProductID = ?")) {
                     drop.setString(1, THROWAWAY_ID);
                     drop.executeUpdate();
                 }
@@ -97,6 +120,13 @@ public final class TestCatalog {
                         ps.executeUpdate();
                     }
                 }
+                try (PreparedStatement ps = tx.prepareStatement(STOCK_UPSERT)) {
+                    for (Object[] p : SEED) {
+                        ps.setBigDecimal(1, new BigDecimal((String) p[8]));   // quantity first
+                        ps.setString(2, (String) p[0]);                       // then the product ID
+                        ps.executeUpdate();
+                    }
+                }
                 return null;
             });
         } catch (SQLException e) {
@@ -106,7 +136,7 @@ public final class TestCatalog {
 
     /** What the Inventory module does: sets a product's stock directly (e.g. "sold at another terminal"). */
     public static void setStock(String productId, String quantity) {
-        update("UPDATE Product SET StockOnHand = ? WHERE ProductID = ?", new BigDecimal(quantity), productId);
+        update(STOCK_UPSERT, new BigDecimal(quantity), productId);
     }
 
     /** Discontinues or reactivates a product directly. */
@@ -114,9 +144,10 @@ public final class TestCatalog {
         update("UPDATE Product SET IsActive = ? WHERE ProductID = ?", active, productId);
     }
 
-    /** Adds the throw-away product P-0099 for one scenario (removed by the next {@link #reset()}). */
+    /** Adds the throw-away product P-0099 with its stock for one scenario (removed by the next {@link #reset()}). */
     public static void addTestProduct(String barcode, String name, String unit, String retail,
                                       String wholesale, boolean vatable, boolean active, String stock) {
+        // TODO remove StockOnHand here when Product.StockOnHand is retired; ProductCheck still reads it.
         String sql = "INSERT INTO Product (ProductID, Barcode, ProductName, Unit, RetailPrice, WholesalePrice, "
                 + "Vatable, IsActive, StockOnHand) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
         try (Connection c = Database.getConnection(); PreparedStatement ps = c.prepareStatement(sql)) {
@@ -133,16 +164,16 @@ public final class TestCatalog {
         } catch (SQLException e) {
             throw new RuntimeException("Could not add the test product", e);
         }
+        update(STOCK_UPSERT, new BigDecimal(stock), THROWAWAY_ID);
     }
 
-    /** Current stock of a product, read straight from MySQL. */
+    /** Current stock of a product, read straight from the Inventory table (0.000 if it has no row). */
     public static BigDecimal stockOf(String productId) {
         try (Connection c = Database.getConnection();
-             PreparedStatement ps = c.prepareStatement("SELECT StockOnHand FROM Product WHERE ProductID = ?")) {
+             PreparedStatement ps = c.prepareStatement("SELECT QuantityOnHand FROM Inventory WHERE ProductID = ?")) {
             ps.setString(1, productId);
             try (ResultSet rs = ps.executeQuery()) {
-                rs.next();
-                return rs.getBigDecimal(1);
+                return rs.next() ? rs.getBigDecimal(1) : BigDecimal.ZERO.setScale(3);
             }
         } catch (SQLException e) {
             throw new RuntimeException("Could not read the stock of " + productId, e);
