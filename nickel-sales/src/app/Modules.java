@@ -7,6 +7,7 @@ import auth.ui.UserAdminModule;
 import inventory.ui.InventoryModule;
 import pos.ui.PosModule;
 import product.ui.ProductModule;
+import system.ui.SystemModule;
 
 import java.util.List;
 import java.util.Objects;
@@ -37,8 +38,8 @@ public final class Modules {
                 new ComingSoonModule("Reports", "Sales and inventory reports", Permission.VIEW_REPORTS),
                 // User & Access Management
                 new UserAdminModule(),
-                // Synchronization / Audit & System: replace with your module
-                new ComingSoonModule("System & sync", "Terminal sync, logs, backup", Permission.MANAGE_SYSTEM));
+                // Audit & System (activity logs; sync, status and backup follow)
+                new SystemModule());
     }
 
     /** The modules {@code user} may use right now, in menu order (empty if inactive). */

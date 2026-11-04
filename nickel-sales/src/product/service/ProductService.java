@@ -14,6 +14,9 @@ import product.repository.DuplicateValueException;
 import product.repository.ProductRepository;
 import product.repository.SupplierRepository;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -136,7 +139,35 @@ public class ProductService implements ProductLookup {
             throw new ProductException(barcodeTaken(changed.barcode()));
         }
         access.log("PRODUCT_UPDATED", actor, changed.productId());
+        String prices = priceChanges(existing, changed);
+        if (!prices.isEmpty()) {
+            access.log("PRICE_CHANGED", actor, changed.productId(), prices);   // the admin's price audit trail
+        }
         return requireProduct(productId);
+    }
+
+    /** "retail=250.00>260.00 wholesale=none>240.00" for the prices that changed; empty if none did. */
+    private static String priceChanges(Product before, Product after) {
+        StringBuilder out = new StringBuilder();
+        if (!samePrice(before.retailPrice(), after.retailPrice())) {
+            out.append("retail=").append(price(before.retailPrice())).append('>').append(price(after.retailPrice()));
+        }
+        if (!samePrice(before.wholesalePrice(), after.wholesalePrice())) {
+            if (out.length() > 0) {
+                out.append(' ');
+            }
+            out.append("wholesale=").append(price(before.wholesalePrice()))
+                    .append('>').append(price(after.wholesalePrice()));
+        }
+        return out.toString();
+    }
+
+    private static boolean samePrice(BigDecimal a, BigDecimal b) {
+        return a == null ? b == null : b != null && a.compareTo(b) == 0;
+    }
+
+    private static String price(BigDecimal p) {
+        return p == null ? "none" : p.setScale(2, RoundingMode.HALF_UP).toPlainString();
     }
 
     /** Discontinues ({@code false}) or reactivates ({@code true}) a product. POS will not sell an inactive one. */
