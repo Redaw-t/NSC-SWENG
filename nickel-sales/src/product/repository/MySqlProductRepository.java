@@ -9,8 +9,11 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Types;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -166,6 +169,49 @@ public class MySqlProductRepository implements ProductRepository {
         } catch (SQLException e) {
             throw MySqlErrors.translate(e, "Could not update product " + p.productId());
         }
+    }
+
+    @Override
+    public void updateBarcode(String productId, String barcode) {
+        String sql = "UPDATE Product SET Barcode = ? WHERE ProductID = ?";
+
+        try (Connection c = Database.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+
+            ps.setString(1, barcode);
+            ps.setString(2, productId);
+
+            if (ps.executeUpdate() == 0) {
+                throw new RuntimeException("No such product: " + productId);
+            }
+
+        } catch (SQLException e) {
+            throw MySqlErrors.translate(e, "Could not save the barcode of product " + productId);
+        }
+    }
+
+    @Override
+    public Map<String, LocalDateTime> lastUpdated() {
+        Map<String, LocalDateTime> updated = new HashMap<>();
+
+        try (Connection c = Database.getConnection();
+             PreparedStatement ps = c.prepareStatement("SELECT ProductID, UpdatedAt FROM Product");
+             ResultSet rs = ps.executeQuery()) {
+
+            while (rs.next()) {
+                // Read as text: UpdatedAt is written by MySQL in its own local time, and the JDBC URL says
+                // serverTimezone=UTC, so getTimestamp() would shift it (see MySqlUserRepository.readLocalTime).
+                String text = rs.getString("UpdatedAt");
+                if (text != null) {
+                    updated.put(rs.getString("ProductID"), LocalDateTime.parse(text.trim().replace(' ', 'T')));
+                }
+            }
+
+        } catch (SQLException e) {
+            throw new RuntimeException("Could not read when products last changed", e);
+        }
+
+        return updated;
     }
 
     private Optional<Product> queryOne(String sql, String param) {

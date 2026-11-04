@@ -2,6 +2,9 @@ package product.ui;
 
 import app.ComingSoonView;
 import app.ScreenContext;
+import barcode.service.BarcodeService;
+import barcode.service.LabelPrinterPort;
+import barcode.ui.BarcodePane;
 import javafx.scene.Parent;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.Priority;
@@ -18,8 +21,10 @@ import java.util.Arrays;
  * Suppliers | Barcode) above the tab's own screen. It is shown inside the app's sidebar
  * frame (see app.AppShell), so it has no Back button; the sidebar's Dashboard goes home.
  *
- * The tabs are {@link ProductsPane}, {@link CategoriesPane} and {@link SuppliersPane};
- * Barcode is not built yet and shows a "Coming soon" card.
+ * The tabs are {@link ProductsPane}, {@link CategoriesPane}, {@link SuppliersPane} and the
+ * Barcode module's {@link BarcodePane}. Barcode lists and saves barcodes only through the
+ * {@code product.contract.BarcodeAssigner} contract ({@link ProductBarcodes}). If no label printer
+ * is connected in this build, the Barcode tab shows a notice instead.
  */
 public class ProductScreen {
 
@@ -36,8 +41,9 @@ public class ProductScreen {
     private final ProductsPane productsPane;
     private final CategoriesPane categoriesPane;
     private final SuppliersPane suppliersPane;
-    private final Parent barcodePlaceholder = ComingSoonView.create("Barcode",
-            "Barcode generation and label printing aren't built yet.");
+    private final BarcodePane barcodePane;          // null when the Barcode module is not connected
+    private final Parent barcodeUnavailable = ComingSoonView.notice("Barcode",
+            "Barcode management is not connected in this build.");
 
     private final TabBar tabs = new TabBar(Arrays.stream(Tab.values()).map(t -> t.label).toList(),
             number -> show(Tab.values()[number]));
@@ -45,12 +51,14 @@ public class ProductScreen {
     private final VBox view = new VBox(20);
 
     public ProductScreen(ScreenContext screen, ProductService products, CategoryService categories,
-                         SupplierService suppliers) {
+                         SupplierService suppliers, LabelPrinterPort labelPrinter) {
         // Read the user fresh on every click, so a role taken away is noticed at once.
         ActorSource actor = () -> screen.app().auth().getCurrentUser(screen.sessionId());
         this.productsPane = new ProductsPane(screen, products, categories, suppliers, actor);
         this.categoriesPane = new CategoriesPane(categories, actor);
         this.suppliersPane = new SuppliersPane(suppliers, actor);
+        this.barcodePane = labelPrinter == null ? null
+                : new BarcodePane(new BarcodeService(products, new ProductBarcodes(products, actor), labelPrinter));
 
         view.getChildren().addAll(tabs.getView(), body);
         VBox.setVgrow(body, Priority.ALWAYS);
@@ -76,7 +84,14 @@ public class ProductScreen {
                 body.setCenter(suppliersPane.getView());
                 suppliersPane.refresh();
             }
-            case BARCODE -> body.setCenter(barcodePlaceholder);
+            case BARCODE -> {
+                if (barcodePane == null) {
+                    body.setCenter(barcodeUnavailable);
+                } else {
+                    body.setCenter(barcodePane.getView());
+                    barcodePane.refresh();
+                }
+            }
         }
     }
 }

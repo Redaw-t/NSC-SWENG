@@ -3,6 +3,7 @@ package product.service;
 import auth.contract.AuditLogger;
 import auth.contract.User;
 import auth.permission.AuthorizationService;
+import product.contract.BarcodeEntry;
 import product.contract.ProductInfo;
 import product.contract.ProductLookup;
 import product.model.Category;
@@ -17,7 +18,9 @@ import product.repository.SupplierRepository;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 
+import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -168,6 +171,37 @@ public class ProductService implements ProductLookup {
 
     private static String price(BigDecimal p) {
         return p == null ? "none" : p.setScale(2, RoundingMode.HALF_UP).toPlainString();
+    /**
+     * Every sold (active) product with the time its record last changed, sorted by name, for the
+     * Barcode screen.
+     */
+    public List<BarcodeEntry> listBarcodeEntries(User actor) throws ProductException {
+        access.require(actor);
+        Map<String, LocalDateTime> updated = products.lastUpdated();
+        return products.search("", true, LIST_LIMIT).stream()
+                .map(p -> new BarcodeEntry(p.toInfo(), updated.get(p.productId())))
+                .toList();
+    }
+
+    /**
+     * Saves {@code barcode} on a product (replacing any it has) and changes nothing else about it.
+     * A barcode belongs to one product only: if another product has it, the message names that product.
+     */
+    public void assignBarcode(User actor, String productId, String barcode) throws ProductException {
+        access.require(actor);
+        if (barcode == null || barcode.isBlank()) {
+            throw new ProductException("Enter a barcode.");
+        }
+        Product existing = requireProduct(productId);
+        Product changed = build(() -> existing.withBarcode(barcode));   // length / spaces rules
+        checkRules(changed, existing);                                  // used by another product?
+        try {
+            products.updateBarcode(changed.productId(), changed.barcode());
+        } catch (DuplicateValueException e) {
+            throw new ProductException(barcodeTaken(changed.barcode()));   // another terminal was faster
+        }
+        access.log(existing.barcode() == null ? "PRODUCT_BARCODE_ASSIGNED" : "PRODUCT_BARCODE_REASSIGNED",
+                actor, changed.productId());
     }
 
     /** Discontinues ({@code false}) or reactivates ({@code true}) a product. POS will not sell an inactive one. */

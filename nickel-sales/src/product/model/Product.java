@@ -114,6 +114,12 @@ public record Product(
                 categoryId, categoryName, supplierId, supplierName, stockOnHand);
     }
 
+    /** The same product with another barcode (null or blank clears it); the barcode rules are checked. */
+    public Product withBarcode(String newBarcode) {
+        return new Product(productId, newBarcode, name, unit, retailPrice, wholesalePrice, vatable, active,
+                categoryId, categoryName, supplierId, supplierName, stockOnHand);
+    }
+
     /** A new product from a draft (stock starts at zero; Inventory adds stock). */
     public static Product create(String productId, ProductDraft d) {
         Objects.requireNonNull(d, "draft");

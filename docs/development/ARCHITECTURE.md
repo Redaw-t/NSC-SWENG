@@ -62,6 +62,7 @@ Never the other way round:
 | Where | Why it exists |
 |---|---|
 | `*.ui` imports `app.AppModule`, `app.ScreenContext`, `app.HomeScreen`; `app` imports each `*.ui` module | The home screen / module-plugin mechanism lives in `app`. It is the only upward dependency allowed. |
+| `product.ui.ProductScreen` / `ProductModule` import `barcode.ui.BarcodePane`, `barcode.service.BarcodeService` and `LabelPrinterPort` | The Barcode tab is one of the Products screen's tabs by design, so the screen embeds the Barcode module's pane. Barcode itself still depends only on `product.contract` (`BarcodeAssigner`, implemented by `product.ui.ProductBarcodes`). The label printer is created in `app.Main`. |
 | `pos.cart` <-> `pos.checkout` (package cycle inside POS) | `SalesService` (cart) finalises through `CheckoutService`, and `Sale`'s mutators are package-private so only `SalesService` can change a sale. Fixing it means introducing an interface in `pos.cart`; deferred, owned by POS. |
 | `pos.*` imports `auth.contract.AuditLogger` | `AuditLogger` is the shared audit port. It moves to `system.contract` when the System module is built. |
 | `pos.ui.PosModule` calls `pos.repository.PosTables.missing()` | A start-up check that the schema is current. Do not add more repository calls to UI classes. |

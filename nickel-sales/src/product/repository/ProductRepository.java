@@ -2,7 +2,9 @@ package product.repository;
 
 import product.model.Product;
 
+import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -50,4 +52,19 @@ public interface ProductRepository {
      * @throws RuntimeException        there is no such product
      */
     void update(Product product);
+
+    /**
+     * Changes ONLY the barcode of one product (null clears it), so nothing else another terminal
+     * just edited is overwritten.
+     *
+     * @throws DuplicateValueException the barcode belongs to another product
+     * @throws RuntimeException        there is no such product
+     */
+    void updateBarcode(String productId, String barcode);
+
+    /**
+     * When each product record last changed (product ID to the stored UpdatedAt), in the local time
+     * MySQL shows, with no time zone conversion.
+     */
+    Map<String, LocalDateTime> lastUpdated();
 }
