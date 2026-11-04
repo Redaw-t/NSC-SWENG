@@ -1,7 +1,6 @@
 # reports/ — Transaction and inventory reports
 
-**Status: sales reports built (Transactions, Sales Summary, Top Products, Cashiers & Terminals).
-Inventory report: waiting for Inventory's `StockOverview` contract (branch `reports/inventory-report`).**
+**Status: built: Transactions, Sales Summary, Top Products, Cashiers & Terminals, Inventory.**
 Opened from the home screen / sidebar "Reports" entry via `ui.ReportsModule`.
 
 **Responsibility:** read-only sales and inventory reports. Reports never write: the services only
@@ -10,7 +9,7 @@ hold the read-only `pos.contract.SaleHistory`.
 | Folder | What is in it |
 |---|---|
 | `model/` | `ReportPeriod` (day / month / year / custom, cut at PH midnight), `ReportFilter`, and the report rows (`SalesSummary`, `SalesBucket`, `ProductSales`, `GroupTotal`, `TransactionList`) |
-| `service/` | One small service per report: `TransactionHistoryService`, `SalesReportService` (one `salesFor(period)` for every period), `ProductPerformanceService`, `CashierReportService`; `ReportsAccess` (permission check); no JavaFX, so `ReportsCheck` tests them without a database |
+| `service/` | One small service per report: `TransactionHistoryService`, `SalesReportService` (one `salesFor(period)` for every period), `ProductPerformanceService`, `CashierReportService`, `InventoryReportService` (through `inventory.contract.StockOverview`); `ReportsAccess` (permission check); no JavaFX, so `ReportsCheck` tests them without a database |
 | `ui/` | `ReportsModule`, `ReportsScreen` (only the tabs the user may open), one pane per report, `SaleDetailsDialog` (read-only; POS's receipt classes are POS internals), `ReportsUi`, `UserNames` |
 
 **Who sees what (Story 5):**
