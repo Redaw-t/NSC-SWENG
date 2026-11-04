@@ -93,9 +93,10 @@ public final class Main {
         app.register(ProductPerformanceService.class,
                 new ProductPerformanceService(app.saleHistory(), reportsAccess));
         app.register(CashierReportService.class, new CashierReportService(app.saleHistory(), reportsAccess));
-        // Inventory report: current stock through Inventory's read-only StockOverview.
-        app.register(StockOverview.class, inventory);
-        app.register(InventoryReportService.class, new InventoryReportService(inventory, reportsAccess));
+        // Inventory report: Reports gets Inventory's read-only StockOverview contract, never InventoryService.
+        StockOverview stockOverview = inventory;
+        app.register(StockOverview.class, stockOverview);
+        app.register(InventoryReportService.class, new InventoryReportService(stockOverview, reportsAccess));
 
         return app;
     }
