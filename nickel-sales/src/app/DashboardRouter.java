@@ -1,5 +1,6 @@
 package app;
 
+import dashboard.DashboardScreen;
 import auth.contract.User;
 import auth.login.LoginResult;
 import auth.ui.LoginScreen;
@@ -75,7 +76,7 @@ public class DashboardRouter {
         showHome(loginResult.session().getSessionId());
     }
 
-    /** Shows the Dashboard (a "Coming soon" screen in the sidebar frame) for a user who may use something. */
+    /** Shows the Dashboard (app.dashboard.DashboardScreen, in the sidebar frame) for a user who may use something. */
     public void showHome(String sessionId) {
         User user = currentUser(sessionId);
         if (user == null) {
@@ -95,7 +96,10 @@ public class DashboardRouter {
             idleTimer.start();
         }
 
-        show(inShell(user, sessionId, null, ComingSoonView.create("Dashboard", "This screen isn't built yet.")));
+        Set<String> titles = visible.stream().map(AppModule::title).collect(Collectors.toSet());
+        ScreenContext context = new ScreenContext(stage, sessionId, user, app, () -> showHome(sessionId));
+        show(inShell(user, sessionId, null,
+                DashboardScreen.create(context, titles, title -> openByTitle(sessionId, title))));
     }
 
     /** Settings: Change password and Printers for everyone; System Status and Backup & Restore for Admin. */
