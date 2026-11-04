@@ -12,6 +12,7 @@ import inventory.model.StockLevel;
 import inventory.model.StockMovement;
 import inventory.model.StockReason;
 import inventory.model.StockRow;
+import inventory.model.StockStatus;
 import inventory.repository.InventoryRepository;
 import product.contract.ProductInfo;
 import product.contract.ProductLookup;
@@ -83,9 +84,18 @@ public class InventoryService implements StockRecorder, StockOverview {
         List<StockSnapshot> snapshots = new ArrayList<>();
         for (StockRow row : stockRows()) {
             snapshots.add(new StockSnapshot(row.productId(), row.name(), row.barcode(), row.unit(),
-                    row.onHand(), row.reorderLevel(), StockSnapshot.Level.valueOf(row.status().name())));
+                    row.onHand(), row.reorderLevel(), levelOf(row.status())));
         }
         return snapshots;
+    }
+
+    /** A switch, not valueOf, so a new StockStatus is a compile error here rather than a runtime one. */
+    private static StockSnapshot.Level levelOf(StockStatus status) {
+        return switch (status) {
+            case IN_STOCK -> StockSnapshot.Level.IN_STOCK;
+            case LOW_STOCK -> StockSnapshot.Level.LOW_STOCK;
+            case OUT_OF_STOCK -> StockSnapshot.Level.OUT_OF_STOCK;
+        };
     }
 
     private List<StockRow> stockRows() {

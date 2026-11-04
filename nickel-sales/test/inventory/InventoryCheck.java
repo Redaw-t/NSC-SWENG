@@ -5,10 +5,13 @@ import auth.contract.UserRole;
 import auth.contract.UserStatus;
 import inventory.contract.InsufficientStockException;
 import inventory.contract.StockLine;
+import inventory.contract.StockOverview;
+import inventory.contract.StockSnapshot;
 import inventory.model.MovementType;
 import inventory.model.StockLevel;
 import inventory.model.StockMovement;
 import inventory.model.StockReason;
+import inventory.model.StockRow;
 import inventory.model.StockStatus;
 import inventory.repository.MySqlInventoryRepository;
 import inventory.service.InventoryAccess;
@@ -28,7 +31,9 @@ import java.sql.SQLException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Self-test for the Inventory module (run by {@code run-demo --scripted}).
@@ -216,6 +221,7 @@ public final class InventoryCheck {
                     levels.available("NOPE").signum() == 0 && levels.available(null).signum() == 0);
 
             salesRules();
+            stockOverviewRules();
         } catch (Exception e) {
             failed++;
             System.out.println("  FAIL  service rules stopped on an unexpected error: " + e);
@@ -224,6 +230,36 @@ public final class InventoryCheck {
     }
 
     /** StockRecorder: what POS calls inside the checkout transaction. */
+    /** The StockOverview contract (read by Reports): the Current Stock rows, with the level worked out here. */
+    private static void stockOverviewRules() throws Exception {
+        Fixture f = new Fixture();
+        f.service.stockIn("s", "P-0001", q("20"), null);
+        f.service.setReorderLevel("s", "P-0001", q("5"));    // 20 of 5: In Stock
+        f.service.stockIn("s", "P-0002", q("4"), null);
+        f.service.setReorderLevel("s", "P-0002", q("8"));    // 4 of 8: Low Stock
+        f.service.setReorderLevel("s", "P-0003", q("5"));    // never stocked, 0 of 5: Out of Stock
+        f.service.stockIn("s", "P-0004", q("1"), null);      // 1 of 0: In Stock (no threshold set)
+
+        StockOverview overview = f.service;   // no session needed: the caller checks its own permission
+        Map<String, StockSnapshot> byId = new HashMap<>();
+        for (StockSnapshot s : overview.currentStock()) {
+            byId.put(s.productId(), s);
+        }
+        check("StockOverview: IN_STOCK above the reorder level", byId.get("P-0001").level() == StockSnapshot.Level.IN_STOCK
+                && byId.get("P-0001").onHand().compareTo(q("20")) == 0
+                && byId.get("P-0001").reorderLevel().compareTo(q("5")) == 0);
+        check("StockOverview: LOW_STOCK at or below the reorder level", byId.get("P-0002").level() == StockSnapshot.Level.LOW_STOCK);
+        check("StockOverview: OUT_OF_STOCK with nothing left", byId.get("P-0003").level() == StockSnapshot.Level.OUT_OF_STOCK
+                && byId.get("P-0003").onHand().signum() == 0);
+        check("StockOverview: reorder level 0 is never LOW_STOCK", byId.get("P-0004").level() == StockSnapshot.Level.IN_STOCK
+                && byId.get("P-0004").reorderLevel().signum() == 0);
+        check("StockOverview: a product never stocked shows 0, Out of Stock", byId.containsKey("P-0007")
+                && byId.get("P-0007").onHand().signum() == 0 && byId.get("P-0007").level() == StockSnapshot.Level.OUT_OF_STOCK);
+        check("StockOverview: the same rows, in the same order, as the Current Stock screen",
+                overview.currentStock().stream().map(StockSnapshot::productId).toList()
+                        .equals(f.service.listStock("s").stream().map(StockRow::productId).toList()));
+    }
+
     private static void salesRules() throws Exception {
         Fixture f = new Fixture();
         f.service.stockIn("s", "P-0001", q("10"), null);
