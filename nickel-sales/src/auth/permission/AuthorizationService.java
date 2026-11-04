@@ -13,7 +13,8 @@ public class AuthorizationService {
     private static final Map<UserRole, Set<Permission>> MATRIX = Map.of(
         UserRole.ADMIN, EnumSet.allOf(Permission.class),
         UserRole.CASHIER, EnumSet.of(Permission.PROCESS_SALE),
-        UserRole.INVENTORY_STAFF, EnumSet.of(Permission.UPDATE_INVENTORY, Permission.MANAGE_PRODUCTS, Permission.VIEW_REPORTS));
+        UserRole.INVENTORY_STAFF, EnumSet.of(Permission.UPDATE_INVENTORY, Permission.MANAGE_PRODUCTS,
+                Permission.VIEW_INVENTORY_REPORTS));   // Story 5: inventory reports, never sales reports
 
     //returns the set of permissions for a given set of user roles
     public Set<Permission> permissionsForUser(Set<UserRole> roles) {

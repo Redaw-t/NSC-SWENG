@@ -34,7 +34,7 @@ public final class Modules {
                 // Inventory (stock in/out)
                 new InventoryModule(),
                 // Transaction & Reports: replace with your module
-                new ComingSoonModule("Reports", "Sales and inventory reports", Permission.VIEW_REPORTS),
+                new ComingSoonModule("Reports", "Sales and inventory reports", Permission.VIEW_INVENTORY_REPORTS),
                 // User & Access Management
                 new UserAdminModule(),
                 // Synchronization / Audit & System: replace with your module
