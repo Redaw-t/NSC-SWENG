@@ -98,13 +98,28 @@ public class BarcodeService {
         assigner.assignBarcode(productId, barcode.trim());
     }
 
-    /** Prints labels for a product that has a barcode. */
+    /** Prints labels for a product that has a barcode, with both prices. */
     public void printLabels(ProductInfo product, int copies) throws LabelPrintException {
+        printLabels(product, copies, true, true);
+    }
+
+    /** Prints labels with only the ticked prices (retail, wholesale, both or none). */
+    public void printLabels(ProductInfo product, int copies, boolean showRetail, boolean showWholesale)
+            throws LabelPrintException {
         Objects.requireNonNull(product, "product");
         if (product.barcode() == null || product.barcode().isBlank()) {
             throw new LabelPrintException(product.name() + " has no barcode yet. Generate one first.");
         }
-        printer.printLabel(product.name(), product.barcode(), copies);
+        printer.printLabel(LabelContent.of(product, showRetail, showWholesale), copies);
+    }
+
+    /** The label exactly as {@link #printLabels} prints it, for the preview; null if it has no barcode. */
+    public LabelBitmap previewLabel(ProductInfo product, boolean showRetail, boolean showWholesale) {
+        Objects.requireNonNull(product, "product");
+        if (product.barcode() == null || product.barcode().isBlank()) {
+            return null;
+        }
+        return printer.render(LabelContent.of(product, showRetail, showWholesale));
     }
 
     private static String key(String barcode) {

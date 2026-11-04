@@ -1,12 +1,19 @@
 package barcode.service;
 
-/** Prints a barcode label. The app uses {@link EscPosLabelPrinter}; another printer can be swapped in. */
+/**
+ * Prints product labels. The app uses {@link EscPosLabelPrinter}; another printer can be swapped in.
+ * {@link #render} and {@link #printLabel} must use the same drawing, so the preview is exactly what
+ * prints.
+ */
 public interface LabelPrinterPort {
 
+    /** The label exactly as it will print (for the preview). */
+    LabelBitmap render(LabelContent label);
+
     /**
-     * Prints {@code copies} labels (1-100) with the product name, the barcode bars and its number.
+     * Prints {@code copies} labels (1-100).
      *
      * @throws LabelPrintException with a message ready to show (no printer, printer refused, ...)
      */
-    void printLabel(String productName, String barcode, int copies) throws LabelPrintException;
+    void printLabel(LabelContent label, int copies) throws LabelPrintException;
 }

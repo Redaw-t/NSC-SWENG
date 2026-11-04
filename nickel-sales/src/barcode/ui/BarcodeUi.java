@@ -1,12 +1,19 @@
 package barcode.ui;
 
 import barcode.service.BarcodeStatus;
+import barcode.service.LabelBitmap;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.TextField;
+import javafx.scene.effect.DropShadow;
+import javafx.scene.image.ImageView;
+import javafx.scene.image.PixelWriter;
+import javafx.scene.image.WritableImage;
+import javafx.scene.paint.Color;
+import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import shared.Styles;
@@ -106,6 +113,36 @@ final class BarcodeUi {
         }
         StackPane holder = new StackPane(card);
         holder.setAlignment(Pos.CENTER_LEFT);
+        return holder;
+    }
+
+    /**
+     * The label exactly as it prints: the same bitmap the printer gets, shown dot for dot (1 screen
+     * pixel per printer dot) on a white strip like the paper roll.
+     */
+    static Node labelPreview(LabelBitmap label) {
+        if (label == null) {
+            Label none = new Label("No preview");
+            Styles.muted(none);
+            return none;
+        }
+        WritableImage image = new WritableImage(label.width(), label.height());
+        PixelWriter px = image.getPixelWriter();
+        for (int y = 0; y < label.height(); y++) {
+            for (int x = 0; x < label.width(); x++) {
+                px.setColor(x, y, label.isBlack(x, y) ? Color.BLACK : Color.WHITE);
+            }
+        }
+        ImageView view = new ImageView(image);
+        view.setSmooth(false);   // keep the dots sharp, as on the paper
+        StackPane paper = new StackPane(view);
+        paper.setPadding(new Insets(14, 0, 14, 0));
+        paper.setStyle("-fx-background-color: white; -fx-border-color: " + Theme.BORDER + "; "
+                + "-fx-border-style: dashed solid dashed solid;");   // dashed top / bottom: where it tears off
+        paper.setEffect(new DropShadow(10, 0, 2, Color.rgb(0, 0, 0, 0.12)));
+        paper.setMaxWidth(Region.USE_PREF_SIZE);
+        StackPane holder = new StackPane(paper);
+        holder.setAlignment(Pos.CENTER);
         return holder;
     }
 }

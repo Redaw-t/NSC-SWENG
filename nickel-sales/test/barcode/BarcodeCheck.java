@@ -5,7 +5,10 @@ import barcode.service.BarcodeService;
 import barcode.service.BarcodeStatus;
 import barcode.service.Ean;
 import barcode.service.LabelPrintException;
+import barcode.service.LabelBitmap;
+import barcode.service.LabelContent;
 import barcode.service.LabelPrinterPort;
+import barcode.service.LabelRenderer;
 import product.contract.BarcodeAssignException;
 import product.contract.BarcodeAssigner;
 import product.contract.BarcodeEntry;
@@ -114,18 +117,53 @@ public final class BarcodeCheck {
             }
         });
 
-        check("Label printer: ESC/POS bytes have the name, the right barcode type and the digits", () -> {
-            byte[] ean = EscPosLabelPrinter.toBytes("Bond Paper A4 (ream)", "4800000000019", 1);
-            String text = new String(ean, StandardCharsets.ISO_8859_1);
-            yes(text.contains("Bond Paper A4 (ream)"), "name printed");
-            yes(text.contains("\u001Dk" + (char) 67 + (char) 13 + "4800000000019"), "EAN-13 command: GS k 67 13 digits");
-            yes(!text.contains("\u001Dk" + (char) 73), "an EAN code does not use CODE128");
-            byte[] two = EscPosLabelPrinter.toBytes("X", "4800000000019", 2);
-            yes(two.length > ean.length, "two copies are longer than one");
-            String odd = new String(EscPosLabelPrinter.toBytes("X", "ZZTEST-1", 1), StandardCharsets.ISO_8859_1);
-            yes(odd.contains("\u001Dk" + (char) 73), "text codes use CODE128");
-            yes(odd.contains("{BZZTEST-1"), "CODE128 set B data");
-            yes(Arrays.equals(Arrays.copyOf(ean, 2), new byte[] {0x1B, 0x40}), "starts with reset");
+        check("Label: one bitmap for preview and print; EAN or CODE128 bars; long names cut with ...", () -> {
+            LabelContent content = new LabelContent("Bond Paper A4 (ream)", "4800000000019",
+                    new BigDecimal("112.00"), new BigDecimal("100.80"));
+            LabelBitmap label = LabelRenderer.render("Nickel Sales Center", content, LabelRenderer.WIDTH_58MM);
+            yes(label.width() == 384, "58 mm = 384 dots wide");
+            yes(label.height() > 150 && label.height() < 400, "a few cm tall: " + label.height());
+            EscPosLabelPrinter printer = new EscPosLabelPrinter("Nickel Sales Center");
+            LabelBitmap preview = printer.render(content);
+            yes(Arrays.equals(preview.toEscPosRaster(), label.toEscPosRaster()), "the preview is exactly what prints");
+
+            byte[] one = EscPosLabelPrinter.toBytes(label, 1);
+            yes(Arrays.equals(Arrays.copyOf(one, 2), new byte[] {0x1B, 0x40}), "starts with reset");
+            String text = new String(one, StandardCharsets.ISO_8859_1);
+            yes(text.contains("\u001Dv0"), "sent as one raster picture (GS v 0)");
+            yes(!text.contains("\u001Dk"), "no printer barcode command: the printer draws nothing itself");
+            byte[] two = EscPosLabelPrinter.toBytes(label, 2);
+            yes(two.length > one.length, "two copies are longer than one");
+
+            LabelBitmap code128 = LabelRenderer.render("Nickel Sales Center",
+                    new LabelContent("X", "ZZTEST-1", new BigDecimal("5.00"), null), LabelRenderer.WIDTH_58MM);
+            yes(code128.height() > 100, "a text code renders too (CODE128)");
+
+            java.awt.Graphics2D g = new java.awt.image.BufferedImage(1, 1,
+                    java.awt.image.BufferedImage.TYPE_INT_RGB).createGraphics();
+            String cut = LabelRenderer.fitForCheck(g, "A very very very very very very very long product name here", 200);
+            yes(cut.endsWith("..."), "too long: ends with ...: " + cut);
+            yes(g.getFontMetrics(LabelRenderer.nameFontForCheck()).stringWidth(cut) <= 200, "and fits");
+            yes(LabelRenderer.fitForCheck(g, "Pen", 200).equals("Pen"), "short names are left alone");
+        });
+
+        check("Label prices: exactly the prices stored for the product (no VAT added)", () -> {
+            ProductInfo vatable = new ProductInfo("P-9", "4800000000019", "Pen", "pc", new BigDecimal("100.00"),
+                    new BigDecimal("90.00"), true, true, BigDecimal.ZERO);
+            LabelContent c = LabelContent.of(vatable);
+            yes(c.retailPrice().compareTo(new BigDecimal("100.00")) == 0, "retail as stored: " + c.retailPrice());
+            yes(c.wholesalePrice().compareTo(new BigDecimal("90.00")) == 0, "wholesale as stored");
+            ProductInfo exempt = new ProductInfo("P-8", "4800000000019", "Rice", "kg", new BigDecimal("50.00"),
+                    null, false, true, BigDecimal.ZERO);
+            yes(LabelContent.of(exempt).retailPrice().compareTo(new BigDecimal("50.00")) == 0, "exempt: as stored");
+            yes(LabelContent.of(exempt).wholesalePrice() == null, "no wholesale price: none on the label");
+            LabelContent retailOnly = LabelContent.of(vatable, true, false);
+            yes(retailOnly.retailPrice() != null && retailOnly.wholesalePrice() == null, "untick wholesale: retail only");
+            LabelContent none = LabelContent.of(vatable, false, false);
+            yes(none.retailPrice() == null && none.wholesalePrice() == null, "untick both: no prices");
+            int withPrices = LabelRenderer.render("S", LabelContent.of(vatable), 384).height();
+            int withoutPrices = LabelRenderer.render("S", none, 384).height();
+            yes(withoutPrices < withPrices, "no prices: a shorter label");
         });
 
 
@@ -287,8 +325,13 @@ public final class BarcodeCheck {
         String last = "";
 
         @Override
-        public void printLabel(String productName, String barcode, int copies) {
-            last = productName + "|" + barcode + "|" + copies;
+        public LabelBitmap render(LabelContent label) {
+            return LabelRenderer.render("Test", label, LabelRenderer.WIDTH_58MM);
+        }
+
+        @Override
+        public void printLabel(LabelContent label, int copies) {
+            last = label.productName() + "|" + label.barcode() + "|" + copies;
         }
     }
 

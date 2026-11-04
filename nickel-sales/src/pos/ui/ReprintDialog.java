@@ -1,72 +1,80 @@
 package pos.ui;
 
 import javafx.application.Platform;
-import javafx.event.ActionEvent;
-import javafx.scene.control.ButtonBar;
-import javafx.scene.control.ButtonType;
-import javafx.scene.control.Dialog;
+import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.TextField;
-import javafx.scene.layout.VBox;
+import javafx.scene.layout.GridPane;
 import javafx.stage.Window;
 import pos.contract.SaleHistory;
 import pos.contract.SaleRecord;
+import shared.Modal;
+import shared.Styles;
+import shared.Theme;
 import shared.UiErrors;
 
+import java.util.Locale;
 import java.util.Optional;
 
 /**
- * F7 on the POS screen: type an invoice number (the last one is filled in)
- * and Enter to find the saved sale for a reprint. Esc closes.
+ * F6 on the POS screen: type an invoice number (the last one is filled in) and Enter to find the
+ * saved sale for a reprint. Esc closes. Drawn with the shared {@link Modal}.
  */
 final class ReprintDialog {
 
     private ReprintDialog() { }
 
     static Optional<SaleRecord> ask(Window owner, SaleHistory history, String lastInvoice) {
-        Dialog<SaleRecord> dialog = new Dialog<>();
-        dialog.initOwner(owner);
-        dialog.setTitle("Reprint a receipt");
-        dialog.setHeaderText("Invoice number of the sale, e.g. T01-2026-000123");
+        Modal modal = new Modal(owner, 600);
+        SaleRecord[] found = {null};
 
         TextField invoice = new TextField(lastInvoice == null ? "" : lastInvoice);
-        invoice.setStyle("-fx-font-size: 20px;");
-        invoice.setPrefColumnCount(18);
+        invoice.setPromptText("e.g. T01-2026-000123");
+        Styles.underline(invoice);
+
+        GridPane grid = Modal.grid();
+        Modal.row(grid, 0, "Invoice No.", invoice);
+
         Label error = new Label();
         error.setWrapText(true);
-        error.setMaxWidth(420);
-        error.setStyle("-fx-font-weight: bold; -fx-text-fill: " + PosScreen.RED + ";");
-        dialog.getDialogPane().setContent(new VBox(10, invoice, error));
+        Styles.error(error);
 
-        ButtonType find = new ButtonType("Find", ButtonBar.ButtonData.OK_DONE);
-        dialog.getDialogPane().getButtonTypes().addAll(find, ButtonType.CANCEL);
-
-        SaleRecord[] found = new SaleRecord[1];
-        dialog.getDialogPane().lookupButton(find).addEventFilter(ActionEvent.ACTION, e -> {
-            String no = invoice.getText().trim().toUpperCase();
+        Button cancel = new Button("Cancel");
+        Styles.modalButton(cancel, Theme.BORDER, Theme.PRIMARY_TEXT);
+        cancel.setCancelButton(true);
+        cancel.setOnAction(e -> modal.close());
+        Button find = new Button("Find");
+        Styles.modalButton(find, Theme.INFORMATION, "white");
+        find.setDefaultButton(true);
+        find.setOnAction(e -> {
+            String no = invoice.getText() == null ? "" : invoice.getText().trim().toUpperCase(Locale.ROOT);
             if (no.isEmpty()) {
                 error.setText("Type the invoice number.");
-                e.consume();
                 return;
             }
+            SaleRecord sale;
             try {
-                found[0] = history.findByInvoiceNo(no).orElse(null);
+                sale = history.findByInvoiceNo(no).orElse(null);
             } catch (RuntimeException ex) {
                 error.setText(UiErrors.message(ex, "Sales could not be searched. Try again."));
-                e.consume();
                 return;
             }
-            if (found[0] == null) {
+            if (sale == null) {
                 error.setText("No sale has the invoice number " + no + ".");
                 invoice.selectAll();
-                e.consume();
+                return;
             }
+            found[0] = sale;
+            modal.close();
         });
-        dialog.setResultConverter(b -> b == find ? found[0] : null);
+
+        modal.card().getChildren().addAll(Modal.title("Reprint Receipt"),
+                Modal.subtitle("Type the invoice number of the sale."), grid, error, Modal.buttons(cancel, find));
         Platform.runLater(() -> {
             invoice.requestFocus();
             invoice.selectAll();
         });
-        return dialog.showAndWait();
+        modal.showAndWait();
+        return Optional.ofNullable(found[0]);
     }
 }

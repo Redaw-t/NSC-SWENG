@@ -10,9 +10,7 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.Parent;
-import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
-import javafx.scene.control.ButtonType;
 import javafx.scene.control.ContentDisplay;
 import javafx.scene.control.Label;
 import javafx.scene.control.OverrunStyle;
@@ -50,6 +48,7 @@ import pos.contract.SaleRecord;
 import pos.receipt.Receipt;
 import product.contract.ProductInfo;
 import product.contract.ProductLookup;
+import shared.Modal;
 import shared.Money;
 import shared.Quantity;
 import shared.ScaledPane;
@@ -274,14 +273,10 @@ public final class PosScreen {
             showInfo("Nothing to cancel.");
             return;
         }
-        Alert confirm = new Alert(Alert.AlertType.CONFIRMATION,
-                "Cancel this transaction? All " + sale.getItems().size() + " line(s) will be removed. Nothing is saved.",
-                ButtonType.YES, ButtonType.NO);
-        confirm.setTitle("Cancel transaction");
-        confirm.setHeaderText(null);
-        confirm.initOwner(screen.stage());
-        confirm.getDialogPane().setMinHeight(Region.USE_PREF_SIZE);
-        if (confirm.showAndWait().orElse(ButtonType.NO) == ButtonType.YES) {
+        int lines = sale.getItems().size();
+        if (Modal.confirm(screen.stage(), "Cancel Transaction",
+                "Cancel this transaction? All " + lines + (lines == 1 ? " line" : " lines")
+                        + " will be removed. Nothing is saved.", "Cancel Transaction", "Keep Sale")) {
             pos.cancelSale();
             pos.startSale(screen.user().getUserId());
             refresh(null);
@@ -345,7 +340,7 @@ public final class PosScreen {
         if (sale.isPresent()) {
             try {
                 Receipt receipt = screen.app().receipts().buildReprint(sale.get());
-                boolean printed = ReceiptDialog.show(screen.stage(), "Reprint", "Reprint  ·  Invoice "
+                boolean printed = ReceiptDialog.show(screen.stage(), "Reprint Receipt", "Invoice "
                         + sale.get().invoiceNo(), null, receipt, screen.app().receiptPrinter(),
                         screen.app().config().receiptWidth());
                 if (printed) {
@@ -498,14 +493,10 @@ public final class PosScreen {
     private void logout() {
         Sale sale = pos.currentSale().orElse(null);
         if (sale != null && !sale.isEmpty()) {
-            Alert confirm = new Alert(Alert.AlertType.CONFIRMATION,
-                    "Log out? This sale has " + sale.getItems().size() + " line(s); they will be discarded. "
-                            + "Nothing is saved.", ButtonType.YES, ButtonType.NO);
-            confirm.setTitle("Log out");
-            confirm.setHeaderText(null);
-            confirm.initOwner(screen.stage());
-            confirm.getDialogPane().setMinHeight(Region.USE_PREF_SIZE);
-            if (confirm.showAndWait().orElse(ButtonType.NO) != ButtonType.YES) {
+            int lines = sale.getItems().size();
+            if (!Modal.confirm(screen.stage(), "Log Out",
+                    "Log out? This sale has " + lines + (lines == 1 ? " line" : " lines")
+                            + "; they will be discarded. Nothing is saved.", "Log Out", "Stay")) {
                 focusBarcode();
                 return;
             }

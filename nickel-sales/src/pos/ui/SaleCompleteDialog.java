@@ -32,7 +32,7 @@ final class SaleCompleteDialog {
         Label total = new Label("Total " + PosScreen.peso(sale.total())
                 + (p.method() == PaymentMethod.CASH ? "   ·   Cash " + PosScreen.peso(p.amountTendered()) : ""));
         total.setStyle("-fx-font-size: 15px;");
-        ReceiptDialog.show(owner, "Sale complete", "Sale complete  ·  Invoice " + sale.invoiceNo(),
+        ReceiptDialog.show(owner, "Sale Complete", "Invoice " + sale.invoiceNo(),
                 new VBox(4, top, total), receipt, printer, width);
     }
 }

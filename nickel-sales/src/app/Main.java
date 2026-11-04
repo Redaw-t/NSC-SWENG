@@ -110,7 +110,7 @@ public final class Main {
         app.register(SupplierService.class,
                 new SupplierService(supplierRepository, authz, audit));
         app.register(InventoryService.class, inventory);
-        app.register(LabelPrinterPort.class, new EscPosLabelPrinter());   // Barcode tab: product labels
+        app.register(LabelPrinterPort.class, new EscPosLabelPrinter(config.store().name()));   // Barcode tab: product labels (58 mm)
 
         // Transaction & Reports: read-only, over POS's SaleHistory.
         ReportsAccess reportsAccess = ReportsAccess.of(app.auth(), app.authz());

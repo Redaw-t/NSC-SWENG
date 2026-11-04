@@ -8,34 +8,50 @@ import javax.print.SimpleDoc;
 import shared.PrinterSettings;
 
 import java.io.ByteArrayOutputStream;
-import java.nio.charset.StandardCharsets;
 
 /**
- * Prints labels straight to a thermal printer with ESC/POS commands, the same way the receipt
- * printer does (printer: the label printer chosen in Settings > Printers, else NSC_PRINTER_NAME,
- * else the default printer). The bars are drawn by the
- * printer itself (GS k), so no image is needed. EAN-13 / EAN-8 / UPC-A use the printer's own
- * barcode types; any other code is printed as CODE128.
+ * Prints labels on a thermal printer with ESC/POS commands (printer: the label printer chosen in
+ * Settings > Printers, else NSC_PRINTER_NAME, else the default printer).
  *
- * Text is plain ASCII (anything else prints as '?'). A 58 mm printer fits about 32 characters.
+ * The whole label (store name, product name, bars, number, prices) is drawn by {@link LabelRenderer}
+ * and sent as ONE picture (GS v 0), never with the printer's own fonts or barcode command. So every
+ * printer model prints exactly the dots the preview shows.
  */
 public class EscPosLabelPrinter implements LabelPrinterPort {
 
     public static final int MAX_COPIES = 100;
-    private static final int NAME_WIDTH = 32;
     private static final int FEED_LINES = 3;
 
+    private final String storeName;
+    private final int widthDots;
+
+    /** A 58 mm printer (384 dots wide). */
+    public EscPosLabelPrinter(String storeName) {
+        this(storeName, LabelRenderer.WIDTH_58MM);
+    }
+
+    /** @param widthDots the paper's printable width in dots (384 for 58 mm, 576 for 80 mm) */
+    public EscPosLabelPrinter(String storeName, int widthDots) {
+        this.storeName = storeName;
+        this.widthDots = widthDots;
+    }
+
     @Override
-    public void printLabel(String productName, String barcode, int copies) throws LabelPrintException {
+    public LabelBitmap render(LabelContent label) {
+        return LabelRenderer.render(storeName, label, widthDots);
+    }
+
+    @Override
+    public void printLabel(LabelContent label, int copies) throws LabelPrintException {
         if (copies < 1 || copies > MAX_COPIES) {
             throw new LabelPrintException("Copies must be 1 to " + MAX_COPIES + ".");
         }
-        String problem = BarcodeValidator.problemWith(barcode);
+        String problem = BarcodeValidator.problemWith(label.barcode());
         if (problem != null) {
             throw new LabelPrintException(problem);
         }
         PrintService service = findPrinter();
-        byte[] data = toBytes(productName, barcode.trim(), copies);
+        byte[] data = toBytes(render(label), copies);
         try {
             DocPrintJob job = service.createPrintJob();
             job.print(new SimpleDoc(data, DocFlavor.BYTE_ARRAY.AUTOSENSE, null), null);
@@ -45,8 +61,9 @@ public class EscPosLabelPrinter implements LabelPrinterPort {
         }
     }
 
-    /** The raw bytes for the print job (public so a check can verify the commands without a printer). */
-    public static byte[] toBytes(String productName, String barcode, int copies) {
+    /** The raw bytes for the print job (public so a check can verify them without a printer). */
+    public static byte[] toBytes(LabelBitmap label, int copies) {
+        byte[] picture = label.toEscPosRaster();
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         out.write(0x1B);                                  // ESC @ : reset
         out.write(0x40);
@@ -54,55 +71,12 @@ public class EscPosLabelPrinter implements LabelPrinterPort {
             out.write(0x1B);                              // ESC a 1 : centre
             out.write(0x61);
             out.write(1);
-            writeText(out, shorten(productName));
-            out.write(0x1D);                              // GS h 80 : bar height
-            out.write(0x68);
-            out.write(80);
-            out.write(0x1D);                              // GS w 2 : bar width
-            out.write(0x77);
-            out.write(2);
-            out.write(0x1D);                              // GS H 2 : print the number below the bars
-            out.write(0x48);
-            out.write(2);
-            writeBarcode(out, barcode);
-            out.write('\n');
-            out.write(0x1B);                              // ESC d n : feed
+            out.write(picture, 0, picture.length);
+            out.write(0x1B);                              // ESC d n : feed, so labels can be torn apart
             out.write(0x64);
             out.write(FEED_LINES);
         }
         return out.toByteArray();
-    }
-
-    private static void writeBarcode(ByteArrayOutputStream out, String barcode) {
-        BarcodeValidator.Format format = BarcodeValidator.formatOf(barcode);
-        out.write(0x1D);                                  // GS k m n d1..dn
-        out.write(0x6B);
-        switch (format) {
-            case UPC_A -> out.write(65);
-            case EAN_13 -> out.write(67);
-            case EAN_8 -> out.write(68);
-            case OTHER -> {
-                out.write(73);                            // CODE128
-                byte[] body = ("{B" + barcode).getBytes(StandardCharsets.US_ASCII);   // code set B
-                out.write(body.length);
-                out.write(body, 0, body.length);
-                return;
-            }
-        }
-        byte[] digits = barcode.getBytes(StandardCharsets.US_ASCII);
-        out.write(digits.length);
-        out.write(digits, 0, digits.length);
-    }
-
-    private static void writeText(ByteArrayOutputStream out, String text) {
-        byte[] b = text.getBytes(StandardCharsets.US_ASCII);
-        out.write(b, 0, b.length);
-        out.write('\n');
-    }
-
-    private static String shorten(String name) {
-        String n = name == null ? "" : name.trim();
-        return n.length() <= NAME_WIDTH ? n : n.substring(0, NAME_WIDTH);
     }
 
     /** The printer chosen in Settings > Printers, else NSC_PRINTER_NAME, else the Windows default. */

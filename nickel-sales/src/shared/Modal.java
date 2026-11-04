@@ -81,6 +81,14 @@ public final class Modal {
         stage.close();
     }
 
+    /** Resizes the pop-up to its content after the content changed size, and centres it again. */
+    public void sizeToFit() {
+        if (stage.isShowing()) {
+            stage.sizeToScene();
+            center();
+        }
+    }
+
     /* ------------------------------ building blocks ------------------------------ */
 
     /** The big title at the top. */
@@ -138,6 +146,14 @@ public final class Modal {
 
     /** The "Are you sure?" pop-up. True if the user pressed the (red) confirm button. */
     public static boolean confirm(Window owner, String title, String message, String confirmText) {
+        return confirm(owner, title, message, confirmText, "Cancel");
+    }
+
+    /**
+     * Same, with your own text on the grey button: e.g. "Keep Sale" next to "Cancel Transaction",
+     * where a plain "Cancel" would be confusing.
+     */
+    public static boolean confirm(Window owner, String title, String message, String confirmText, String cancelText) {
         Modal modal = new Modal(owner, 520);
         boolean[] confirmed = {false};
 
@@ -145,7 +161,7 @@ public final class Modal {
         Styles.modalLabel(body);
         body.setWrapText(true);
 
-        Button cancel = new Button("Cancel");
+        Button cancel = new Button(cancelText);
         Styles.modalButton(cancel, Theme.BORDER, Theme.PRIMARY_TEXT);
         cancel.setCancelButton(true);
         cancel.setOnAction(e -> modal.close());

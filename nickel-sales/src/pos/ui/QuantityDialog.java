@@ -1,52 +1,71 @@
 package pos.ui;
 
 import javafx.application.Platform;
-import javafx.scene.control.ButtonType;
-import javafx.scene.control.Dialog;
+import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.TextField;
-import javafx.scene.layout.VBox;
+import javafx.scene.layout.GridPane;
 import javafx.stage.Window;
 import pos.cart.SaleLineItem;
+import shared.Modal;
 import shared.Quantity;
+import shared.Styles;
+import shared.Theme;
 
 import java.math.BigDecimal;
 import java.util.Optional;
 
-/** F4 / Enter on a cart line: type the new quantity, Enter to apply, Esc to keep it. */
+/**
+ * F3 / Enter on a cart line: type the new quantity, Enter to apply, Esc to keep it. Drawn with the
+ * shared {@link Modal}, like the pop-ups of the other screens.
+ */
 final class QuantityDialog {
 
     private QuantityDialog() { }
 
     static Optional<BigDecimal> ask(Window owner, SaleLineItem line) {
-        Dialog<BigDecimal> dialog = new Dialog<>();
-        dialog.initOwner(owner);
-        dialog.setTitle("Change quantity");
-        dialog.setHeaderText(line.productName() + "  (now " + Quantity.format(line.quantity()) + " " + line.unit() + ")");
+        Modal modal = new Modal(owner, 560);
+        BigDecimal[] result = {null};
 
         TextField field = new TextField(Quantity.format(line.quantity()));
-        field.setStyle("-fx-font-size: 20px;");
-        Label error = new Label();
-        error.setStyle("-fx-text-fill: " + PosScreen.RED + ";");
-        dialog.getDialogPane().setContent(new VBox(8, new Label("New quantity (e.g. 6 or 1.5):"), field, error));
-        dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
+        field.setPromptText("e.g. 6 or 1.5");
+        Styles.underline(field);
 
-        // Keep the dialog open until the text is a number above 0.
-        dialog.getDialogPane().lookupButton(ButtonType.OK).addEventFilter(javafx.event.ActionEvent.ACTION, e -> {
+        GridPane grid = Modal.grid();
+        Modal.row(grid, 0, "New Quantity", field);
+
+        Label error = new Label();
+        error.setWrapText(true);
+        Styles.error(error);
+
+        Button cancel = new Button("Cancel");
+        Styles.modalButton(cancel, Theme.BORDER, Theme.PRIMARY_TEXT);
+        cancel.setCancelButton(true);
+        cancel.setOnAction(e -> modal.close());
+        Button apply = new Button("Apply");
+        Styles.modalButton(apply, Theme.INFORMATION, "white");
+        apply.setDefaultButton(true);
+        apply.setOnAction(e -> {
             BigDecimal q = parse(field.getText());
             if (q == null) {
                 error.setText("Type a number above 0, e.g. 6 or 1.5.");
                 field.requestFocus();
                 field.selectAll();
-                e.consume();
+                return;
             }
+            result[0] = q;
+            modal.close();
         });
-        dialog.setResultConverter(b -> b == ButtonType.OK ? parse(field.getText()) : null);
+
+        modal.card().getChildren().addAll(Modal.title("Change Quantity"),
+                Modal.subtitle(line.productName() + "  (now " + Quantity.format(line.quantity()) + " " + line.unit() + ")"),
+                grid, error, Modal.buttons(cancel, apply));
         Platform.runLater(() -> {
             field.requestFocus();
             field.selectAll();
         });
-        return dialog.showAndWait();
+        modal.showAndWait();
+        return Optional.ofNullable(result[0]);
     }
 
     private static BigDecimal parse(String text) {
