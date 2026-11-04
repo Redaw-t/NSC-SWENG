@@ -78,7 +78,7 @@ final class ProductsPane {
     private final SearchPicker<StatusFilter> statusFilter = new SearchPicker<>(false, false);   // same look as the others, no search box
     private final SearchPicker<Supplier> supplierFilter = new SearchPicker<>(false);
     private final TableView<Product> table = Tables.create();
-    private final TablePager pager = TablePager.links(this::showPage);
+    private final TablePager pager = TablePager.boxed(this::showPage);
     private final Label message = new Label();
     private final VBox view = new VBox(16);
 

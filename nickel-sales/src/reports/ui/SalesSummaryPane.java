@@ -46,7 +46,7 @@ final class SalesSummaryPane implements ReportsPane {
     private final Label retail = new Label();
     private final Label wholesale = new Label();
     private final TableView<SalesBucket> table = Tables.create();
-    private final TablePager pager = TablePager.links(this::showPage);
+    private final TablePager pager = TablePager.boxed(this::showPage);
     private final Label message = ReportsUi.messageLabel();
     private final VBox view = new VBox(16);
 

@@ -86,7 +86,7 @@ final class ActivityLogPane implements SystemPane {
     private final SearchPicker<ModuleChoice> moduleFilter = new SearchPicker<>(false, false);
     private final TextField search = SystemUi.searchField("Search logs...", this::load);
     private final TableView<ActivityEntry> table = Tables.create();
-    private final TablePager pager = TablePager.links(this::showPage);
+    private final TablePager pager = TablePager.boxed(this::showPage);
     private final Label totalValue = new Label("0");
     private final Label signInValue = new Label("0");
     private final Label failedValue = new Label("0");

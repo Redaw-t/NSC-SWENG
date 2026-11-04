@@ -45,7 +45,7 @@ final class InventoryPane implements ReportsPane {
     private final SearchPicker<Choice<Show>> show = new SearchPicker<>(false, false);
     private final TextField search = ReportsUi.searchField("Search product or code...", this::filter);
     private final TableView<StockSnapshot> table = Tables.create();
-    private final TablePager pager = TablePager.links(this::showPage);
+    private final TablePager pager = TablePager.boxed(this::showPage);
     private final Label totalValue = new Label("0");
     private final Label lowValue = new Label("0");
     private final Label outValue = new Label("0");

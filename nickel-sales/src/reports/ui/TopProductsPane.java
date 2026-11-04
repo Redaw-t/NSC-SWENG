@@ -40,7 +40,7 @@ final class TopProductsPane implements ReportsPane {
     private final SearchPicker<ProductRanking> ranking = new SearchPicker<>(false, false);
     private final SearchPicker<Choice<Integer>> size = new SearchPicker<>(false, false);
     private final TableView<ProductSales> table = Tables.create();
-    private final TablePager pager = TablePager.links(this::showPage);
+    private final TablePager pager = TablePager.boxed(this::showPage);
     private final Label message = ReportsUi.messageLabel();
     private final VBox view = new VBox(16);
 

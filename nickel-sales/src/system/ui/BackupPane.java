@@ -60,7 +60,7 @@ final class BackupPane implements SystemPane {
     private final Button backupNow = SystemUi.applyButton("Back Up Now");
     private final Button restore = SystemUi.secondaryButton("Restore from Backup");
     private final TableView<BackupRecord> table = Tables.create();
-    private final TablePager pager = TablePager.links(this::showPage);
+    private final TablePager pager = TablePager.boxed(this::showPage);
     private final Label lastValue = new Label("None");
     private final Label okValue = new Label("0");
     private final Label failedValue = new Label("0");

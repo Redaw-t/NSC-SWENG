@@ -68,7 +68,7 @@ final class InventoryLogPane implements SystemPane {
     private final SearchPicker<TypeChoice> typeFilter = new SearchPicker<>(false, false);
     private final TextField search = SystemUi.searchField("Search product or reference...", this::load);
     private final TableView<InventoryLogEntry> table = Tables.create();
-    private final TablePager pager = TablePager.links(this::showPage);
+    private final TablePager pager = TablePager.boxed(this::showPage);
     private final Label totalValue = new Label("0");
     private final Label inValue = new Label("0");
     private final Label outValue = new Label("0");

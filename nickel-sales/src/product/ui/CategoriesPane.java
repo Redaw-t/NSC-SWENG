@@ -40,7 +40,7 @@ final class CategoriesPane {
 
     private final TextField search = new TextField();
     private final TableView<Category> table = Tables.create();
-    private final TablePager pager = TablePager.links(this::showPage);
+    private final TablePager pager = TablePager.boxed(this::showPage);
     private final Label message = new Label();
     private final VBox view = new VBox(16);
 

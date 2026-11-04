@@ -64,7 +64,7 @@ public final class BarcodePane {
     private final TextField search = new TextField();
     private final SearchPicker<StatusFilter> statusFilter = new SearchPicker<>(false, false);
     private final TableView<BarcodeRow> table = Tables.create();
-    private final TablePager pager = TablePager.links(this::showPage);
+    private final TablePager pager = TablePager.boxed(this::showPage);
     private final Label message = new Label();
     private final VBox view = new VBox(16);
 

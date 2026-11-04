@@ -54,7 +54,7 @@ final class TransactionsPane implements ReportsPane {
     private final SearchPicker<Choice<PaymentMethod>> method = new SearchPicker<>(false, false);
     private final TextField invoice = ReportsUi.searchField("Invoice no.", this::load);
     private final TableView<SaleRecord> table = Tables.create();
-    private final TablePager pager = TablePager.links(this::showPage);
+    private final TablePager pager = TablePager.boxed(this::showPage);
     private final Label countValue = new Label("0");
     private final Label totalValue = new Label(ReportsUi.peso(Money.ZERO));
     private final Label message = ReportsUi.messageLabel();

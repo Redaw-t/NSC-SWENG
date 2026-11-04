@@ -42,7 +42,7 @@ final class CashierPane implements ReportsPane {
     private final SearchPicker<Choice<Boolean>> groupBy = new SearchPicker<>(false, false);
     private final TableView<GroupTotal> table = Tables.create();
     private final TableColumn<GroupTotal, String> keyColumn;
-    private final TablePager pager = TablePager.links(this::showPage);
+    private final TablePager pager = TablePager.boxed(this::showPage);
     private final Label countValue = new Label("0");
     private final Label totalValue = new Label(ReportsUi.peso(Money.ZERO));
     private final Label message = ReportsUi.messageLabel();

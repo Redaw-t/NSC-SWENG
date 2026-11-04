@@ -64,7 +64,7 @@ final class SyncLogPane implements SystemPane {
     private final SearchPicker<StatusChoice> statusFilter = new SearchPicker<>(false, false);
     private final TextField search = SystemUi.searchField("Search record or terminal...", this::load);
     private final TableView<SyncLogEntry> table = Tables.create();
-    private final TablePager pager = TablePager.links(this::showPage);
+    private final TablePager pager = TablePager.boxed(this::showPage);
     private final Label unsentValue = new Label("0");
     private final Label failedValue = new Label("0");
     private final Label syncedValue = new Label("0");

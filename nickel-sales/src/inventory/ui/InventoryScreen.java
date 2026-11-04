@@ -106,8 +106,8 @@ public final class InventoryScreen {
     private boolean updatingCategories;   // true while the screen refills the Category drop-down itself
     private final TableView<StockRow> stockTable = Tables.create();
     private final TableView<StockMovement> historyTable = Tables.create();
-    private final TablePager stockPager = TablePager.links(this::showStockPage);
-    private final TablePager historyPager = TablePager.links(this::showHistoryPage);
+    private final TablePager stockPager = TablePager.boxed(this::showStockPage);
+    private final TablePager historyPager = TablePager.boxed(this::showHistoryPage);
     private final StackPane pagerSlot = new StackPane();
     private final Label totalValue = new Label("0");
     private final Label lowValue = new Label("0");
