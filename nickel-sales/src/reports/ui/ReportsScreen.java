@@ -39,7 +39,7 @@ final class ReportsScreen {
         this.tabs = List.copyOf(tabs);
         this.bar = new TabBar(this.tabs.stream().map(Tab::label).toList(), this::show);
 
-        Label hint = new Label("F5: refresh   |   Enter in a date box: apply");
+        Label hint = new Label("F5: refresh");
         Styles.muted(hint);
         VBox header = new VBox(6, bar.getView(), hint);
         header.setAlignment(Pos.CENTER_RIGHT);
