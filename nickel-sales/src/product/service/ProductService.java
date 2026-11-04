@@ -14,10 +14,8 @@ import product.repository.CategoryRepository;
 import product.repository.DuplicateValueException;
 import product.repository.ProductRepository;
 import product.repository.SupplierRepository;
-
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -171,6 +169,8 @@ public class ProductService implements ProductLookup {
 
     private static String price(BigDecimal p) {
         return p == null ? "none" : p.setScale(2, RoundingMode.HALF_UP).toPlainString();
+    }
+    
     /**
      * Every sold (active) product with the time its record last changed, sorted by name, for the
      * Barcode screen.
