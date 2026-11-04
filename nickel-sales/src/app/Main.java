@@ -5,6 +5,7 @@ import auth.contract.AuditLogger;
 import auth.permission.AuthorizationService;
 import inventory.contract.InsufficientStockException;
 import inventory.contract.StockLine;
+import inventory.contract.StockOverview;
 import inventory.contract.StockRecorder;
 import inventory.repository.MySqlInventoryRepository;
 import inventory.service.InventoryAccess;
@@ -19,6 +20,7 @@ import product.service.CategoryService;
 import product.service.ProductService;
 import product.service.SupplierService;
 import reports.service.CashierReportService;
+import reports.service.InventoryReportService;
 import reports.service.ProductPerformanceService;
 import reports.service.ReportsAccess;
 import reports.service.SalesReportService;
@@ -91,6 +93,9 @@ public final class Main {
         app.register(ProductPerformanceService.class,
                 new ProductPerformanceService(app.saleHistory(), reportsAccess));
         app.register(CashierReportService.class, new CashierReportService(app.saleHistory(), reportsAccess));
+        // Inventory report: current stock through Inventory's read-only StockOverview.
+        app.register(StockOverview.class, inventory);
+        app.register(InventoryReportService.class, new InventoryReportService(inventory, reportsAccess));
 
         return app;
     }

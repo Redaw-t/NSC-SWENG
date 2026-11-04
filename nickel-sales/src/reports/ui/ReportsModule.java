@@ -7,6 +7,7 @@ import app.ScreenContext;
 import auth.permission.Permission;
 import javafx.scene.Parent;
 import reports.service.CashierReportService;
+import reports.service.InventoryReportService;
 import reports.service.ProductPerformanceService;
 import reports.service.SalesReportService;
 import reports.service.TransactionHistoryService;
@@ -68,8 +69,13 @@ public final class ReportsModule implements AppModule {
             tabs.add(new ReportsScreen.Tab("Cashiers & Terminals", new CashierPane(screen, cashiers)));
         }
 
+        if (app.authz().checkAccess(screen.user(), Permission.VIEW_INVENTORY_REPORTS)) {
+            app.find(InventoryReportService.class).ifPresent(inventory ->
+                    tabs.add(new ReportsScreen.Tab("Inventory", new InventoryPane(screen, inventory))));
+        }
+
         if (tabs.isEmpty()) {
-            return ComingSoonView.notice(TITLE, "The inventory report is not connected in this build yet.");
+            return ComingSoonView.notice(TITLE, "The inventory report is not connected in this build.");
         }
         return new ReportsScreen(tabs).getView();
     }

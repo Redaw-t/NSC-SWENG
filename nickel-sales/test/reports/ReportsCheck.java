@@ -5,6 +5,8 @@ import auth.contract.UserRole;
 import auth.contract.UserStatus;
 import auth.permission.AuthorizationService;
 import auth.permission.Permission;
+import inventory.contract.StockOverview;
+import inventory.contract.StockSnapshot;
 import pos.contract.PaymentMethod;
 import pos.contract.PaymentRecord;
 import pos.contract.PriceType;
@@ -12,6 +14,7 @@ import pos.contract.SaleHistory;
 import pos.contract.SaleLineRecord;
 import pos.contract.SaleRecord;
 import reports.model.GroupTotal;
+import reports.model.InventoryReport;
 import reports.model.ProductRanking;
 import reports.model.ProductSales;
 import reports.model.ReportFilter;
@@ -19,6 +22,7 @@ import reports.model.ReportPeriod;
 import reports.model.SalesSummary;
 import reports.model.TransactionList;
 import reports.service.CashierReportService;
+import reports.service.InventoryReportService;
 import reports.service.ProductPerformanceService;
 import reports.service.ReportException;
 import reports.service.ReportsAccess;
@@ -41,7 +45,8 @@ import java.util.Optional;
 /**
  * SELF-TEST for Transaction &amp; Reports. Builds completed sales in memory (no database) and
  * checks the totals, the period boundaries in Philippine time, the top-N order and its
- * tie-breaks, grouping by cashier and terminal, the transaction filters, and who may see what.
+ * tie-breaks, grouping by cashier and terminal, the transaction filters, the inventory
+ * report (with an in-memory StockOverview), and who may see what.
  *
  * Run after any run-demo build, from nickel-sales/:
  *   java -cp "out;lib\jbcrypt-0.4.jar;lib\mysql-connector-j-9.4.0.jar" reports.ReportsCheck
@@ -278,6 +283,36 @@ public class ReportsCheck {
             expectTrue(e.getMessage().startsWith("The sales could not be loaded"), e.getMessage());
         });
 
+        // ---- inventory report ------------------------------------------------------------
+        StockOverview stock = () -> List.of(
+                snapshot("P-1", "Bond Paper", "40", "10", StockSnapshot.Level.IN_STOCK),
+                snapshot("P-2", "Rice", "5", "10", StockSnapshot.Level.LOW_STOCK),
+                snapshot("P-3", "Marker", "0", "5", StockSnapshot.Level.OUT_OF_STOCK),
+                snapshot("P-4", "Stapler", "10", "10", StockSnapshot.Level.LOW_STOCK));
+        InventoryReportService inventory = new InventoryReportService(stock, ACCESS);
+
+        check("Inventory report: all products, low stock and out of stock (no overlap)", () -> {
+            InventoryReport r = inventory.current(ADMIN);
+            expectTrue(r.all().size() == 4, "4 products");
+            expectText(String.join(",", r.lowStock().stream().map(StockSnapshot::productId).toList()), "P-2,P-4");
+            expectText(String.join(",", r.outOfStock().stream().map(StockSnapshot::productId).toList()), "P-3");
+        });
+
+        check("Inventory report: inventory staff and admin may see it; cashiers may not", () -> {
+            inventory.current("s-inventory");
+            inventory.current(ADMIN);
+            expectDenied(() -> inventory.current("s-cashier"), "inventory reports");
+            expectDenied(() -> inventory.current("s-inactive"), "inventory reports");
+        });
+
+        check("Inventory report: a database problem becomes a message", () -> {
+            StockOverview broken = () -> {
+                throw new IllegalStateException("connection refused");
+            };
+            ReportException e = expectReportException(() -> new InventoryReportService(broken, ACCESS).current(ADMIN));
+            expectTrue(e.getMessage().startsWith("The stock could not be loaded"), e.getMessage());
+        });
+
         // ---- permissions -----------------------------------------------------------------
         check("Permissions: admin sees every sales report", () -> {
             ReportPeriod day = ReportPeriod.day(NOV_4);
@@ -425,6 +460,10 @@ public class ReportsCheck {
                 total, total, Money.ZERO);
         return new SaleRecord(id, invoiceNo, terminal, cashier, Instant.parse(completedAtUtc), records,
                 List.of(payment), vatable, exempt, vat, total);
+    }
+
+    static StockSnapshot snapshot(String id, String name, String onHand, String reorder, StockSnapshot.Level level) {
+        return new StockSnapshot(id, name, null, "pc", Quantity.of(onHand), Quantity.of(reorder), level);
     }
 
     static User user(String id, UserStatus status, UserRole... roles) {
