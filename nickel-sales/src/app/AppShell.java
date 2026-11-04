@@ -24,7 +24,7 @@ import java.util.function.Consumer;
 
 /**
  * The frame around a screen: a left sidebar (logo and name, Dashboard, POS, Products,
- * Inventory, Reports, Users, Settings, who is logged in, Logout) with the screen itself
+ * Inventory, Reports, Users, Audit Logs, Settings, who is logged in, Logout) with the screen itself
  * on the right.
  *
  * <p>The router wraps the Dashboard, Settings and every module whose
@@ -42,7 +42,7 @@ public final class AppShell {
 
     /** Title of the Settings entry; the router opens it as a screen, not as a module. */
     public static final String SETTINGS = "Settings";
-    /** The \"System & sync\" module (see {@link Modules}); it is reached from Settings. */
+    /** The \"System & sync\" module (see {@link Modules}): the sidebar's Audit Logs entry. */
     public static final String SYSTEM = "System & sync";
 
     /** One sidebar row: its label, and the {@link AppModule#title()} it opens (null = Dashboard, SETTINGS = Settings). */
@@ -55,6 +55,7 @@ public final class AppShell {
             new Entry("Inventory", "Inventory"),
             new Entry("Reports", "Reports"),
             new Entry("Users", "Manage users"),
+            new Entry("Audit Logs", SYSTEM),
             new Entry("Settings", SETTINGS));
 
     private AppShell() { }
@@ -81,10 +82,7 @@ public final class AppShell {
             if (!dashboard && !settings && !availableTitles.contains(entry.moduleTitle())) {
                 continue;
             }
-            // Settings also stays highlighted on the System & sync screen, which is opened from it.
-            boolean active = dashboard ? activeTitle == null
-                    : settings ? SETTINGS.equals(activeTitle) || SYSTEM.equals(activeTitle)
-                    : entry.moduleTitle().equals(activeTitle);
+            boolean active = dashboard ? activeTitle == null : entry.moduleTitle().equals(activeTitle);
             boolean here = dashboard ? activeTitle == null : entry.moduleTitle().equals(activeTitle);
             Button item = new Button(entry.label());
             item.setMaxWidth(Double.MAX_VALUE);

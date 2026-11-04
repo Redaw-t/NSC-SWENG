@@ -76,18 +76,14 @@ endlocal & exit /b 1
 rem --- --scripted: every self-test, with the same JDK that compiled them --
 :checks
 set "FAILED="
-call :check auth.AuthDemo --scripted
-call :check auth.AuthzDemo
-call :check auth.UserAdminDemo
-call :check pos.PosContractCheck
-call :check pos.CartCheck
-call :check pos.CheckoutCheck
-call :check pos.ReceiptCheck
-call :check inventory.InventoryCheck
-call :check app.AppCheck
-call :check product.ProductCheck
-call :check barcode.BarcodeCheck
-call :check reports.ReportsCheck
+set "LISTED=0"
+set "RAN=0"
+for %%C in ("auth.AuthDemo --scripted" auth.AuthzDemo auth.UserAdminDemo pos.PosContractCheck pos.CartCheck pos.CheckoutCheck pos.ReceiptCheck inventory.InventoryCheck app.AppCheck product.ProductCheck barcode.BarcodeCheck reports.ReportsCheck system.SystemLogCheck system.SystemAdminCheck) do (
+    set /a LISTED+=1
+    call :check %%~C
+)
+rem A check that never started must fail the run, not pass by saying nothing.
+if not "!RAN!"=="!LISTED!" set "FAILED=!FAILED! (only !RAN! of !LISTED! checks ran)"
 echo.
 echo =================================================================
 if defined FAILED (
@@ -104,6 +100,7 @@ endlocal & exit /b 0
 :check
 echo.
 echo ----- %~1
+set /a RAN+=1
 "!JDK_BIN!\java.exe" -cp "out;%CP%;%FX%\*" %*
 if errorlevel 1 set "FAILED=!FAILED! %~1"
 exit /b 0

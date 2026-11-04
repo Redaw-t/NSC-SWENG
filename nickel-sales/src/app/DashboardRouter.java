@@ -26,8 +26,7 @@ import java.util.stream.Collectors;
  *
  * - After login the user lands on the Dashboard ("Coming soon"). Dashboard, Settings and the
  *   modules all sit in the sidebar frame ({@link AppShell}): open on the Dashboard and on
- *   Settings (including System & sync, which is opened from it), collapsed (auto-hidden) on
- *   every other screen.
+ *   Settings, collapsed (auto-hidden) on every other screen (Audit Logs included).
  * - After login, and every time the user comes back to the Dashboard, the user is
  *   re-read from the database, so role changes take effect at once.
  * - Pressing a module's button re-checks its permission before opening.
@@ -99,23 +98,18 @@ public class DashboardRouter {
         show(inShell(user, sessionId, null, ComingSoonView.create("Dashboard", "This screen isn't built yet.")));
     }
 
-    /** Settings: Change password for everyone, and System & sync for users who may open it. */
+    /** Settings: Change password, for everyone. */
     private void openSettings(String sessionId) {
         User user = currentUser(sessionId);
         if (user == null) {
             return;
         }
-        Runnable system = null;
-        if (modules.stream().anyMatch(m -> m.title().equals(AppShell.SYSTEM)
-                && app.authz().checkAccess(user, m.permission()))) {
-            system = () -> openByTitle(sessionId, AppShell.SYSTEM);
-        }
-        show(inShell(user, sessionId, AppShell.SETTINGS, SettingsScreen.create(stage, app, sessionId, system)));
+        show(inShell(user, sessionId, AppShell.SETTINGS, SettingsScreen.create(stage, app, sessionId)));
     }
 
-    /** The sidebar is open on the Dashboard (null) and on Settings (and System & sync under it), hidden elsewhere. */
+    /** The sidebar is open on the Dashboard (null) and on Settings, hidden elsewhere. */
     private static boolean staysOpen(String activeTitle) {
-        return activeTitle == null || AppShell.SETTINGS.equals(activeTitle) || AppShell.SYSTEM.equals(activeTitle);
+        return activeTitle == null || AppShell.SETTINGS.equals(activeTitle);
     }
 
     /** Puts {@code screen} in the sidebar frame; {@code activeTitle} is the highlighted entry (null = Dashboard). */

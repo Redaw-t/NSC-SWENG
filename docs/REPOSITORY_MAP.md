@@ -25,13 +25,13 @@ the only part other modules should import.
 |---|---|---|---|
 | `app/` | Entry point (`Main`), wiring (`AppContext`, `AppConfig`), the module list (`Modules`), the home-screen shell (`AppModule`, `ScreenContext`, `HomeScreen`, `DashboardRouter`, `IdleLogoutTimer`) | Business rules, SQL, any module's screens or services | Shared. **Shared UI shell:** small additive edits only; wiring of Product/Inventory happens here |
 | `auth/` | Login, sessions, users, roles and permissions, user-admin screens (`contract`, `login`, `account`, `permission`, `session`, `repository`, `ui`) | Anything about sales, products or stock | User and Access Management (Iteration 1, done); maintenance only |
-| `pos/` | Selling: `cart` (cart, pricing, `SalesService`), `checkout` (payment, checkout transaction), `receipt` (build and print), `repository` (sale and invoice-number SQL), `contract` (sale records, `SaleHistory`, `SaleExport`), `ui` (cashier screens) | Product catalog or stock logic, product/inventory SQL, test stand-ins | **POS review and stabilisation; POS to Product/Inventory integration** (Nathan's slice) |
+| `pos/` | Selling: `cart` (cart, pricing, `SalesService`), `checkout` (payment, checkout transaction), `receipt` (build and print), `repository` (sale and invoice-number SQL), `contract` (sale records, `SaleHistory`, `SaleExport`), `ui` (cashier screens) | Product catalog or stock logic, product/inventory SQL, test stand-ins | **POS review and stabilisation; POS to Product/Inventory integration** |
 | `product/` | The product catalog: `contract` now (`ProductLookup`, `ProductInfo`); later `model`, `service`, `repository`, `ui` | Stock quantities' business rules, anything from `pos` | **Product Management + data layer** |
 | `inventory/` | Stock levels and movements: `contract` now (`StockRecorder`, `StockLine`, `InsufficientStockException`); later `model`, `service`, `repository`, `ui` | Anything from `pos` (including `pos.contract`), product catalog editing | **Inventory Management** |
 | `barcode/` | Barcode to product lookup, barcode validation and generation (README only for now) | A second product lookup, SQL on product tables | **Barcode Management** |
 | `sync/` | Sending and receiving data with the central server, working from exported contracts (README only for now) | Screens, direct reads of POS internals | **Synchronization / API foundation** |
 | `reports/` | Read-only sales and inventory reports (`model`, `service`, `ui`) | Writes of any kind, POS internals | Transaction and Reports |
-| `system/` | Audit log, settings, backup (README only for now) | Sales, product or stock rules | Audit and System Management (later iteration) |
+| `system/` | Activity, inventory and sync logs, system status, backup and restore (`contract`, `model`, `repository`, `service`, `ui`) | Sales, product or stock rules | Audit and System Management |
 | `shared/` | Only cross-module infrastructure: `Database`, `Money`, `Quantity`, `PhTime`, `UiErrors` | Business logic of any module, "helpers", anything that knows about products, sales, users or stock | Whole team; additions need team agreement |
 
 ## 2. Allowed dependencies per folder

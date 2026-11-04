@@ -196,6 +196,58 @@ CREATE TABLE IF NOT EXISTS `StockMovement` (
     INDEX idx_movement_created (CreatedAt)       -- history list, newest first
 );
 
+-- ================== AUDIT AND SYSTEM ==================
+-- Owned by System. Times are UTC DATETIME(3).
+-- Every audit event any module sends (logins, user, product, price and stock changes, sales),
+-- one row each. Only ever added to, never edited or deleted: the app has no update or delete for it.
+CREATE TABLE IF NOT EXISTS `ActivityLog` (
+    LogID BIGINT AUTO_INCREMENT PRIMARY KEY,
+    CreatedAt DATETIME(3) NOT NULL,
+    UserID VARCHAR(30) NULL,                     -- who did it; the typed login name for a failed login
+    TerminalID VARCHAR(10) NOT NULL,             -- which POS it happened on (T01, T02 ...)
+    Module VARCHAR(20) NOT NULL,                 -- Login / Users / Products / Inventory / POS / System / Other
+    ActionType VARCHAR(40) NOT NULL,             -- e.g. LOGIN_SUCCESS, PRICE_CHANGED, STOCK_ADJUSTED
+    Target VARCHAR(50) NULL,                     -- what it was done to: a user ID, product ID, invoice number ...
+    Details VARCHAR(255) NULL,                   -- the rest of the event, as sent
+    OldValue VARCHAR(255) NULL,                  -- before a change (e.g. prices), if the event says
+    NewValue VARCHAR(255) NULL,                  -- after the change
+    INDEX idx_activity_created (CreatedAt),
+    INDEX idx_activity_user (UserID, CreatedAt),
+    INDEX idx_activity_module (Module, CreatedAt)
+);
+
+-- One row per attempt to send a record to another terminal. Written by Sync (through
+-- system.contract.SyncLogWriter); only its status, retry count and error change afterwards.
+CREATE TABLE IF NOT EXISTS `SyncLog` (
+    LogID BIGINT AUTO_INCREMENT PRIMARY KEY,
+    CreatedAt DATETIME(3) NOT NULL,
+    UpdatedAt DATETIME(3) NOT NULL,
+    SourceTerminal VARCHAR(10) NOT NULL,
+    TargetTerminal VARCHAR(10) NOT NULL,
+    DataType VARCHAR(20) NOT NULL,               -- SALE / PRODUCT / USER
+    RecordID VARCHAR(50) NOT NULL,               -- the sale, product or user sent
+    Status VARCHAR(10) NOT NULL,                 -- PENDING / SYNCED / FAILED
+    RetryCount INT NOT NULL DEFAULT 0,
+    ErrorMessage VARCHAR(255) NULL,
+    INDEX idx_sync_status (Status, CreatedAt),
+    INDEX idx_sync_created (CreatedAt)
+);
+
+-- Every backup and restore made from the System screen, successful or not.
+CREATE TABLE IF NOT EXISTS `BackupRecord` (
+    BackupID BIGINT AUTO_INCREMENT PRIMARY KEY,
+    CreatedAt DATETIME(3) NOT NULL,
+    TerminalID VARCHAR(10) NOT NULL,
+    Kind VARCHAR(10) NOT NULL,                   -- BACKUP / SAFETY (taken before a restore) / RESTORE
+    FileName VARCHAR(255) NOT NULL,
+    FolderPath VARCHAR(500) NOT NULL,
+    SizeBytes BIGINT NULL,
+    Result VARCHAR(10) NOT NULL,                 -- SUCCESS / FAILED
+    Message VARCHAR(255) NULL,
+    UserID VARCHAR(10) NULL,
+    INDEX idx_backup_created (CreatedAt)
+);
+
 -- Starting stock for the test catalog (Inventory is the source of truth for stock).
 INSERT IGNORE INTO `Inventory` (ProductID, QuantityOnHand, ReorderLevel, UpdatedAt) VALUES
     ('P-0001', 40, 0, UTC_TIMESTAMP(3)),

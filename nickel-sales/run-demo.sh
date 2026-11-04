@@ -54,7 +54,7 @@ if [[ "${1:-}" == "--scripted" ]]; then
     for check in "auth.AuthDemo --scripted" auth.AuthzDemo \
                  auth.UserAdminDemo pos.PosContractCheck pos.CartCheck \
                  pos.CheckoutCheck pos.ReceiptCheck inventory.InventoryCheck \
-                 app.AppCheck product.ProductCheck barcode.BarcodeCheck reports.ReportsCheck; do
+                 app.AppCheck product.ProductCheck barcode.BarcodeCheck reports.ReportsCheck system.SystemLogCheck system.SystemAdminCheck; do
         echo
         echo "----- ${check%% *}"
         # shellcheck disable=SC2086

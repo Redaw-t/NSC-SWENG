@@ -121,7 +121,12 @@ Paths are relative to `nickel-sales/src/` (sections 1 to 10), `nickel-sales/test
 
 | File / Class | Purpose | Module / Owner Area | Depends On / Used By | Modification Guidance |
 |---|---|---|---|---|
-| `system/README.md` | Intended: audit log, settings, backup. Today audit events only print to the console via `AppContext`. | System (later iteration) | `auth.contract.AuditLogger` | PLACEHOLDER |
+| `system/README.md` | What the module does, its rules, shortcuts and the Details wording convention. | System | Read first | KEEP UP TO DATE |
+| `system/contract/` | `SyncLogWriter`, `SyncRetryHandler`, `StatusProvider`: what other modules use. | System | Used by Sync and `app/Main` | Other modules depend on these |
+| `system/model/` | `AuditEvent`, `ActivityDescription` (Details wording), log entries and filters, `BackupRecord`, `StatusItem`. | System | Used by the services and screens | A new audit event needs its sentence in `ActivityDescription` |
+| `system/repository/` | MySQL repositories for the logs and backup history; `DatabaseDump` (writes, checks and restores backups). | System | Tables `ActivityLog`, `SyncLog`, `BackupRecord`; reads `StockMovement` | Never add an update or delete for `ActivityLog` |
+| `system/service/` | `ActivityLogger` (the app's `AuditLogger`), one service per tab, `SystemAccess`, `BackupFolderSetting`, `Csv`. | System | Registered in `app/Main` | Every method starts with the `SystemAccess` check |
+| `system/ui/` | `SystemModule`, `SystemScreen`, one `SystemPane` per tab, `SystemUi`, `UserNames`. | System | Opened from the sidebar's Audit Logs entry (Admin only) | Follows the Reports design |
 
 ## 10. shared
 

@@ -9,7 +9,8 @@ package auth.contract;
  * touching authentication.
  *
  * Events currently emitted:
- *   LOGIN_SUCCESS, LOGIN_FAILED, LOGIN_BLOCKED_INACTIVE,
+ *   LOGIN_SUCCESS, LOGIN_FAILED_UNKNOWN_USER (userId is the login name that was
+ *   typed, since no account has it), LOGIN_FAILED_WRONG_PASSWORD, LOGIN_BLOCKED_INACTIVE,
  *   LOGIN_BLOCKED_LOCKED, LOGOUT, PASSWORD_CHANGED, PASSWORD_CHANGE_FAILED
  */
 public interface AuditLogger {
