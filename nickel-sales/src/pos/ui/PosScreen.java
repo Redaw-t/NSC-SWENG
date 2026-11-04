@@ -5,18 +5,16 @@ import app.ScreenContext;
 import javafx.beans.property.ReadOnlyStringWrapper;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
+import javafx.geometry.Bounds;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
-import javafx.geometry.Side;
 import javafx.scene.Node;
 import javafx.scene.Parent;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.ContentDisplay;
-import javafx.scene.control.ContextMenu;
 import javafx.scene.control.Label;
-import javafx.scene.control.MenuItem;
 import javafx.scene.control.OverrunStyle;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
@@ -30,11 +28,13 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
+import javafx.scene.effect.DropShadow;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Circle;
 import javafx.scene.shape.Line;
 import javafx.scene.shape.Rectangle;
 import javafx.scene.shape.StrokeLineCap;
+import javafx.stage.Popup;
 import inventory.contract.InsufficientStockException;
 import pos.cart.CartException;
 import pos.cart.Sale;
@@ -53,6 +53,7 @@ import product.contract.ProductLookup;
 import shared.Money;
 import shared.Quantity;
 import shared.ScaledPane;
+import shared.Styles;
 import shared.Theme;
 import shared.UiErrors;
 
@@ -106,6 +107,7 @@ public final class PosScreen {
     private static final String STATUS_BAR = "#C8D1D9";
     private static final String ONLINE_GREEN = "#1FBA42";
     private static final String DARK = Theme.PRIMARY_TEXT;
+    private static final double MENU_WIDTH = 220;
 
     /** "5*4800000000019": a quantity, a star, then the barcode (or the search text). */
     private static final Pattern QUANTITY_PREFIX = Pattern.compile("^\\s*(\\d+(?:\\.\\d+)?)\\s*\\*\\s*(.*)$");
@@ -541,13 +543,43 @@ public final class PosScreen {
         showNotice("New Transaction is not available yet.");
     }
 
-    /** Hamburger menu (top right) - TODO(skeleton): add more entries (change password, help, ...) when they exist. */
+    /**
+     * Hamburger menu (top right): a small dropdown styled like the sidebar on the Products screen
+     * (same colours and list rows) with Dashboard and Logout.
+     */
     private void showMenu(Node anchor) {
-        ContextMenu menu = new ContextMenu();
-        MenuItem home = new MenuItem("Home  (Esc)");
-        home.setOnAction(e -> screen.goHome());
-        menu.getItems().add(home);
-        menu.show(anchor, Side.BOTTOM, 0, 0);
+        Popup popup = new Popup();
+        popup.setAutoHide(true);
+
+        Button dashboard = new Button("Dashboard");
+        dashboard.setOnAction(e -> {
+            popup.hide();
+            screen.goHome();
+        });
+        Button logout = new Button("Logout");
+        logout.setOnAction(e -> {
+            popup.hide();
+            logout();
+        });
+        for (Button item : List.of(dashboard, logout)) {
+            item.setMaxWidth(Double.MAX_VALUE);
+            item.setFocusTraversable(false);
+            Styles.navItem(item, false);
+        }
+
+        VBox menu = new VBox(dashboard, logout);
+        menu.setMinWidth(MENU_WIDTH);
+        menu.setPrefWidth(MENU_WIDTH);
+        menu.setMaxWidth(MENU_WIDTH);
+        menu.setStyle("-fx-background-color: " + Theme.BORDER + "; -fx-background-radius: 6; "
+                + "-fx-border-color: " + Theme.BORDER + "; -fx-border-radius: 6;");
+        menu.setEffect(new DropShadow(12, Color.rgb(0, 0, 0, 0.25)));
+        menu.setPadding(new Insets(4, 0, 4, 0));
+        popup.getContent().add(menu);
+
+        // right edge of the menu lines up with the right edge of the hamburger button
+        Bounds b = anchor.localToScreen(anchor.getBoundsInLocal());
+        popup.show(anchor, b.getMaxX() - MENU_WIDTH, b.getMaxY() + 4);
     }
 
     /* ------------------------------- layout ------------------------------- */
@@ -605,7 +637,7 @@ public final class PosScreen {
         });
     }
 
-    /** Online - Cashier: name - [message] - menu - Logout. */
+    /** Online - Cashier: name - [message] - menu (Dashboard, Logout). */
     private Node buildStatusBar() {
         // TODO(skeleton): "Online" is always shown. Make it follow the real connection (database / server) status.
         Circle dot = new Circle(10, Color.web(ONLINE_GREEN));
@@ -623,12 +655,8 @@ public final class PosScreen {
         menu.setFocusTraversable(false);
         menu.setPadding(new Insets(8));
         menu.setOnAction(e -> showMenu(menu));
-        Button logout = new Button("Logout");
-        PosStyle.plainButton(logout, "-fx-font-size: 22px; -fx-text-fill: " + DARK + "; -fx-padding: 6 12 6 12;");
-        logout.setFocusTraversable(false);
-        logout.setOnAction(e -> logout());
 
-        HBox bar = new HBox(12, dot, online, spacer(24), cashier, message, menu, logout);
+        HBox bar = new HBox(12, dot, online, spacer(24), cashier, message, menu);
         bar.setAlignment(Pos.CENTER_LEFT);
         bar.setPadding(new Insets(0, 14, 0, 18));
         fixHeight(bar, 46);
@@ -727,8 +755,7 @@ public final class PosScreen {
         barcodeField.focusedProperty().addListener((o, was, now) -> barcodeBox.setStyle(barcodeBoxStyle(now)));
 
         Button scan = iconKeyButton(barcodeIcon(), "Enter", this::addFromBarcode);
-        scan.setMinWidth(75);
-        scan.setPrefWidth(75);
+        fixSize(scan, 65, 70);
 
         Button search = new Button();
         HBox searchRow = new HBox(6, label("Search Product", 15, true), searchIcon());
@@ -842,7 +869,8 @@ public final class PosScreen {
         Label main = new Label(name);
         main.setStyle("-fx-font-size: " + size + "px; -fx-font-weight: bold; -fx-text-fill: " + color + ";");
         Button b = new Button();
-        b.setGraphic(keyed(main, key, color));
+        // the label's own line height leaves a gap under the text, so pull the [key] hint up under it
+        b.setGraphic(keyed(main, key, color, -Math.round(size / 5.0)));
         decorate(b, kind, onClick);
         return b;
     }
@@ -855,9 +883,13 @@ public final class PosScreen {
     }
 
     private static Node keyed(Node main, String key, String color) {
+        return keyed(main, key, color, 2);
+    }
+
+    private static Node keyed(Node main, String key, String color, double gap) {
         Label hint = new Label("[" + key + "]");
-        hint.setStyle("-fx-font-size: 11px; -fx-text-fill: " + color + ";");
-        VBox box = new VBox(2, main, hint);
+        hint.setStyle("-fx-font-size: 11px; -fx-text-fill: " + color + "; -fx-padding: 0;");
+        VBox box = new VBox(gap, main, hint);
         box.setAlignment(Pos.CENTER);
         return box;
     }
@@ -881,7 +913,7 @@ public final class PosScreen {
     }
 
     private static Node barcodeIcon() {
-        double[] widths = {1, 3, 1, 2, 3, 1, 2, 1, 3, 1, 2, 3, 1};
+        double[] widths = {1, 2, 1, 2, 2, 1, 2, 1, 2, 1, 2, 2, 1};
         HBox bars = new HBox(1);
         bars.setAlignment(Pos.CENTER);
         for (double w : widths) {

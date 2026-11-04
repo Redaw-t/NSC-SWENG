@@ -90,9 +90,9 @@ public final class BarcodePane {
         Styles.input(search);
         search.textProperty().addListener((obs, old, text) -> applyFilters());
 
-        statusFilter.setPromptText("Barcode Status");
         statusFilter.setPrefWidth(220);
         statusFilter.getItems().setAll(StatusFilter.values());
+        statusFilter.setValue(StatusFilter.ALL);
         statusFilter.valueProperty().addListener((obs, old, s) -> applyFilters());
 
         Button assign = new Button("+ Assign Barcode");

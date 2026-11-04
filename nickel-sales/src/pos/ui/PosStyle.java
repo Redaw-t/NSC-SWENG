@@ -68,7 +68,7 @@ final class PosStyle {
         paint(button);
     }
 
-    /** A see-through button that gets a faint tint under the mouse (menu, Logout). {@code extra} is appended to its style. */
+    /** A see-through button that gets a faint tint under the mouse (the menu button). {@code extra} is appended to its style. */
     static void plainButton(Button button, String extra) {
         button.getProperties().remove(KIND);
         button.getProperties().put(PLAIN_EXTRA, extra == null ? "" : extra);

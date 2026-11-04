@@ -45,6 +45,8 @@ final class ProductsPane {
     /** The "no filter" choices at the top of the drop-downs. */
     private static final Category ALL_CATEGORIES = new Category(null, "All Categories", true);
     private static final Supplier ALL_SUPPLIERS = new Supplier(null, "All Suppliers", null, null, null, null, true);
+    private static final Category NO_CATEGORY = new Category(-1, "(No category)", true);
+    private static final Supplier NO_SUPPLIER = new Supplier(-1, "(No supplier)", null, null, null, null, true);
 
     private enum StatusFilter {
         ALL("All Statuses"), ACTIVE("Active"), INACTIVE("Inactive");
@@ -282,9 +284,11 @@ final class ProductsPane {
         List<Category> cats = new ArrayList<>();
         cats.add(ALL_CATEGORIES);
         cats.addAll(categories.listCategories(current, true));
+        cats.add(NO_CATEGORY);
         List<Supplier> sups = new ArrayList<>();
         sups.add(ALL_SUPPLIERS);
         sups.addAll(suppliers.listSuppliers(current, true));
+        sups.add(NO_SUPPLIER); 
 
         Category keepCategory = categoryFilter.getValue();
         Supplier keepSupplier = supplierFilter.getValue();
@@ -313,9 +317,11 @@ final class ProductsPane {
         List<Product> result = new ArrayList<>();
         for (Product p : loaded) {
             boolean categoryOk = category == null || category.categoryId() == null
-                    || category.categoryId().equals(p.categoryId());
+                    || (category == NO_CATEGORY ? p.categoryId() == null
+                                                : category.categoryId().equals(p.categoryId()));
             boolean supplierOk = supplier == null || supplier.supplierId() == null
-                    || supplier.supplierId().equals(p.supplierId());
+                    || (supplier == NO_SUPPLIER ? p.supplierId() == null
+                                                : supplier.supplierId().equals(p.supplierId()));
             boolean statusOk = status == null || status == StatusFilter.ALL
                     || (status == StatusFilter.ACTIVE) == p.active();
             if (categoryOk && supplierOk && statusOk) {

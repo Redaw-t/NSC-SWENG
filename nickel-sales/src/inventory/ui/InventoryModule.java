@@ -1,15 +1,11 @@
 package inventory.ui;
 
 import app.AppModule;
-import app.HomeScreen;
+import app.ComingSoonView;
 import app.ScreenContext;
 import auth.permission.Permission;
 import inventory.service.InventoryService;
-import javafx.geometry.Pos;
 import javafx.scene.Parent;
-import javafx.scene.control.Button;
-import javafx.scene.control.Label;
-import javafx.scene.layout.VBox;
 
 import java.util.Optional;
 
@@ -35,21 +31,17 @@ public final class InventoryModule implements AppModule {
         return Permission.UPDATE_INVENTORY;
     }
 
+    /** Shown inside the sidebar frame ({@link app.AppShell}); the sidebar's Dashboard entry goes home. */
+    @Override
+    public boolean usesShell() {
+        return true;
+    }
+
     @Override
     public Parent open(ScreenContext screen) {
         Optional<InventoryService> service = screen.app().find(InventoryService.class);
         if (service.isEmpty()) {
-            Label heading = new Label("Inventory");
-            heading.setStyle("-fx-font-size: 26px; -fx-font-weight: bold; -fx-text-fill: " + HomeScreen.BLUE + ";");
-            Label note = new Label("Inventory is not connected on this terminal yet.");
-            note.setStyle("-fx-font-size: 16px;");
-            Button back = new Button("Back to home");
-            back.setDefaultButton(true);
-            back.setOnAction(e -> screen.goHome());
-            VBox view = new VBox(16, heading, note, back);
-            view.setAlignment(Pos.CENTER);
-            view.setStyle("-fx-background-color: white;");
-            return view;
+            return ComingSoonView.notice("Inventory", "Inventory is not connected on this terminal yet.");
         }
         return new InventoryScreen(screen, service.get()).getView();
     }

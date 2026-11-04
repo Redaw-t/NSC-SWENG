@@ -15,7 +15,9 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -49,6 +51,41 @@ public class MySqlInventoryRepository implements InventoryRepository {
             List<StockLevel> out = new ArrayList<>();
             while (rs.next()) {
                 out.add(readLevel(rs));
+            }
+            return out;
+        } catch (SQLException e) {
+            throw failure(e);
+        }
+    }
+
+    @Override
+    public Map<String, String> findProductCategories() {
+        String sql = "SELECT p.ProductID, c.CategoryName FROM Product p "
+                + "JOIN Category c ON c.CategoryID = p.CategoryID";
+        try (Connection c = Database.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            Map<String, String> out = new HashMap<>();
+            while (rs.next()) {
+                out.put(rs.getString("ProductID"), rs.getString("CategoryName"));
+            }
+            return out;
+        } catch (SQLException e) {
+            throw failure(e);
+        }
+    }
+
+    @Override
+    public List<String> findCategoryNames() {
+        String sql = "SELECT CategoryName FROM Category "
+                + "WHERE IsActive = TRUE OR CategoryID IN (SELECT CategoryID FROM Product WHERE CategoryID IS NOT NULL) "
+                + "ORDER BY CategoryName";
+        try (Connection c = Database.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            List<String> out = new ArrayList<>();
+            while (rs.next()) {
+                out.add(rs.getString("CategoryName"));
             }
             return out;
         } catch (SQLException e) {

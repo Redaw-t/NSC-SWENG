@@ -8,6 +8,7 @@ import java.sql.Connection;
 import java.sql.SQLException;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -31,6 +32,23 @@ public interface InventoryRepository {
 
     /** Movement history, newest first; {@code productId} null = all products. */
     List<StockMovement> findMovements(String productId, int limit);
+
+    /**
+     * Category name of every product that has one (Product.CategoryID -> Category.CategoryName),
+     * keyed by product ID. Products with no category are left out. Used only by the Inventory
+     * screen's Category filter. Default: none (stores without categories, e.g. test stubs).
+     */
+    default Map<String, String> findProductCategories() {
+        return Map.of();
+    }
+
+    /**
+     * Category names for the Category filter, A-Z: every active category, plus any inactive one a
+     * product still uses. Default: none.
+     */
+    default List<String> findCategoryNames() {
+        return List.of();
+    }
 
     /**
      * Runs {@code work} as one all-or-nothing transaction: committed together,

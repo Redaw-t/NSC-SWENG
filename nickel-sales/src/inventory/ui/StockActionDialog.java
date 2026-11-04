@@ -4,24 +4,16 @@ import inventory.model.StockReason;
 import inventory.model.StockRow;
 import inventory.service.InventoryException;
 import javafx.application.Platform;
-import javafx.collections.FXCollections;
-import javafx.event.ActionEvent;
-import javafx.geometry.Insets;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
-import javafx.scene.control.ButtonType;
-import javafx.scene.control.ComboBox;
-import javafx.scene.control.Dialog;
 import javafx.scene.control.Label;
-import javafx.scene.control.Separator;
 import javafx.scene.control.TextField;
-import javafx.scene.layout.ColumnConstraints;
 import javafx.scene.layout.GridPane;
-import javafx.scene.layout.Priority;
-import javafx.scene.layout.VBox;
 import javafx.stage.Window;
-import javafx.util.StringConverter;
+import shared.Modal;
 import shared.Quantity;
+import shared.SearchPicker;
+import shared.Styles;
 import shared.Theme;
 import shared.UiErrors;
 
@@ -29,10 +21,13 @@ import java.math.BigDecimal;
 import java.util.List;
 
 /**
- * The Stock In, Stock Out, Adjust Stock and Reorder Level windows (one class,
- * four modes), laid out like INVENTORY_UI.pdf: Product dropdown, Current Stock,
- * quantity, reason, note. The dialog stays open until the service accepts the
- * change. No rules live here: it only collects input and calls {@link Submit}.
+ * The Stock In, Stock Out, Adjust Stock and Reorder Level pop-ups (one class, four modes), drawn
+ * with the shared {@link Modal} like the Product screens.
+ *
+ * <p>Opened from a table row ({@code lockProduct} true) the product is fixed and shown as text.
+ * Opened from the toolbar it is chosen with a {@link SearchPicker} (type a name or barcode).
+ * No rules live here: it only collects input and calls {@link Submit}. It stays open until the
+ * service accepts the change.
  */
 final class StockActionDialog {
 
@@ -42,96 +37,47 @@ final class StockActionDialog {
         void run(String productId, BigDecimal quantity, StockReason reason, String note) throws InventoryException;
     }
 
+    /** A list item for {@link SearchPicker}, which shows (and searches) {@code toString()}. */
+    private record Choice<T>(T item, String text) {
+        @Override
+        public String toString() {
+            return text;
+        }
+    }
+
     private StockActionDialog() { }
 
     /**
-     * @param rows     products to choose from
-     * @param selected product to preselect (may be null)
+     * @param rows        products to choose from (used only when {@code lockProduct} is false)
+     * @param selected    product to preselect; required when {@code lockProduct} is true
+     * @param lockProduct true when opened from a table row: no product drop-down
      * @return the ID of the product that was changed, or null if cancelled
      */
-    static String show(Window owner, Mode mode, List<StockRow> rows, StockRow selected, Submit submit) {
+    static String show(Window owner, Mode mode, List<StockRow> rows, StockRow selected, boolean lockProduct,
+                       Submit submit) {
+        boolean locked = lockProduct && selected != null;
+        Modal modal = new Modal(owner, 640);
+
         String title = switch (mode) {
             case STOCK_IN -> "Stock In";
             case STOCK_OUT -> "Stock Out";
             case ADJUST -> "Adjust Stock";
             case REORDER -> "Reorder Level";
         };
-        Dialog<ButtonType> dialog = new Dialog<>();
-        dialog.initOwner(owner);
-        dialog.setTitle(title);
-        dialog.setHeaderText(null);
 
-        Label heading = new Label(title);
-        heading.setStyle("-fx-font-size: 24px; -fx-font-weight: bold; -fx-text-fill: " + Theme.PRIMARY_TEXT + ";");
-
-        ComboBox<StockRow> product = new ComboBox<>(FXCollections.observableArrayList(rows));
-        product.setPromptText("Select product");
-        product.setMaxWidth(Double.MAX_VALUE);
-        product.setConverter(new StringConverter<>() {
-            @Override
-            public String toString(StockRow r) {
-                return r == null ? "" : r.name() + "  (" + (r.barcode() == null ? r.productId() : r.barcode()) + ")";
-            }
-
-            @Override
-            public StockRow fromString(String s) {
-                return null;
-            }
+        // --- product: fixed text (row button) or a searchable picker (toolbar) ---
+        StockRow[] chosen = {locked ? selected : null};
+        Label current = value("-");
+        TextField qty = new TextField();
+        Styles.underline(qty);
+        qty.setPromptText(switch (mode) {
+            case STOCK_IN, STOCK_OUT -> "e.g. 6 or 1.5";
+            case ADJUST -> "Counted quantity";
+            case REORDER -> "0 = not set";
         });
 
-        Label current = new Label("-");
-        current.setStyle("-fx-font-size: 16px; -fx-font-weight: bold; -fx-text-fill: " + Theme.SECONDARY_TEXT + ";");
-        TextField qty = new TextField();
-        qty.setStyle("-fx-font-size: 16px;");
-        ComboBox<StockReason> reason = new ComboBox<>();
-        TextField note = new TextField();
-
-        GridPane grid = new GridPane();
-        grid.setHgap(16);
-        grid.setVgap(14);
-        ColumnConstraints c0 = new ColumnConstraints();
-        c0.setMinWidth(170);
-        ColumnConstraints c1 = new ColumnConstraints();
-        c1.setHgrow(Priority.ALWAYS);
-        c1.setMinWidth(280);
-        grid.getColumnConstraints().addAll(c0, c1);
-
-        int r = 0;
-        addRow(grid, r++, "Product", product);
-        addRow(grid, r++, "Current Stock", current);
-        addRow(grid, r++, switch (mode) {
-            case STOCK_IN -> "Quantity to Add";
-            case STOCK_OUT -> "Quantity to Remove";
-            case ADJUST -> "New Quantity";
-            case REORDER -> "Reorder Level";
-        }, qty);
-        if (mode == Mode.STOCK_OUT || mode == Mode.ADJUST) {
-            List<StockReason> reasons = mode == Mode.STOCK_OUT ? StockReason.forStockOut() : StockReason.forAdjustment();
-            reason.getItems().setAll(reasons);
-            reason.setPromptText("Choose a reason");
-            reason.setMaxWidth(Double.MAX_VALUE);
-            reason.setConverter(new StringConverter<>() {
-                @Override
-                public String toString(StockReason x) {
-                    return x == null ? "" : x.label();
-                }
-
-                @Override
-                public StockReason fromString(String s) {
-                    return null;
-                }
-            });
-            addRow(grid, r++, "Reason", reason);
-        }
-        if (mode != Mode.REORDER) {
-            addRow(grid, r++, switch (mode) {
-                case STOCK_IN -> "Reference / Note";
-                case STOCK_OUT -> "Note";
-                default -> "Adjustment Note";
-            }, note);
-        }
-
-        product.valueProperty().addListener((o, was, row) -> {
+        Runnable showChosen = () -> {
+            StockRow row = chosen[0];
             if (row == null) {
                 current.setText("-");
                 return;
@@ -142,43 +88,92 @@ final class StockActionDialog {
             } else if (mode == Mode.REORDER) {
                 qty.setText(Quantity.format(row.reorderLevel()));
             }
-        });
-        if (selected != null) {
-            rows.stream().filter(x -> x.productId().equals(selected.productId())).findFirst()
-                    .ifPresent(product::setValue);
+        };
+
+        Node productField;
+        SearchPicker<Choice<StockRow>> picker = null;
+        if (locked) {
+            productField = value(describe(selected));
+        } else {
+            picker = new SearchPicker<>(true);
+            picker.setPromptText("Select product");
+            Choice<StockRow> preselect = null;
+            for (StockRow r : rows) {
+                Choice<StockRow> c = new Choice<>(r, describe(r));
+                picker.getItems().add(c);
+                if (selected != null && r.productId().equals(selected.productId())) {
+                    preselect = c;
+                }
+            }
+            picker.valueProperty().addListener((o, was, is) -> {
+                chosen[0] = is == null ? null : is.item();
+                showChosen.run();
+            });
+            picker.setValue(preselect);
+            productField = picker;
+        }
+        showChosen.run();
+
+        // --- reason (Stock Out / Adjust) ---
+        SearchPicker<Choice<StockReason>> reason = null;
+        if (mode == Mode.STOCK_OUT || mode == Mode.ADJUST) {
+            reason = new SearchPicker<>(true, false);
+            reason.setPromptText("Choose a reason");
+            List<StockReason> reasons = mode == Mode.STOCK_OUT ? StockReason.forStockOut() : StockReason.forAdjustment();
+            for (StockReason r : reasons) {
+                reason.getItems().add(new Choice<>(r, r.label()));
+            }
+        }
+
+        TextField note = new TextField();
+        Styles.underline(note);
+        note.setPromptText(mode == Mode.STOCK_IN ? "Invoice / PO no. or note (optional)" : "Optional");
+
+        GridPane grid = Modal.grid();
+        int r = 0;
+        r = Modal.row(grid, r, "Product", productField);
+        r = Modal.row(grid, r, "Current Stock", current);
+        r = Modal.row(grid, r, switch (mode) {
+            case STOCK_IN -> "Quantity to Add";
+            case STOCK_OUT -> "Quantity to Remove";
+            case ADJUST -> "New Quantity";
+            case REORDER -> "Reorder Level";
+        }, qty);
+        if (reason != null) {
+            r = Modal.row(grid, r, "Reason", reason);
+        }
+        if (mode != Mode.REORDER) {
+            Modal.row(grid, r, switch (mode) {
+                case STOCK_IN -> "Reference / Note";
+                case STOCK_OUT -> "Note";
+                default -> "Adjustment Note";
+            }, note);
         }
 
         Label error = new Label();
         error.setWrapText(true);
-        error.setMaxWidth(460);
-        error.setStyle("-fx-font-size: 14px; -fx-font-weight: bold; -fx-text-fill: " + Theme.ERROR + ";");
+        Styles.error(error);
 
-        VBox content = new VBox(16, heading, new Separator(), grid, error);
-        content.setPadding(new Insets(8));
-        content.setMinWidth(500);
-        dialog.getDialogPane().setContent(content);
-        dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
+        Button cancel = new Button("Cancel");
+        Styles.modalButton(cancel, Theme.BORDER, Theme.PRIMARY_TEXT);
+        cancel.setCancelButton(true);
+        cancel.setOnAction(e -> modal.close());
 
-        Button ok = (Button) dialog.getDialogPane().lookupButton(ButtonType.OK);
-        ok.setText(switch (mode) {
+        Button save = new Button(switch (mode) {
             case STOCK_IN -> "Confirm Stock In";
             case STOCK_OUT -> "Confirm Stock Out";
             case ADJUST -> "Save Adjustment";
             case REORDER -> "Save";
         });
-        ok.setStyle("-fx-background-color: " + Theme.PRIMARY_BLUE + "; -fx-text-fill: white; -fx-font-weight: bold; "
-                + "-fx-background-radius: 8; -fx-padding: 10 24 10 24;");
-        Button cancel = (Button) dialog.getDialogPane().lookupButton(ButtonType.CANCEL);
-        cancel.setStyle("-fx-background-color: #DDE1EA; -fx-text-fill: " + Theme.PRIMARY_TEXT + "; "
-                + "-fx-background-radius: 8; -fx-padding: 10 24 10 24;");
+        Styles.modalButton(save, mode == Mode.STOCK_OUT ? Theme.ACCENT_RED : Theme.INFORMATION, "white");
+        save.setDefaultButton(true);
 
         String[] savedId = {null};
-        // Consuming the event keeps the dialog open so the person can fix the input.
-        ok.addEventFilter(ActionEvent.ACTION, e -> {
-            StockRow chosen = product.getValue();
-            if (chosen == null) {
+        SearchPicker<Choice<StockReason>> reasonPicker = reason;
+        save.setOnAction(e -> {
+            StockRow row = chosen[0];
+            if (row == null) {
                 error.setText("Select a product.");
-                e.consume();
                 return;
             }
             BigDecimal quantity = null;
@@ -189,38 +184,51 @@ final class StockActionDialog {
                 } catch (NumberFormatException ex) {
                     error.setText("Type the quantity as a number, e.g. 6 or 1.5.");
                     qty.requestFocus();
-                    e.consume();
                     return;
                 }
             }
+            StockReason why = reasonPicker == null || reasonPicker.getValue() == null
+                    ? null : reasonPicker.getValue().item();
             try {
-                submit.run(chosen.productId(), quantity, reason.getValue(), note.getText());
-                savedId[0] = chosen.productId();
+                submit.run(row.productId(), quantity, why, note.getText());
+                savedId[0] = row.productId();
+                modal.close();
             } catch (InventoryException ex) {
                 error.setText(ex.getMessage());
-                e.consume();
             } catch (RuntimeException ex) {
                 error.setText(UiErrors.message(ex, "Something went wrong. Try again, or contact the system administrator."));
-                e.consume();
             }
         });
 
+        String subtitle = switch (mode) {
+            case STOCK_IN -> "Adds stock received from a supplier.";
+            case STOCK_OUT -> "Removes stock that left without a sale (damaged, expired, returned...).";
+            case ADJUST -> "Sets the stock to what was actually counted.";
+            case REORDER -> "The product shows as Low Stock at or below this level.";
+        };
+        modal.card().getChildren().addAll(Modal.title(title), Modal.subtitle(subtitle), grid, error,
+                Modal.buttons(cancel, save));
+
+        Node first = chosen[0] == null && picker != null ? picker : qty;
         Platform.runLater(() -> {
-            if (product.getValue() == null) {
-                product.requestFocus();
-            } else {
-                qty.requestFocus();
+            first.requestFocus();
+            if (first == qty) {
                 qty.selectAll();
             }
         });
-        dialog.showAndWait();
+        modal.showAndWait();
         return savedId[0];
     }
 
-    private static void addRow(GridPane grid, int row, String label, Node control) {
-        Label l = new Label(label);
-        l.setStyle("-fx-font-size: 15px; -fx-text-fill: " + Theme.PRIMARY_TEXT + ";");
-        grid.add(l, 0, row);
-        grid.add(control, 1, row);
+    /** "Bond Paper A4  (4800123456789)". */
+    static String describe(StockRow r) {
+        return r.name() + "  (" + r.barcodeOrId() + ")";
+    }
+
+    private static Label value(String text) {
+        Label label = new Label(text);
+        Styles.modalValue(label);
+        label.setWrapText(true);
+        return label;
     }
 }

@@ -124,6 +124,18 @@ public class InventoryService implements StockRecorder, StockOverview {
         return rows;
     }
 
+    /** Category filter: product ID -> category name (products with no category are left out). */
+    public Map<String, String> productCategories(String sessionId) throws InventoryException {
+        access.require(sessionId);
+        return repository.findProductCategories();
+    }
+
+    /** Category filter: the category names to offer, A-Z. */
+    public List<String> categoryNames(String sessionId) throws InventoryException {
+        access.require(sessionId);
+        return repository.findCategoryNames();
+    }
+
     /** Stock Movement History screen: newest first, at most {@code limit}. */
     public List<StockMovement> history(String sessionId, int limit) throws InventoryException {
         access.require(sessionId);
