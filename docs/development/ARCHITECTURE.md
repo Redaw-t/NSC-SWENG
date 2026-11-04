@@ -41,7 +41,7 @@ app (composition root: Main, AppContext, Modules)
   -> every module (to wire them together; nothing else may depend on app's wiring)
 
 pos      -> product.contract, inventory.contract, auth.contract/permission, shared
-reports  -> pos.contract (SaleHistory), product.contract, inventory.contract, shared
+reports  -> pos.contract (SaleHistory), product.contract, inventory.contract, auth.contract/permission, shared
 sync     -> pos.contract (SaleExport), product.contract, inventory.contract, shared
 barcode  -> product.contract, shared
 inventory-> product.contract, auth.*, shared

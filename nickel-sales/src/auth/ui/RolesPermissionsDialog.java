@@ -90,7 +90,8 @@ final class RolesPermissionsDialog {
             case PROCESS_SALE -> "Process sales (POS)";
             case MANAGE_PRODUCTS -> "Manage products";
             case UPDATE_INVENTORY -> "Update inventory";
-            case VIEW_REPORTS -> "View reports";
+            case VIEW_SALES_REPORTS -> "Sales reports";
+            case VIEW_INVENTORY_REPORTS -> "Inventory reports";
             case MANAGE_USERS -> "Manage users";
             case MANAGE_SYSTEM -> "System & sync";
         };

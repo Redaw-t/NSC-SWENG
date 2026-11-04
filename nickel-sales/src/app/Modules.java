@@ -7,6 +7,7 @@ import auth.ui.UserAdminModule;
 import inventory.ui.InventoryModule;
 import pos.ui.PosModule;
 import product.ui.ProductModule;
+import reports.ui.ReportsModule;
 import system.ui.SystemModule;
 
 import java.util.List;
@@ -34,8 +35,8 @@ public final class Modules {
                 new ProductModule(),
                 // Inventory (stock in/out)
                 new InventoryModule(),
-                // Transaction & Reports: replace with your module
-                new ComingSoonModule("Reports", "Sales and inventory reports", Permission.VIEW_REPORTS),
+                // Transaction & Reports (sales and inventory reports)
+                new ReportsModule(),
                 // User & Access Management
                 new UserAdminModule(),
                 // Audit & System (activity logs; sync, status and backup follow)

@@ -28,7 +28,9 @@ with a button for each part of the system your role may use:
 - **Products** (admins and inventory staff): add, edit and discontinue products,
   set retail and wholesale prices, and manage categories and suppliers. Point of Sale
   sells these real products.
-- **Inventory**, **Reports**, **System & sync**: not built yet ("coming soon").
+- **Reports** (admins: sales reports; admins and inventory staff: inventory report): transaction
+  history, daily / monthly / yearly sales summary, top products, sales by cashier and terminal.
+- **Inventory**, **System & sync**: not built yet ("coming soon").
   Until Inventory exists, stock is changed only by sales made through `run-demo`.
 
 Everyone can change their own password and log out.

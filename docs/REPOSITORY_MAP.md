@@ -30,7 +30,7 @@ the only part other modules should import.
 | `inventory/` | Stock levels and movements: `contract` now (`StockRecorder`, `StockLine`, `InsufficientStockException`); later `model`, `service`, `repository`, `ui` | Anything from `pos` (including `pos.contract`), product catalog editing | **Inventory Management** |
 | `barcode/` | Barcode to product lookup, barcode validation and generation (README only for now) | A second product lookup, SQL on product tables | **Barcode Management** |
 | `sync/` | Sending and receiving data with the central server, working from exported contracts (README only for now) | Screens, direct reads of POS internals | **Synchronization / API foundation** |
-| `reports/` | Read-only sales and inventory reports (README only for now) | Writes of any kind, POS internals | Transaction and Reports (later iteration) |
+| `reports/` | Read-only sales and inventory reports (`model`, `service`, `ui`) | Writes of any kind, POS internals | Transaction and Reports |
 | `system/` | Activity, inventory and sync logs, system status, backup and restore (`contract`, `model`, `repository`, `service`, `ui`) | Sales, product or stock rules | Audit and System Management |
 | `shared/` | Only cross-module infrastructure: `Database`, `Money`, `Quantity`, `PhTime`, `UiErrors` | Business logic of any module, "helpers", anything that knows about products, sales, users or stock | Whole team; additions need team agreement |
 
@@ -45,7 +45,7 @@ the only part other modules should import.
 | `inventory/` | `shared`, `product.contract`, `auth.*` | `pos.*` (any, including `pos.contract`), `test/` |
 | `barcode/` | `shared`, `product.contract` | `pos` internals, `inventory` internals, `test/` |
 | `sync/` | `shared`, `pos.contract` (`SaleExport`), `product.contract`, `inventory.contract` | any `*.ui`, `pos` internals, `test/` |
-| `reports/` | `shared`, `pos.contract` (`SaleHistory`), `product.contract`, `inventory.contract` | `pos` internals, other modules' `ui`, `test/` |
+| `reports/` | `shared`, `pos.contract` (`SaleHistory`), `product.contract`, `inventory.contract`, `auth.contract`/`auth.permission`, `app` (shell API from `ui` only) | `pos` internals, other modules' `ui`, `test/` |
 | `system/` | `shared`, `auth.contract`/`auth.permission` | `pos`, `product`, `inventory` internals, `test/` |
 | `shared/` | JDK only | every module, `test/` |
 

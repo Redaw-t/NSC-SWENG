@@ -7,7 +7,7 @@ for a completed sale), adjustments, reorder levels, low-stock rules, movement hi
 
 | Folder | State | What goes there |
 |---|---|---|
-| `contract/` | **Exists** | `StockRecorder` (called by POS inside the checkout transaction), `StockLine`, `InsufficientStockException`, and `StockLevels` (read-only current stock, used by Product to fill `ProductInfo.stockOnHand`). Do not change without telling the POS / Product owners. |
+| `contract/` | **Exists** | `StockRecorder` (called by POS inside the checkout transaction), `StockLine`, `InsufficientStockException`, and `StockLevels` (read-only current stock, used by Product to fill `ProductInfo.stockOnHand`), and `StockOverview` / `StockSnapshot` (read-only stock list with reorder level and status, used by Reports). Do not change without telling the POS / Product owners. |
 | `model/` | **Done** | `StockLevel`, `StockMovement` (checks its own numbers), `MovementType`, `StockReason`, `StockStatus`. |
 | `service/` | **Done** (core) | `InventoryService` (stock in/out, adjust, reorder level; implements `StockRecorder`), `InventoryStockLevels` (implements `StockLevels`), `InventoryAccess` (session + `UPDATE_INVENTORY` check), `InventoryException`. |
 | `repository/` | **Done** (core) | `InventoryRepository` (interface) and `MySqlInventoryRepository`. All SQL lives here. TODO: list/search/history/summary queries for the two screens. |

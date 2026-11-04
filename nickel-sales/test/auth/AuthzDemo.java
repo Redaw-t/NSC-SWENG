@@ -38,6 +38,13 @@ public class AuthzDemo {
         check("Cashier is DENIED updating inventory", !authz.checkAccess(cashier, Permission.UPDATE_INVENTORY));
         check("Inventory staff can update inventory", authz.checkAccess(inventory, Permission.UPDATE_INVENTORY));
         check("Inventory staff is DENIED processing sales", !authz.checkAccess(inventory, Permission.PROCESS_SALE));
+        check("Admin can view sales reports and inventory reports",
+                authz.checkAccess(admin, Permission.VIEW_SALES_REPORTS)
+                        && authz.checkAccess(admin, Permission.VIEW_INVENTORY_REPORTS));
+        check("Inventory staff can view inventory reports", authz.checkAccess(inventory, Permission.VIEW_INVENTORY_REPORTS));
+        check("Inventory staff is DENIED sales reports (Story 5)", !authz.checkAccess(inventory, Permission.VIEW_SALES_REPORTS));
+        check("Cashier is DENIED both kinds of report", !authz.checkAccess(cashier, Permission.VIEW_SALES_REPORTS)
+                && !authz.checkAccess(cashier, Permission.VIEW_INVENTORY_REPORTS));
         check("Inactive cashier is DENIED even PROCESS_SALE", !authz.checkAccess(inactive, Permission.PROCESS_SALE));
         check("Locked cashier is DENIED even PROCESS_SALE", !authz.checkAccess(locked, Permission.PROCESS_SALE));
         check("No user (null) is DENIED", !authz.checkAccess(null, Permission.PROCESS_SALE));

@@ -5,6 +5,7 @@ import auth.contract.AuditLogger;
 import auth.permission.AuthorizationService;
 import inventory.contract.InsufficientStockException;
 import inventory.contract.StockLine;
+import inventory.contract.StockOverview;
 import inventory.contract.StockRecorder;
 import inventory.repository.MySqlInventoryRepository;
 import inventory.service.InventoryAccess;
@@ -18,6 +19,12 @@ import product.repository.SupplierRepository;
 import product.service.CategoryService;
 import product.service.ProductService;
 import product.service.SupplierService;
+import reports.service.CashierReportService;
+import reports.service.InventoryReportService;
+import reports.service.ProductPerformanceService;
+import reports.service.ReportsAccess;
+import reports.service.SalesReportService;
+import reports.service.TransactionHistoryService;
 import shared.Database;
 import system.contract.SyncLogWriter;
 import system.repository.ActivityLogRepository;
@@ -100,6 +107,19 @@ public final class Main {
         app.register(SupplierService.class,
                 new SupplierService(supplierRepository, authz, audit));
         app.register(InventoryService.class, inventory);
+
+        // Transaction & Reports: read-only, over POS's SaleHistory.
+        ReportsAccess reportsAccess = ReportsAccess.of(app.auth(), app.authz());
+        app.register(TransactionHistoryService.class,
+                new TransactionHistoryService(app.saleHistory(), reportsAccess));
+        app.register(SalesReportService.class, new SalesReportService(app.saleHistory(), reportsAccess));
+        app.register(ProductPerformanceService.class,
+                new ProductPerformanceService(app.saleHistory(), reportsAccess));
+        app.register(CashierReportService.class, new CashierReportService(app.saleHistory(), reportsAccess));
+        // Inventory report: Reports gets Inventory's read-only StockOverview contract, never InventoryService.
+        StockOverview stockOverview = inventory;
+        app.register(StockOverview.class, stockOverview);
+        app.register(InventoryReportService.class, new InventoryReportService(stockOverview, reportsAccess));
 
         // Audit & System module.
         SystemAccess systemAccess = SystemAccess.of(app.auth(), app.authz());
