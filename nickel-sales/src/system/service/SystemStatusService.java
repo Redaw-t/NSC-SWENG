@@ -1,5 +1,6 @@
 package system.service;
 
+import shared.PrinterSettings;
 import system.contract.StatusProvider;
 import system.model.BackupRecord;
 import system.model.StatusItem;
@@ -7,6 +8,10 @@ import system.model.StatusItem.Level;
 import system.repository.ActivityLogRepository;
 import system.repository.BackupRecordRepository;
 
+import javax.print.PrintService;
+import javax.print.attribute.standard.PrinterIsAcceptingJobs;
+import javax.print.attribute.standard.PrinterState;
+import javax.print.attribute.standard.QueuedJobCount;
 import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.net.URI;
@@ -27,8 +32,8 @@ import java.util.function.Supplier;
 
 /**
  * Collects each component's health into one status report (Admin only). The ready-made checks
- * below cover the database, the other terminal, unsent sales, the last backup, free disk space
- * and log retention.
+ * below cover the database, the other terminal, the receipt and barcode printers, unsent sales,
+ * the last backup, free disk space and log retention.
  */
 public final class SystemStatusService {
 
@@ -137,7 +142,7 @@ public final class SystemStatusService {
             Optional<BackupRecord> latest = records.latestBackup();
             if (latest.isEmpty()) {
                 return new StatusItem("Last Backup", Level.WARNING, "None yet",
-                        "No backup has been made. Create one from the Backup & Restore tab.");
+                        "No backup has been made. Create one in Settings > Backup & Restore.");
             }
             long days = Duration.between(latest.get().createdAt(), clock.instant()).toDays();
             String when = days == 0 ? "Today" : days == 1 ? "1 day ago" : days + " days ago";
@@ -196,6 +201,46 @@ public final class SystemStatusService {
             return new StatusItem("Log Retention", Level.OK, age + (age == 1 ? " day old" : " days old"),
                     "Age of the oldest log entry. Logs are kept for " + RETENTION_DAYS + " days.");
         });
+    }
+
+    /**
+     * The receipt or barcode label printer (Settings > Printers), one card each. Windows does not
+     * always know whether a USB printer is plugged in, so this reports what it can see: the printer
+     * is missing, stopped, offline, or has print jobs stuck in its queue (the usual sign that it is
+     * unplugged, switched off or out of paper); otherwise Ready.
+     */
+    public static StatusProvider printer(PrinterSettings.Use use) {
+        String name = use == PrinterSettings.Use.RECEIPT ? "Receipt Printer" : "Barcode Printer";
+        return () -> {
+            PrintService service;
+            try {
+                service = PrinterSettings.find(use);
+            } catch (PrinterSettings.NoPrinterException e) {
+                boolean chosenButGone = PrinterSettings.chosen(use) != null;
+                return new StatusItem(name, Level.ERROR, chosenButGone ? "Not found" : "No printer", e.getMessage());
+            }
+            String printer = service.getName();
+            String where = printer + " (" + PrinterSettings.source(use) + ")";
+
+            PrinterIsAcceptingJobs accepting = service.getAttribute(PrinterIsAcceptingJobs.class);
+            PrinterState state = service.getAttribute(PrinterState.class);
+            QueuedJobCount queued = service.getAttribute(QueuedJobCount.class);
+            int waiting = queued == null ? 0 : queued.getValue();
+
+            if (state == PrinterState.STOPPED) {
+                return new StatusItem(name, Level.ERROR, "Stopped",
+                        where + " is stopped. Check it is on, connected and has paper.");
+            }
+            if (accepting == PrinterIsAcceptingJobs.NOT_ACCEPTING_JOBS) {
+                return new StatusItem(name, Level.ERROR, "Offline",
+                        where + " is not accepting print jobs. Check it is on and connected.");
+            }
+            if (waiting > 0) {
+                return new StatusItem(name, Level.WARNING, waiting + (waiting == 1 ? " job waiting" : " jobs waiting"),
+                        where + " has unprinted jobs. It may be unplugged, off or out of paper.");
+            }
+            return new StatusItem(name, Level.OK, "Ready", where + ".");
+        };
     }
 
     /** A check that reads the database: when it cannot, its card keeps its own name. */

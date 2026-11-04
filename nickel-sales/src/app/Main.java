@@ -28,6 +28,7 @@ import reports.service.ReportsAccess;
 import reports.service.SalesReportService;
 import reports.service.TransactionHistoryService;
 import shared.Database;
+import shared.PrinterSettings;
 import system.contract.SyncLogWriter;
 import system.repository.ActivityLogRepository;
 import system.repository.BackupRecordRepository;
@@ -144,6 +145,8 @@ public final class Main {
         app.register(SystemStatusService.class, new SystemStatusService(systemAccess, List.of(
                 SystemStatusService.database(Database::getConnection),
                 SystemStatusService.otherTerminal(System.getenv("NSC_PEER_URL")),
+                SystemStatusService.printer(PrinterSettings.Use.RECEIPT),
+                SystemStatusService.printer(PrinterSettings.Use.LABEL),
                 SystemStatusService.pendingSync(unsyncedSales, syncLog::syncConnected),
                 SystemStatusService.lastBackup(backupRecords, clock),
                 SystemStatusService.diskSpace(backups::folder),

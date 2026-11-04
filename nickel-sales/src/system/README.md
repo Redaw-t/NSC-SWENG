@@ -1,6 +1,6 @@
 # system/ — Audit and System Management
 
-**Status: all five tabs built (Activity Logs, Inventory Logs, Sync Logs, System Status, Backup & Restore).
+**Status: all five tabs built. Activity Logs, Inventory Logs and Sync Logs are on the Audit Logs screen; System Status and Backup & Restore are on the Settings screen (`ui/SystemSettingsTabs`, Admin only).
 Sync Logs fills up once the Sync module is connected. Old logs are never cleared: see Retention.**
 Opened from the sidebar's "Audit Logs" entry (Admin only: `MANAGE_SYSTEM`) via `ui.SystemModule`.
 

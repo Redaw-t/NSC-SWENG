@@ -7,8 +7,9 @@ import javax.print.DocFlavor;
 import javax.print.DocPrintJob;
 import javax.print.PrintException;
 import javax.print.PrintService;
-import javax.print.PrintServiceLookup;
 import javax.print.SimpleDoc;
+import shared.PrinterSettings;
+
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -17,8 +18,8 @@ import java.util.List;
  * Prints receipts straight to a thermal printer with ESC/POS commands, like the
  * printer maker's own test print: no page, no margins, no extra paper.
  *
- * Uses the Windows printer named in the environment variable NSC_PRINTER_NAME
- * (e.g. POS-58), or the default printer when it is not set.
+ * Uses the receipt printer chosen in Settings > Printers; if none is chosen, the printer named in
+ * the environment variable NSC_PRINTER_NAME (e.g. POS-58), else the Windows default printer.
  * Text is plain ASCII (anything else prints as '?'). The invoice-number barcode is sent
  * as a raster picture (GS v 0), which 58 mm and 80 mm ESC/POS printers support.
  */
@@ -47,21 +48,13 @@ public class EscPosReceiptPrinter implements PrinterPort {
         }
     }
 
+    /** The printer chosen in Settings > Printers, else NSC_PRINTER_NAME, else the Windows default. */
     private static PrintService findPrinter() throws ReceiptPrintException {
-        String wanted = System.getenv("NSC_PRINTER_NAME");
-        if (wanted != null && !wanted.isBlank()) {
-            for (PrintService s : PrintServiceLookup.lookupPrintServices(null, null)) {
-                if (s.getName().equalsIgnoreCase(wanted.trim())) {
-                    return s;
-                }
-            }
-            throw new ReceiptPrintException("There is no printer named \"" + wanted.trim() + "\" on this computer.");
+        try {
+            return PrinterSettings.find(PrinterSettings.Use.RECEIPT);
+        } catch (PrinterSettings.NoPrinterException e) {
+            throw new ReceiptPrintException(e.getMessage());
         }
-        PrintService def = PrintServiceLookup.lookupDefaultPrintService();
-        if (def == null) {
-            throw new ReceiptPrintException("No printer is set up on this computer. Set a default printer in Windows.");
-        }
-        return def;
     }
 
     private static byte[] toBytes(List<Receipt.Part> parts, int width) {

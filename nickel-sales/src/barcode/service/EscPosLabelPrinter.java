@@ -4,14 +4,16 @@ import javax.print.DocFlavor;
 import javax.print.DocPrintJob;
 import javax.print.PrintException;
 import javax.print.PrintService;
-import javax.print.PrintServiceLookup;
 import javax.print.SimpleDoc;
+import shared.PrinterSettings;
+
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 
 /**
  * Prints labels straight to a thermal printer with ESC/POS commands, the same way the receipt
- * printer does (printer: NSC_PRINTER_NAME, else the default printer). The bars are drawn by the
+ * printer does (printer: the label printer chosen in Settings > Printers, else NSC_PRINTER_NAME,
+ * else the default printer). The bars are drawn by the
  * printer itself (GS k), so no image is needed. EAN-13 / EAN-8 / UPC-A use the printer's own
  * barcode types; any other code is printed as CODE128.
  *
@@ -103,20 +105,12 @@ public class EscPosLabelPrinter implements LabelPrinterPort {
         return n.length() <= NAME_WIDTH ? n : n.substring(0, NAME_WIDTH);
     }
 
+    /** The printer chosen in Settings > Printers, else NSC_PRINTER_NAME, else the Windows default. */
     private static PrintService findPrinter() throws LabelPrintException {
-        String wanted = System.getenv("NSC_PRINTER_NAME");
-        if (wanted != null && !wanted.isBlank()) {
-            for (PrintService s : PrintServiceLookup.lookupPrintServices(null, null)) {
-                if (s.getName().equalsIgnoreCase(wanted.trim())) {
-                    return s;
-                }
-            }
-            throw new LabelPrintException("There is no printer named \"" + wanted.trim() + "\" on this computer.");
+        try {
+            return PrinterSettings.find(PrinterSettings.Use.LABEL);
+        } catch (PrinterSettings.NoPrinterException e) {
+            throw new LabelPrintException(e.getMessage());
         }
-        PrintService def = PrintServiceLookup.lookupDefaultPrintService();
-        if (def == null) {
-            throw new LabelPrintException("No printer is set up on this computer. Set a default printer first.");
-        }
-        return def;
     }
 }

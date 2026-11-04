@@ -98,13 +98,14 @@ public class DashboardRouter {
         show(inShell(user, sessionId, null, ComingSoonView.create("Dashboard", "This screen isn't built yet.")));
     }
 
-    /** Settings: Change password, for everyone. */
+    /** Settings: Change password and Printers for everyone; System Status and Backup & Restore for Admin. */
     private void openSettings(String sessionId) {
         User user = currentUser(sessionId);
         if (user == null) {
             return;
         }
-        show(inShell(user, sessionId, AppShell.SETTINGS, SettingsScreen.create(stage, app, sessionId)));
+        ScreenContext context = new ScreenContext(stage, sessionId, user, app, () -> showHome(sessionId));
+        show(inShell(user, sessionId, AppShell.SETTINGS, SettingsScreen.create(context)));
     }
 
     /** The sidebar is open on the Dashboard (null) and on Settings, hidden elsewhere. */
