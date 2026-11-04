@@ -3,6 +3,8 @@ package app;
 
 import auth.contract.AuditLogger;
 import auth.permission.AuthorizationService;
+import barcode.service.EscPosLabelPrinter;
+import barcode.service.LabelPrinterPort;
 import inventory.contract.InsufficientStockException;
 import inventory.contract.StockLine;
 import inventory.contract.StockRecorder;
@@ -77,6 +79,7 @@ public final class Main {
         app.register(SupplierService.class,
                 new SupplierService(supplierRepository, authz, audit));
         app.register(InventoryService.class, inventory);
+        app.register(LabelPrinterPort.class, new EscPosLabelPrinter());   // Barcode tab: product labels
 
         return app;
     }

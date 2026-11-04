@@ -4,6 +4,7 @@ import app.AppModule;
 import app.ComingSoonView;
 import app.ScreenContext;
 import auth.permission.Permission;
+import barcode.service.LabelPrinterPort;
 import javafx.scene.Parent;
 import product.service.CategoryService;
 import product.service.ProductService;
@@ -44,7 +45,9 @@ public final class ProductModule implements AppModule {
         if (products == null || categories == null || suppliers == null) {
             return notConnected();
         }
-        return new ProductScreen(screen, products, categories, suppliers).getView();
+        // The Barcode tab prints labels with the label printer registered in app.Main (null: the tab says so).
+        LabelPrinterPort labelPrinter = screen.app().find(LabelPrinterPort.class).orElse(null);
+        return new ProductScreen(screen, products, categories, suppliers, labelPrinter).getView();
     }
 
     private static Parent notConnected() {
