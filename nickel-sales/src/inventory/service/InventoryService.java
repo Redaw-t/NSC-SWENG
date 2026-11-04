@@ -4,7 +4,9 @@ import auth.contract.AuditLogger;
 import auth.contract.User;
 import inventory.contract.InsufficientStockException;
 import inventory.contract.StockLine;
+import inventory.contract.StockOverview;
 import inventory.contract.StockRecorder;
+import inventory.contract.StockSnapshot;
 import inventory.model.MovementType;
 import inventory.model.StockLevel;
 import inventory.model.StockMovement;
@@ -30,7 +32,7 @@ import java.util.TreeMap;
 
 /**
  * The Inventory use cases: stock in, stock out, adjustments, reorder levels,
- * and the stock-out of a completed sale ({@link StockRecorder}).
+ * and the stock-out of a completed sale ({@link StockRecorder}); read-only current stock for Reports ({@link StockOverview}).
  *
  * Rules enforced here (not in the screen):
  * - the caller must be logged in with UPDATE_INVENTORY (every screen method takes the session id);
@@ -41,7 +43,7 @@ import java.util.TreeMap;
  *
  * Not here on purpose: StockLevels (see InventoryStockLevels, to avoid a construction cycle with Product).
  */
-public class InventoryService implements StockRecorder {
+public class InventoryService implements StockRecorder, StockOverview {
 
     static final int MAX_NOTE_LENGTH = 200;
     private static final int MAX_DECIMALS = 3;
@@ -69,6 +71,24 @@ public class InventoryService implements StockRecorder {
      */
     public List<StockRow> listStock(String sessionId) throws InventoryException {
         access.require(sessionId);
+        return stockRows();
+    }
+
+    /**
+     * {@link StockOverview}: the same rows as {@link #listStock}, for the Reports module.
+     * No session check here: Reports checks its own permission (VIEW_INVENTORY_REPORTS).
+     */
+    @Override
+    public List<StockSnapshot> currentStock() {
+        List<StockSnapshot> snapshots = new ArrayList<>();
+        for (StockRow row : stockRows()) {
+            snapshots.add(new StockSnapshot(row.productId(), row.name(), row.barcode(), row.unit(),
+                    row.onHand(), row.reorderLevel(), StockSnapshot.Level.valueOf(row.status().name())));
+        }
+        return snapshots;
+    }
+
+    private List<StockRow> stockRows() {
         Map<String, StockLevel> levels = new HashMap<>();
         for (StockLevel level : repository.findAll()) {
             levels.put(level.productId(), level);
