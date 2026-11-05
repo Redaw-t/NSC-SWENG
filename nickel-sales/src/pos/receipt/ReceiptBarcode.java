@@ -18,7 +18,7 @@ final class ReceiptBarcode {
     /** Barcode height: about 10 mm, tall enough for scanners to read easily. */
     static final int HEIGHT_DOTS = 80;
     /** Widest bar used (dots); wider bars on wide paper add nothing. */
-    private static final int MAX_MODULE_DOTS = 3;
+    private static final int MAX_MODULE_DOTS = 2;
 
     private ReceiptBarcode() { }
 

@@ -53,7 +53,10 @@ public class AppCheck {
         check("Receipt settings: store details and paper width", () -> {
             AppConfig defaults = AppConfig.from(Map.of());
             expectText(defaults.store().name(), "NICKEL SALES CENTER");
-            expectText(defaults.store().address(), "");
+            expectText(defaults.store().address(), pos.receipt.StoreInfo.NICKEL_ADDRESS);   // the store's own details
+            expectText(defaults.store().proprietor(), pos.receipt.StoreInfo.NICKEL_PROPRIETOR);
+            expectText(defaults.store().tin(), pos.receipt.StoreInfo.NICKEL_TIN);
+            expectText(AppConfig.from(Map.of("NSC_STORE_TIN", " ")).store().tin(), "");        // blank = left off
             expectTrue(defaults.receiptWidth() == 32, "32 characters (58 mm) by default");
             AppConfig set = AppConfig.from(Map.of("NSC_STORE_NAME", "Nickel Sales Center - Branch 2",
                     "NSC_STORE_ADDRESS", "123 Rizal Ave.", "NSC_STORE_TIN", "000-123", "NSC_STORE_PHONE", "8123",

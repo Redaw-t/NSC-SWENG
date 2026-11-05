@@ -7,10 +7,9 @@ import java.util.List;
  * The sales summary of a period. The first five amounts come from each sale's own totals, so
  * they always agree: {@code vatableSales + vatExemptSales + vatAmount = totalIncome}.
  *
- * <p>The retail / wholesale split is different: it adds up LINE amounts, which are before VAT
- * (VAT is worked out once per sale, not per line). So {@code retailAmount + wholesaleAmount}
- * equals the sales before VAT, not the total income. (Sales saved under the old rule, when shelf
- * prices already included VAT, have line amounts that include VAT.)
+ * <p>The retail / wholesale split is different: it adds up LINE amounts. Shelf prices include VAT,
+ * so {@code retailAmount + wholesaleAmount} equals the total income. (Sales saved while prices were
+ * before VAT have line amounts without VAT, so for them the split is less than the income.)
  *
  * @param transactions number of completed sales
  * @param totalIncome  what customers paid, VAT included

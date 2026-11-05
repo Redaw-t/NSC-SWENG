@@ -16,7 +16,7 @@ import java.math.BigDecimal;
  */
 public interface PricingRule {
 
-    /** Price per unit, before VAT, for {@code quantity} of {@code product}. */
+    /** Price per unit, VAT included, for {@code quantity} of {@code product}. */
     BigDecimal unitPrice(ProductInfo product, BigDecimal quantity);
 
     /** Which price a line of {@code quantity} qualifies for. */

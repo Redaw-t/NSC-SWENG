@@ -15,16 +15,16 @@ import java.util.Objects;
  * A completed sale never changes. Only completed sales are saved: a sale that
  * is cancelled before payment is simply never stored.
  *
- * Totals. Prices are BEFORE VAT; 12% VAT is added on the VATable items:
- * - vatableSales   = sum of line totals of VATable lines
+ * Totals. Shelf prices INCLUDE VAT, so the line totals add up to the total:
+ * - total          = sum of the line totals = what the customer pays
+ * - vatableSales   = the VATable lines' total without its VAT (/ 1.12, rounded once)
+ * - vatAmount      = the VAT inside the VATable lines
  * - vatExemptSales = sum of line totals of VAT-exempt lines
- * - vatAmount      = 12% of vatableSales, rounded once for the whole sale
- * - total          = vatableSales + vatExemptSales + vatAmount = what the customer pays
- * so the line totals add up to {@link #subtotal()} and total = subtotal + VAT.
+ * so vatableSales + vatAmount + vatExemptSales = total.
  *
- * (Sales saved before this rule, when shelf prices already included VAT, have
- * line totals that add up to the total instead; they still load and print
- * exactly as they were sold.)
+ * (Sales saved while prices were BEFORE VAT, when VAT was added on top, have line
+ * totals that add up to total - VAT instead; they still load and print exactly as
+ * they were sold.)
  *
  * The constructor checks that the lines are numbered 1, 2, 3 ..., that the
  * totals add up as above, and that the payments cover exactly the total, so
@@ -108,7 +108,7 @@ public record SaleRecord(
         }
     }
 
-    /** Sum of the line totals (before VAT on sales made under the current rule). */
+    /** Sum of the line totals (VAT included on sales made under the current rule; before VAT on older ones). */
     public BigDecimal subtotal() {
         BigDecimal sum = Money.ZERO;
         for (SaleLineRecord line : lines) {

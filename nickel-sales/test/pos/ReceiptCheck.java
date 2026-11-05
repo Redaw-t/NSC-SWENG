@@ -15,7 +15,9 @@ import pos.contract.PriceType;
 import pos.contract.SaleLineRecord;
 import pos.contract.SaleRecord;
 import pos.receipt.Receipt;
+import pos.receipt.EscPosReceiptPrinter;
 import pos.receipt.ReceiptBuilder;
+import pos.receipt.ReceiptRenderer;
 import pos.receipt.StoreInfo;
 import pos.repository.InvoiceNumberGenerator;
 import pos.repository.MySqlSaleRepository;
@@ -41,7 +43,8 @@ import java.util.UUID;
  *
  * Checks that a receipt shows exactly the saved sale: every amount is read
  * back OUT of the receipt text and compared with the SaleRecord, and the
- * printed line totals must add up to the printed total. With MySQL, a sale is
+ * printed line totals must add up to the printed total (prices include VAT).
+ * The printed picture is made from the same lines (pos.receipt.ReceiptRenderer). With MySQL, a sale is
  * saved, reprinted from the database, and the reprint must match the
  * original line for line (only the REPRINT mark differs).
  *
@@ -70,48 +73,76 @@ public class ReceiptCheck {
                 line("P-0002", "Ballpen Black", "pc", "6", "10.00", PriceType.WHOLESALE, true),
                 line("P-0004", "Rice (per kg)", "kg", "1.5", "52.50", PriceType.RETAIL, false));
 
-        check("Every amount on the receipt matches the saved sale", () -> {
+        check("Every amount on the receipt matches the saved sale (prices include VAT)", () -> {
             Receipt r = new Receipt(STORE, cashSale, "Juan Dela Cruz", false);
             List<String> text = r.toText(Receipt.DEFAULT_WIDTH);
             BigDecimal printedSum = Money.ZERO;
             for (SaleLineRecord line : cashSale.lines()) {
                 String detail = "  " + Quantity.format(line.quantity()) + " " + line.unit() + " x "
-                        + Money.format(line.unitPrice());
-                String row = only(text, l -> l.startsWith(detail), "line for " + line.productName());
-                BigDecimal amount = amountAtEnd(row);
+                        + Money.format(line.unitPrice()) + (line.priceType() == PriceType.WHOLESALE ? " W" : "");
+                String row = only(text, l -> l.startsWith(detail + " "), "line for " + line.productName());
+                expectTrue(row.endsWith(line.vatable() ? " V" : " E"), "V / E flag: " + row);
+                BigDecimal amount = amountBeforeFlag(row);
                 expect(amount, line.lineTotal().toPlainString());
                 printedSum = printedSum.add(amount);
                 expectTrue(text.get(text.indexOf(row) - 1).equals(line.productName()), "name above its amounts");
             }
-            // prices are before VAT: lines add up to the Subtotal, and Subtotal + VAT = TOTAL
+            // VAT is INSIDE the prices: the lines add up to the TOTAL, and nothing is added on top
             BigDecimal printedSubtotal = amountAtEnd(only(text, l -> l.startsWith("Subtotal"), "Subtotal"));
-            BigDecimal printedVat = amountAtEnd(only(text, l -> l.startsWith("VAT (12%)"), "VAT"));
             BigDecimal printedTotal = amountAtEnd(only(text, l -> l.startsWith("TOTAL"), "TOTAL"));
-            expectTrue(printedSum.compareTo(printedSubtotal) == 0, "printed lines add up to the printed subtotal");
-            expectTrue(printedSubtotal.add(printedVat).compareTo(printedTotal) == 0, "subtotal + VAT = total");
-            expect(printedSubtotal, "638.75");
-            expect(amountAtEnd(only(text, l -> l.trim().startsWith("VATable sales"), "VATable")), "560.00");
-            expect(amountAtEnd(only(text, l -> l.trim().startsWith("VAT-exempt sales"), "exempt")), "78.75");
-            expect(printedVat, "67.20");
-            expect(printedTotal, "705.95");
+            BigDecimal vatable = amountAtEnd(only(text, l -> l.startsWith("VATable (V)"), "VATable"));
+            BigDecimal vat = amountAtEnd(only(text, l -> l.startsWith("VAT ") && !l.startsWith("VATable"), "VAT"));
+            BigDecimal exempt = amountAtEnd(only(text, l -> l.startsWith("VAT-Exempt (E)"), "exempt"));
+            expectTrue(printedSum.compareTo(printedTotal) == 0, "printed lines add up to the printed total");
+            expectTrue(printedSubtotal.compareTo(printedTotal) == 0, "subtotal = total (VAT is not added)");
+            expectTrue(vatable.add(vat).add(exempt).compareTo(printedTotal) == 0, "VATable + VAT + exempt = total");
+            expect(printedTotal, "638.75");
+            expect(vatable, "500.00");                              // 560.00 / 1.12
+            expect(vat, "60.00");
+            expect(exempt, "78.75");
+            expect(amountAtEnd(only(text, l -> l.startsWith("VAT-Zero (Z)"), "zero-rated")), "0.00");
             expect(printedTotal, cashSale.total().toPlainString());
-            expect(amountAtEnd(only(text, l -> l.startsWith("Cash "), "Cash")), "1000.00");
-            expect(amountAtEnd(only(text, l -> l.startsWith("Change"), "Change")), "294.05");
-            only(text, l -> l.equals("Prices are before VAT."), "before-VAT note");
+            expect(amountAtEnd(only(text, l -> l.startsWith("CASH "), "Cash")), "1000.00");
+            expect(amountAtEnd(only(text, l -> l.startsWith("CHANGE"), "Change")), "361.25");
         });
 
-        check("Header: store details, invoice, PH date and time, terminal, cashier", () -> {
-            List<String> text = new Receipt(STORE, cashSale, "Juan Dela Cruz", false).toText(42);
+        check("The 15.00 example: VATable 13.39 and VAT 1.61 inside the price", () -> {
+            SaleRecord one = sale(PaymentMethod.CASH, "15", null,
+                    line("P-1", "STABILO BOSS (ORANGE)", "pc", "1", "15.00", PriceType.RETAIL, true));
+            List<String> text = new Receipt(STORE, one, "Juan", false).toText(32);
+            expect(amountAtEnd(only(text, l -> l.startsWith("TOTAL"), "TOTAL")), "15.00");
+            expect(amountAtEnd(only(text, l -> l.startsWith("VATable (V)"), "VATable")), "13.39");
+            expect(amountAtEnd(only(text, l -> l.startsWith("VAT ") && !l.startsWith("VATable"), "VAT")), "1.61");
+            expect(amountAtEnd(only(text, l -> l.startsWith("CHANGE"), "Change")), "0.00");
+            expectTrue(text.stream().noneMatch(l -> l.equals("Wholesale (W)")), "no wholesale legend without W items");
+        });
+
+        check("Header and details: store, proprietor, VAT-REG TIN, invoice, PH date and time, terminal, cashier", () -> {
+            StoreInfo store = new StoreInfo("Nickel Sales Center", "123 Rizal Ave., Manila", "Jerick Chua Cubillan",
+                    "000-123-456-000", "(02) 8123 4567");
+            List<String> text = new Receipt(store, cashSale, "Juan Dela Cruz", false).toText(48);
             expectText(text.get(0).trim(), "Nickel Sales Center");
             expectTrue(text.get(1).trim().equals("123 Rizal Ave., Manila"), "address");
-            expectTrue(text.contains(center("TIN 000-123-456-000", 42)), "TIN centered");
-            expectTrue(text.contains(center("Tel. (02) 8123 4567", 42)), "phone centered");
-            only(text, l -> l.startsWith("Invoice") && l.endsWith(cashSale.invoiceNo()), "invoice");
-            only(text, l -> l.startsWith("Date") && l.endsWith(PhTime.format(cashSale.completedAt())), "PH date");
-            only(text, l -> l.startsWith("Terminal") && l.endsWith("T01"), "terminal");
+            expectTrue(text.contains(center("Jerick Chua Cubillan - PROPRIETOR", 48)), "proprietor centered");
+            expectTrue(text.contains(center("VAT-REG TIN: 000-123-456-000", 48)), "TIN centered");
+            expectTrue(text.contains(center("Tel. (02) 8123 4567", 48)), "phone centered");
+            only(text, l -> l.trim().equals(Receipt.TITLE), "SALES INVOICE title");
+            only(text, l -> l.startsWith("Sales Invoice #") && l.endsWith(cashSale.invoiceNo()), "invoice");
+            String when = java.time.format.DateTimeFormatter.ofPattern("MMM d, yyyy h:mm a", java.util.Locale.US)
+                    .format(PhTime.of(cashSale.completedAt()));
+            expectText(when, "Oct 24, 2026 3:23 PM");                        // 07:23 UTC = 3:23 PM in PH
+            only(text, l -> l.startsWith("Transaction Date & Time") && l.endsWith(when), "PH date and time");
+            only(text, l -> l.startsWith("POS Terminal") && l.endsWith("T01"), "terminal");
             only(text, l -> l.startsWith("Cashier") && l.endsWith("Juan Dela Cruz"), "cashier");
-            only(text, l -> l.trim().equals(Receipt.NOT_OFFICIAL), "not an official receipt");
-            only(text, l -> l.equals("W = wholesale price, E = VAT-exempt"), "legend");
+            only(text, l -> l.startsWith("Item Count") && l.endsWith("9.5"), "item count (2 + 6 + 1.5)");
+            String legend = only(text, l -> l.equals("Wholesale (W)"), "wholesale legend");
+            expectTrue(text.indexOf(legend) == text.indexOf(only(text, l -> l.startsWith("Item Count"), "count")) + 1,
+                    "legend right after Item Count");
+            for (String field : List.of("Name: ", "Address: ", "TIN: ", "Business Style: ")) {
+                only(text, l -> l.startsWith(field) && l.endsWith("..."), "fill-in line " + field.trim());
+            }
+            only(text, l -> l.trim().equals(Receipt.CLOSING), "closing note");
+            only(text, l -> l.trim().equals(Receipt.THANKS), "thank you");
             expectTrue(text.stream().noneMatch(l -> l.contains("REPRINT")), "an original is not marked REPRINT");
         });
 
@@ -141,31 +172,53 @@ public class ReceiptCheck {
             SaleRecord g = sale(PaymentMethod.GCASH, null, "1009876543210",
                     line("P-0001", "Bond Paper A4 (ream)", "ream", "1", "250.00", PriceType.RETAIL, true));
             List<String> text = new Receipt(STORE, g, "Juan", false).toText(42);
-            expect(amountAtEnd(only(text, l -> l.startsWith("GCash"), "GCash")), "280.00");   // 250.00 + VAT
-            only(text, l -> l.startsWith("Ref. no.") && l.endsWith("1009876543210"), "reference");
-            expectTrue(text.stream().noneMatch(l -> l.startsWith("Change") || l.startsWith("Cash ")), "no change");
+            expect(amountAtEnd(only(text, l -> l.startsWith("GCASH"), "GCash")), "250.00");   // VAT already inside
+            only(text, l -> l.startsWith("Ref. No.") && l.endsWith("1009876543210"), "reference");
+            expect(amountAtEnd(only(text, l -> l.startsWith("CHANGE"), "Change")), "0.00");
+            expectTrue(text.stream().noneMatch(l -> l.startsWith("CASH ")), "no cash line");
         });
 
-        check("Barcode: Code 128 of the invoice number, just above the not-official notice", () -> {
+        check("Barcode: Code 128 of the invoice number, after the fill-in lines, before the closing note", () -> {
             for (boolean reprint : new boolean[]{false, true}) {
-                List<Receipt.Part> parts = new Receipt(STORE, cashSale, "Juan Dela Cruz", reprint).toParts(32);
-                long barcodes = parts.stream().filter(p -> p instanceof Receipt.BarcodeBlock).count();
-                expectTrue(barcodes == 1, "exactly one barcode, found " + barcodes);
-                int at = -1;
-                for (int i = 0; i < parts.size(); i++) {
-                    if (parts.get(i) instanceof Receipt.BarcodeBlock) {
-                        at = i;
-                    }
-                }
-                Receipt.BarcodeBlock code = (Receipt.BarcodeBlock) parts.get(at);
+                List<Receipt.Line> lines = new Receipt(STORE, cashSale, "Juan Dela Cruz", reprint).lines();
+                List<Receipt.Line> codes = lines.stream().filter(l -> l instanceof Receipt.Barcode).toList();
+                expectTrue(codes.size() == 1, "exactly one barcode, found " + codes.size());
+                Receipt.Barcode code = (Receipt.Barcode) codes.get(0);
                 expectText(code.value(), cashSale.invoiceNo());
                 expectText(Code128.decode(Code128.modules(code.value())), cashSale.invoiceNo());
-                List<String> after = ((Receipt.TextBlock) parts.get(at + 1)).lines();
-                expectText(after.get(0).trim(), cashSale.invoiceNo());                // readable number under the bars
-                expectTrue(after.stream().anyMatch(l -> l.trim().equals(Receipt.NOT_OFFICIAL)), "notice after barcode");
-                List<String> before = ((Receipt.TextBlock) parts.get(at - 1)).lines();
-                expectTrue(before.stream().noneMatch(l -> l.trim().equals(Receipt.NOT_OFFICIAL)), "notice not before barcode");
+                int at = lines.indexOf(code);
+                int lastFillIn = -1;
+                int closing = -1;
+                for (int i = 0; i < lines.size(); i++) {
+                    if (lines.get(i) instanceof Receipt.FillIn) {
+                        lastFillIn = i;
+                    }
+                    if (lines.get(i) instanceof Receipt.Center c && c.text().equals(Receipt.CLOSING)) {
+                        closing = i;
+                    }
+                }
+                expectTrue(lastFillIn < at && at < closing, "barcode between the fill-in lines and the closing note");
             }
+        });
+
+        check("Printed picture: 384 dots on 58 mm, 576 on 80 mm, the same every time, sent as raster strips", () -> {
+            Receipt r = new Receipt(STORE, cashSale, "Juan Dela Cruz", false);
+            java.awt.image.BufferedImage narrow = ReceiptRenderer.render(r, 32);
+            java.awt.image.BufferedImage wide = ReceiptRenderer.render(r, 48);
+            expectTrue(narrow.getWidth() == 384 && wide.getWidth() == 576, "paper widths in dots");
+            expectTrue(narrow.getHeight() > 600 && narrow.getHeight() < 3000, "a receipt-sized picture: " + narrow.getHeight());
+            java.awt.image.BufferedImage again = ReceiptRenderer.render(r, 32);
+            for (int y = 0; y < narrow.getHeight(); y += 7) {
+                for (int x = 0; x < narrow.getWidth(); x += 3) {
+                    expectTrue(narrow.getRGB(x, y) == again.getRGB(x, y), "same picture every time (preview = print)");
+                }
+            }
+            byte[] bytes = EscPosReceiptPrinter.toBytes(narrow);
+            expectTrue(bytes[0] == 0x1B && bytes[1] == 0x40, "starts with reset");
+            String raw = new String(bytes, java.nio.charset.StandardCharsets.ISO_8859_1);
+            expectTrue(raw.contains("\u001Dv0"), "raster picture (GS v 0)");
+            int strips = raw.split("\u001Dv0", -1).length - 1;
+            expectTrue(strips == (narrow.getHeight() + 127) / 128, "sent in 128-row strips: " + strips);
         });
 
         check("Code 128: bars decode back to the text (invoice numbers, letters, digits, odd lengths)", () -> {
@@ -212,7 +265,7 @@ public class ReceiptCheck {
                 throw new RuntimeException("database down");
             });
             List<String> reprint = builder.buildReprint(cashSale).toText(42);
-            only(reprint, l -> l.trim().equals("*** REPRINT ***"), "REPRINT mark");
+            only(reprint, l -> l.trim().equals(Receipt.REPRINT_MARK), "REPRINT mark");
             only(reprint, l -> l.startsWith("Cashier") && l.endsWith("NSC-00002"), "user ID instead of name");
             expectTrue(new ReceiptBuilder(STORE, id -> null).build(cashSale).cashierName().equals("NSC-00002"),
                     "unknown user -> ID");
@@ -237,7 +290,7 @@ public class ReceiptCheck {
                 List<String> original = builder.build(saved).toText(42);
                 SaleRecord fromDb = repo.findByInvoiceNo(saved.invoiceNo()).orElseThrow();
                 List<String> reprint = new ArrayList<>(builder.buildReprint(fromDb).toText(42));
-                reprint.removeIf(l -> l.isEmpty() || l.trim().equals("*** REPRINT ***"));   // the REPRINT mark
+                reprint.removeIf(l -> l.isEmpty() || l.trim().equals(Receipt.REPRINT_MARK));   // the REPRINT mark
                 List<String> originalNoBlank = new ArrayList<>(original);
                 originalNoBlank.removeIf(String::isEmpty);
                 expectTrue(reprint.equals(originalNoBlank), "reprint differs from the original:\n"
@@ -278,7 +331,13 @@ public class ReceiptCheck {
                 t.vatableSales(), t.vatExemptSales(), t.vatAmount(), t.total());
     }
 
-    /** The number at the end of a receipt line, e.g. "1,000.00" -> 1000.00. */
+    /** The amount before the V / E flag of an item line, e.g. "PHP 1,000.00 V" -> 1000.00. */
+    static BigDecimal amountBeforeFlag(String line) {
+        String[] parts = line.trim().split("\\s+");
+        return new BigDecimal(parts[parts.length - 2].replace(",", ""));
+    }
+
+    /** The number at the end of a receipt line, e.g. "PHP 1,000.00" -> 1000.00. */
     static BigDecimal amountAtEnd(String line) {
         String[] parts = line.trim().split("\\s+");
         return new BigDecimal(parts[parts.length - 1].replace(",", ""));

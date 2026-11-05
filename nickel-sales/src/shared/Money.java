@@ -12,7 +12,7 @@ import java.util.Locale;
  * - Amounts are BigDecimal, never double (0.1 + 0.2 != 0.3 in double).
  * - Two decimal places, rounded half-up (1.005 -> 1.01).
  * - Stored in MySQL as DECIMAL(12,2).
- * - Prices are BEFORE VAT; POS adds 12% VAT on VATable items (pos.cart.SaleTotals).
+ * - Prices INCLUDE VAT; POS works out the VAT inside them (pos.cart.SaleTotals).
  */
 public final class Money {
 

@@ -25,6 +25,16 @@ final class ReprintDialog {
     private ReprintDialog() { }
 
     static Optional<SaleRecord> ask(Window owner, SaleHistory history, String lastInvoice) {
+        return ask(owner, history, lastInvoice, "Reprint Receipt", "Type the invoice number of the sale.", "Find");
+    }
+
+    /**
+     * The same pop-up with its own title, grey line and button text (F7 Retrieve Transaction uses it).
+     *
+     * @return the completed sale with that invoice number, or empty if closed
+     */
+    static Optional<SaleRecord> ask(Window owner, SaleHistory history, String lastInvoice,
+                                    String title, String subtitle, String buttonText) {
         Modal modal = new Modal(owner, 600);
         SaleRecord[] found = {null};
 
@@ -43,7 +53,7 @@ final class ReprintDialog {
         Styles.modalButton(cancel, Theme.BORDER, Theme.PRIMARY_TEXT);
         cancel.setCancelButton(true);
         cancel.setOnAction(e -> modal.close());
-        Button find = new Button("Find");
+        Button find = new Button(buttonText);
         Styles.modalButton(find, Theme.INFORMATION, "white");
         find.setDefaultButton(true);
         find.setOnAction(e -> {
@@ -65,11 +75,12 @@ final class ReprintDialog {
                 return;
             }
             found[0] = sale;
+            invoice.clear();
             modal.close();
         });
 
-        modal.card().getChildren().addAll(Modal.title("Reprint Receipt"),
-                Modal.subtitle("Type the invoice number of the sale."), grid, error, Modal.buttons(cancel, find));
+        modal.card().getChildren().addAll(Modal.title(title), Modal.subtitle(subtitle), grid, error,
+                Modal.buttons(cancel, find));
         Platform.runLater(() -> {
             invoice.requestFocus();
             invoice.selectAll();

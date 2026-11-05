@@ -226,17 +226,18 @@ public class CartCheck {
             pos.addItem(PAPER, q("2"));                                  // 500.00 VATable
             pos.addItem(BALLPEN, q("6"));                                //  60.00 VATable (wholesale)
             pos.addItem(RICE, q("1.5"));                                 //  78.75 VAT-exempt
-            SaleTotals t = pos.getTotals();                              // prices are BEFORE VAT
-            expect(t.vatableSales(), "560.00");                          // 500.00 + 60.00
+            SaleTotals t = pos.getTotals();                              // prices INCLUDE VAT
+            expect(t.vatableSales(), "500.00");                          // 560.00 / 1.12
             expect(t.vatExemptSales(), "78.75");
             expect(t.subtotal(), "638.75");
-            expect(t.vatAmount(), "67.20");                              // 12% of 560.00, added
-            expect(t.total(), "705.95");                                 // 638.75 + 67.20
+            expect(t.vatAmount(), "60.00");                              // the VAT inside 560.00
+            expect(t.total(), "638.75");                                 // nothing added on top
             expectTrue(t.vatableSales().add(t.vatAmount()).add(t.vatExemptSales()).compareTo(t.total()) == 0,
                     "parts add up to the total");
-            expect(Vat.on(Money.of("100.00")), "12.00");
-            expect(Vat.on(Money.of("223.21")), "26.79");                 // 26.7852 rounds up
-            expect(Vat.on(Money.of("0.04")), "0.00");                    // 0.0048 rounds down
+            expect(Vat.inside(Money.of("112.00")), "12.00");
+            expect(Vat.inside(Money.of("15.00")), "1.61");               // 13.39 + 1.61
+            expect(Vat.inside(Money.of("223.21")), "23.92");             // 199.2946 -> 199.29 of sales
+            expect(Vat.inside(Money.of("0.04")), "0.00");                // too small to hold any VAT
             expectTrue(SaleTotals.of(List.of()).equals(SaleTotals.ZERO), "empty cart totals are zero");
         });
 
@@ -247,7 +248,7 @@ public class CartCheck {
                         PriceType.RETAIL, true);
                 SaleTotals t = SaleTotals.of(List.of(line));
                 if (t.vatableSales().add(t.vatAmount()).compareTo(t.total()) != 0 || Money.isNegative(t.vatAmount())
-                        || t.vatableSales().compareTo(price) != 0 || t.vatAmount().compareTo(Vat.on(price)) != 0) {
+                        || t.total().compareTo(price) != 0 || t.vatAmount().compareTo(Vat.inside(price)) != 0) {
                     throw new AssertionError("does not add up for " + price);
                 }
             }

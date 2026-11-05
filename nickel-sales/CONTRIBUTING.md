@@ -41,7 +41,7 @@ No Maven or Gradle is used.
 | `NSC_DB_PASSWORD` | none: you must set it. **Never put a real password in code or in the repo.** |
 | `NSC_IDLE_TIMEOUT_MINUTES` | `30` |
 | `NSC_TERMINAL_ID` | `T01` (invoice numbers; each terminal needs its own) |
-| `NSC_STORE_NAME` / `NSC_STORE_ADDRESS` / `NSC_STORE_TIN` / `NSC_STORE_PHONE` | printed on receipts |
+| `NSC_STORE_NAME` / `NSC_STORE_ADDRESS` / `NSC_STORE_PROPRIETOR` / `NSC_STORE_TIN` / `NSC_STORE_PHONE` | printed on receipts (address, proprietor and TIN default to the store's own) |
 | `NSC_RECEIPT_WIDTH` | `42` (80 mm paper; 32 for 58 mm) |
 
 Windows: `setx NSC_DB_PASSWORD "..."`, then open a **new** terminal (restart IntelliJ too).

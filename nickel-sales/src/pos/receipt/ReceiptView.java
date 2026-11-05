@@ -1,74 +1,41 @@
 package pos.receipt;
 
-import barcode.ui.BarcodeView;
-import javafx.geometry.Pos;
-import javafx.geometry.VPos;
-import javafx.scene.Node;
-import javafx.scene.layout.StackPane;
-import javafx.scene.layout.VBox;
-import javafx.scene.text.Font;
-import javafx.scene.text.Text;
+import javafx.scene.image.ImageView;
+import javafx.scene.image.PixelWriter;
+import javafx.scene.image.WritableImage;
+import javafx.scene.paint.Color;
 
-import java.util.List;
+import java.awt.image.BufferedImage;
 
 /**
- * Draws receipt lines as a block of monospaced text. The screen preview and
- * the printed pages are both made here, from the same lines, so what the
- * cashier sees is what prints.
+ * The on-screen receipt preview: the very picture {@link ReceiptRenderer} makes for the printer,
+ * shown dot for dot, so what the cashier sees is what prints.
  */
 public final class ReceiptView {
 
-    /** Font family used on screen and paper (every computer has a "Monospaced" font). */
-    public static final String FONT = "Monospaced";
-
     private ReceiptView() { }
 
-    /** The lines as one Text node in the given font size (points). */
-    public static Text text(List<String> lines, double fontSize) {
-        Text text = new Text(String.join("\n", lines));
-        text.setFont(Font.font(FONT, fontSize));
-        text.setTextOrigin(VPos.TOP);   // place by the top edge, so nothing is cut off at the top of a page
-        return text;
+    /** The receipt picture as a JavaFX image, one screen pixel per printer dot. */
+    public static ImageView node(Receipt receipt, int widthChars) {
+        return node(ReceiptRenderer.render(receipt, widthChars));
     }
 
-    /**
-     * The whole receipt for the preview: text blocks plus the barcode picture,
-     * lined up on one paper width. The barcode takes the same share of the paper
-     * as it does on the printer.
-     *
-     * @param width characters per line (the same value used for {@code toParts})
-     */
-    public static Node node(List<Receipt.Part> parts, double fontSize, int width) {
-        double paper = widthOf(width, fontSize);
-        VBox box = new VBox();
-        box.setAlignment(Pos.TOP_LEFT);
-        for (Receipt.Part part : parts) {
-            if (part instanceof Receipt.TextBlock block) {
-                box.getChildren().add(text(block.lines(), fontSize));
-            } else if (part instanceof Receipt.BarcodeBlock code) {
-                double scale = paper / ReceiptBarcode.paperDots(width);
-                double barsWidth = ReceiptBarcode.barcodeDots(code.value(), width) * scale;
-                double barsHeight = ReceiptBarcode.HEIGHT_DOTS * scale;
-                StackPane centered = new StackPane(BarcodeView.node(code.value(), barsWidth, barsHeight));
-                centered.setAlignment(Pos.CENTER);
-                centered.setMinWidth(paper);
-                centered.setPrefWidth(paper);
-                centered.setMaxWidth(paper);
-                box.getChildren().add(centered);
+    /** A rendered receipt picture as a JavaFX image, one screen pixel per printer dot. */
+    public static ImageView node(BufferedImage picture) {
+        WritableImage image = new WritableImage(picture.getWidth(), picture.getHeight());
+        PixelWriter px = image.getPixelWriter();
+        for (int y = 0; y < picture.getHeight(); y++) {
+            for (int x = 0; x < picture.getWidth(); x++) {
+                px.setColor(x, y, (picture.getRGB(x, y) & 0xFFFFFF) == 0 ? Color.BLACK : Color.WHITE);
             }
         }
-        return box;
+        ImageView view = new ImageView(image);
+        view.setSmooth(false);   // keep the dots sharp, as on the paper
+        return view;
     }
 
-    /** Width in points of {@code chars} characters at {@code fontSize}. */
-    static double widthOf(int chars, double fontSize) {
-        return text(List.of("M".repeat(chars)), fontSize).getLayoutBounds().getWidth();
-    }
-
-    /** Height in points of one line at {@code fontSize}. */
-    static double lineHeight(double fontSize) {
-        double one = text(List.of("M"), fontSize).getLayoutBounds().getHeight();
-        double two = text(List.of("M", "M"), fontSize).getLayoutBounds().getHeight();
-        return two - one;
+    /** Width on screen of a receipt {@code widthChars} characters wide (for sizing the preview). */
+    public static double paperWidth(int widthChars) {
+        return ReceiptRenderer.dotsFor(widthChars);
     }
 }

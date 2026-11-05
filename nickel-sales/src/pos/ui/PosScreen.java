@@ -44,6 +44,7 @@ import pos.checkout.CheckoutException;
 import pos.checkout.PaymentService;
 import pos.contract.PaymentRecord;
 import pos.contract.PriceType;
+import pos.contract.SaleLineRecord;
 import pos.contract.SaleRecord;
 import pos.receipt.Receipt;
 import product.contract.ProductInfo;
@@ -107,6 +108,10 @@ public final class PosScreen {
     private static final String ONLINE_GREEN = "#1FBA42";
     private static final String DARK = Theme.PRIMARY_TEXT;
     private static final double MENU_WIDTH = 220;
+    /** How faint locked buttons look while a retrieved sale is shown (JavaFX's own disabled look is 0.4). */
+    private static final double LOCKED_OPACITY = 0.55;
+    private static final java.time.format.DateTimeFormatter RETRIEVED_TIME =
+            java.time.format.DateTimeFormatter.ofPattern("M/d/yy h:mm a", java.util.Locale.US);
 
     /** "5*4800000000019": a quantity, a star, then the barcode (or the search text). */
     private static final Pattern QUANTITY_PREFIX = Pattern.compile("^\\s*(\\d+(?:\\.\\d+)?)\\s*\\*\\s*(.*)$");
@@ -127,14 +132,70 @@ public final class PosScreen {
     private final Label itemCount = new Label();
     private final Label subtotalValue = new Label();
     private final Label vatValue = new Label();
+    private final Label vatableValue = new Label();   // VATable sales: the VATable lines without their VAT
+    private final Label exemptValue = new Label();
+    private final Label zeroRatedValue = new Label();
     private final Label totalValue = new Label();
     private final Label payHint = new Label();
     private Button payButton;
     private PaymentOverlay paymentCard;   // non-null while the payment card is open
-    private String lastInvoice;           // filled in for F6 reprint
+    private String lastInvoice;           // the latest sale completed here; filled in for F6 reprint and F7 retrieve
 
-    /** One line in the cart table, with its stock problem (null if none). */
-    record Row(int no, SaleLineItem line, StockProblem problem) { }
+    /** The completed sale shown by F7 Retrieve Transaction; null = the normal cart is shown. */
+    private SaleRecord retrieved;
+    private final Label summaryTitle = new Label("ORDER SUMMARY");
+    /** Every button that is locked (dimmed, not clickable) while a retrieved sale is shown. */
+    private final List<Button> lockedWhileRetrieved = new java.util.ArrayList<>();
+    private Button removeButton;   // "Remove Item" normally, "Void Item" while a sale is retrieved
+    private Button cancelButton;   // "Cancel Transaction" normally, "Void Transaction" while retrieved
+
+    /**
+     * One line in the cart table: a line of the open sale ({@code line}, with its stock problem or
+     * null), or a line of a retrieved, already completed sale ({@code saved}; {@code line} is null).
+     */
+    record Row(int no, SaleLineItem line, SaleLineRecord saved, StockProblem problem) {
+
+        Row(int no, SaleLineItem line, StockProblem problem) {
+            this(no, line, null, problem);
+        }
+
+        static Row of(SaleLineRecord saved) {
+            return new Row(saved.lineNo(), null, saved, null);
+        }
+
+        String productName() {
+            return line != null ? line.productName() : saved.productName();
+        }
+
+        BigDecimal quantity() {
+            return line != null ? line.quantity() : saved.quantity();
+        }
+
+        String unit() {
+            return line != null ? line.unit() : saved.unit();
+        }
+
+        BigDecimal unitPrice() {
+            return line != null ? line.unitPrice() : saved.unitPrice();
+        }
+
+        PriceType priceType() {
+            return line != null ? line.priceType() : saved.priceType();
+        }
+
+        BigDecimal lineTotal() {
+            return line != null ? line.lineTotal() : saved.lineTotal();
+        }
+
+        boolean vatable() {
+            return line != null ? line.vatable() : saved.vatable();
+        }
+
+        /** " V" after a VATable item's price, like the receipt. */
+        String vatFlag() {
+            return vatable() ? " V" : "";
+        }
+    }
 
     public PosScreen(ScreenContext screen, SalesService pos, PaymentService payments, ProductLookup products) {
         this.screen = screen;
@@ -267,6 +328,24 @@ public final class PosScreen {
         }
     }
 
+    /** The red Remove Item / Void Item button and the Delete key. */
+    private void removeOrVoid() {
+        if (retrieved != null) {
+            voidItem();
+        } else {
+            removeSelected();
+        }
+    }
+
+    /** The red Cancel Transaction / Void Transaction button and F9. */
+    private void cancelOrVoid() {
+        if (retrieved != null) {
+            voidTransaction();
+        } else {
+            cancelSale();
+        }
+    }
+
     private void cancelSale() {
         Sale sale = pos.currentSale().orElse(null);
         if (sale == null || sale.isEmpty()) {
@@ -358,9 +437,12 @@ public final class PosScreen {
 
     /** Re-reads the sale, its stock problems and totals; keeps or moves the selection. */
     private void refresh(String selectProductId) {
+        if (retrieved != null) {
+            return;   // a retrieved sale is on screen; the open sale is shown again after F8
+        }
         Row selected = table.getSelectionModel().getSelectedItem();
         String keep = selectProductId != null ? selectProductId
-                : selected == null ? null : selected.line().productId();
+                : selected == null || selected.line() == null ? null : selected.line().productId();
 
         Sale sale = pos.currentSale().orElseThrow();
         Map<String, StockProblem> problems = new HashMap<>();
@@ -390,7 +472,7 @@ public final class PosScreen {
         }
         if (keep != null) {
             for (Row r : rows) {
-                if (r.line().productId().equals(keep)) {
+                if (r.line() != null && r.line().productId().equals(keep)) {
                     table.getSelectionModel().select(r);
                     table.scrollTo(r);
                 }
@@ -399,14 +481,14 @@ public final class PosScreen {
 
         SaleTotals t = sale.totals();
         subtotalValue.setText(peso(t.subtotal()));
-        vatValue.setText(peso(t.vatAmount()));
+        showVat(t.vatableSales(), t.vatAmount(), t.vatExemptSales());
         totalValue.setText(peso(t.total()));
         BigDecimal pieces = BigDecimal.ZERO;
         for (SaleLineItem line : items) {
             pieces = pieces.add(line.quantity());
         }
         itemCount.setText(Quantity.format(pieces));
-        payButton.setDisable(!canPay);
+        lock(payButton, !canPay);
         payHint.setText(hint);
     }
 
@@ -524,13 +606,104 @@ public final class PosScreen {
         showNotice("Edit Price is not available yet.");
     }
 
-    /** F7 - TODO(skeleton): bring back a transaction that was put on hold. */
+    /**
+     * F7: find a completed sale by invoice number and show it in the cart, read only. The barcode box
+     * and every button are locked except Void Item, Void Transaction and New Transaction (F8), which
+     * goes back. The open sale is left as it was and comes back with New Transaction.
+     */
     private void retrieveTransaction() {
-        showNotice("Retrieve Transaction is not available yet.");
+        if (retrieved != null) {
+            return;
+        }
+        Optional<SaleRecord> sale;
+        try {
+            sale = ReprintDialog.ask(screen.stage(), screen.app().saleHistory(), lastInvoice,
+                    "Retrieve Transaction", "Type the invoice number of the completed sale.", "Retrieve");
+        } catch (RuntimeException e) {
+            showError(UiErrors.message(e, "Sales could not be searched. Try again."));
+            return;
+        }
+        if (sale.isEmpty()) {
+            focusBarcode();
+            return;
+        }
+        showRetrieved(sale.get());
     }
 
-    /** F8 - TODO(skeleton): start a new transaction (for example, put this one on hold and begin another). */
+    /** Shows a completed sale in the cart table and locks the screen (see {@link #retrieveTransaction}). */
+    private void showRetrieved(SaleRecord sale) {
+        retrieved = sale;   // lastInvoice is NOT changed: F6 / F7 keep offering the latest completed sale
+        rows.clear();
+        BigDecimal pieces = BigDecimal.ZERO;
+        for (SaleLineRecord line : sale.lines()) {
+            rows.add(Row.of(line));
+            pieces = pieces.add(line.quantity());
+        }
+        itemCount.setText(Quantity.format(pieces));
+        subtotalValue.setText(peso(sale.subtotal()));
+        showVat(sale.vatableSales(), sale.vatAmount(), sale.vatExemptSales());
+        totalValue.setText(peso(sale.total()));
+        summaryTitle.setText("RETRIEVED SALE");
+        payHint.setText("Invoice " + sale.invoiceNo() + "  \u00B7  "
+                + RETRIEVED_TIME.format(shared.PhTime.of(sale.completedAt())) + "  \u00B7  read only");
+        payHint.setStyle("-fx-font-size: 16px; -fx-font-weight: bold; -fx-text-fill: " + BLUE + ";");
+        applyMode();
+        if (!rows.isEmpty()) {
+            table.getSelectionModel().select(0);
+        }
+        table.requestFocus();
+        showNotice("Showing sale " + sale.invoiceNo() + ". Press New Transaction (F8) to go back.");
+    }
+
+    /** F8 while a sale is retrieved: back to the open sale (as it was before F7). */
+    private void leaveRetrieved() {
+        retrieved = null;
+        summaryTitle.setText("ORDER SUMMARY");
+        payHint.setStyle("-fx-font-size: 16px; -fx-text-fill: " + RED + ";");
+        applyMode();
+        refresh(null);
+        showNotice("Back to the current transaction.");
+        focusBarcode();
+    }
+
+    /** Locks or unlocks the screen for a retrieved sale, and relabels Remove / Cancel as Void. */
+    private void applyMode() {
+        boolean locked = retrieved != null;
+        lock(barcodeBox, locked);
+        barcodeField.setEditable(!locked);
+        for (Button b : lockedWhileRetrieved) {
+            lock(b, locked);
+        }
+        lock(payButton, locked);
+        relabel(removeButton, locked ? "Void Item" : "Remove Item", "Del", 22);
+        relabel(cancelButton, locked ? "Void Transaction" : "Cancel Transaction", "F9", 26);
+    }
+
+    /** Disables a control and dims it a little (not as faint as JavaFX's default), or the reverse. */
+    private static void lock(javafx.scene.Node node, boolean locked) {
+        node.setDisable(locked);
+        node.setOpacity(locked ? LOCKED_OPACITY : 1);
+    }
+
+    /** Del while a sale is retrieved. TODO: void one line of a completed sale (decide who may do it). */
+    private void voidItem() {
+        showNotice("Void Item is not available yet.");
+    }
+
+    /** F9 while a sale is retrieved. TODO: void the whole completed sale (decide who may do it). */
+    private void voidTransaction() {
+        showNotice("Void Transaction is not available yet.");
+    }
+
+    /**
+     * F8: leaves a retrieved sale. TODO(skeleton): otherwise, start a new transaction (for example,
+     * put this one on hold and begin another).
+     */
     private void newTransaction() {
+        if (retrieved != null) {
+            leaveRetrieved();
+            return;
+        }
         showNotice("New Transaction is not available yet.");
     }
 
@@ -595,6 +768,10 @@ public final class PosScreen {
                 return;
             }
             KeyCode k = e.getCode();
+            if (retrieved != null) {
+                handleRetrievedKey(e);   // only F8, F9, Delete, Esc and the arrow keys work
+                return;
+            }
             if (k == KeyCode.F1) {
                 addFromSearch();
             } else if (k == KeyCode.F2) {
@@ -626,6 +803,24 @@ public final class PosScreen {
             }
             e.consume();
         });
+    }
+
+    /** Keys while a retrieved sale is shown: F8 back, F9 void transaction, Delete void item, Esc home. */
+    private void handleRetrievedKey(KeyEvent e) {
+        switch (e.getCode()) {
+            case F8 -> newTransaction();
+            case F9 -> voidTransaction();
+            case DELETE, BACK_SPACE -> voidItem();
+            case ESCAPE -> screen.goHome();
+            case UP, DOWN, PAGE_UP, PAGE_DOWN, HOME, END, TAB -> {
+                if (!table.isFocused()) {
+                    table.requestFocus();
+                }
+                return;   // let the table move the selection
+            }
+            default -> { }
+        }
+        e.consume();   // every other key (F1-F7, Enter, +, -, typing) does nothing
     }
 
     /** Online - Cashier: name - [message] - menu (Dashboard, Logout). */
@@ -666,7 +861,9 @@ public final class PosScreen {
         Button reprint = keyButton("Reprint Receipt", "F6", PosStyle.Kind.SECONDARY, DARK, 26, this::reprint);
         Button retrieve = keyButton("Retrieve Transaction", "F7", PosStyle.Kind.SECONDARY, DARK, 26, this::retrieveTransaction);
         Button newTransaction = keyButton("New Transaction", "F8", PosStyle.Kind.SECONDARY, DARK, 26, this::newTransaction);
-        Button cancel = keyButton("Cancel Transaction", "F9", PosStyle.Kind.DANGER, "white", 26, this::cancelSale);
+        Button cancel = keyButton("Cancel Transaction", "F9", PosStyle.Kind.DANGER, "white", 26, this::cancelOrVoid);
+        cancelButton = cancel;
+        lockedWhileRetrieved.addAll(List.of(reprint, retrieve));
         for (Button b : List.of(reprint, retrieve, newTransaction, cancel)) {
             fixHeight(b, 70);
             b.setMaxWidth(Double.MAX_VALUE);
@@ -689,12 +886,12 @@ public final class PosScreen {
         PosStyle.placeholder(empty);
         table.setPlaceholder(empty);
         table.getColumns().add(column("#", 73, r -> String.valueOf(r.no())));
-        table.getColumns().add(column("Item", 503, r -> r.line().productName()));
-        table.getColumns().add(column("Qty", 99, r -> Quantity.format(r.line().quantity()) + " " + r.line().unit()));
-        table.getColumns().add(column("Unit Price", 188, r -> Money.format(r.line().unitPrice())));
+        table.getColumns().add(column("Item", 503, Row::productName));
+        table.getColumns().add(column("Qty", 99, r -> Quantity.format(r.quantity()) + " " + r.unit()));
+        table.getColumns().add(column("Unit Price", 188, r -> Money.format(r.unitPrice()) + r.vatFlag()));
         table.getColumns().add(column("Price", 218,
-                r -> r.line().priceType() == PriceType.WHOLESALE ? "WHOLESALE" : "RETAIL"));
-        table.getColumns().add(column("Amount", 270, r -> Money.format(r.line().lineTotal())));
+                r -> r.priceType() == PriceType.WHOLESALE ? "WHOLESALE" : "RETAIL"));
+        table.getColumns().add(column("Amount", 270, r -> Money.format(r.lineTotal()) + r.vatFlag()));
         // A line with a stock problem is tinted red; the sentence is in the summary card above Payment.
         table.setRowFactory(t -> new PosStyle.CartRow<Row>(row -> row.problem() != null));
         table.addEventFilter(KeyEvent.KEY_PRESSED, e -> {
@@ -758,7 +955,9 @@ public final class PosScreen {
         Button openItem = keyButton("Open Item", "F2", PosStyle.Kind.SECONDARY, DARK, 26, this::openItem);
         Button editQty = keyButton("Edit Qty", "F3", PosStyle.Kind.SECONDARY, DARK, 26, this::askQuantity);
         Button editPrice = keyButton("Edit Price", "F4", PosStyle.Kind.SECONDARY, DARK, 26, this::editPrice);
-        Button remove = keyButton("Remove Item", "Del", PosStyle.Kind.DANGER, "white", 22, this::removeSelected);
+        Button remove = keyButton("Remove Item", "Del", PosStyle.Kind.DANGER, "white", 22, this::removeOrVoid);
+        removeButton = remove;
+        lockedWhileRetrieved.addAll(List.of(scan, search, openItem, editQty, editPrice));
         fixSize(openItem, 165, 70);
         fixSize(editQty, 164, 70);
         fixSize(editPrice, 165, 70);
@@ -776,19 +975,23 @@ public final class PosScreen {
 
     /** ORDER SUMMARY: total items, subtotal, VAT, TOTAL, a stock hint and the PAYMENT button. */
     private Node buildSummary() {
-        Label title = label("ORDER SUMMARY", 40, true);
+        Label title = summaryTitle;
+        title.setStyle("-fx-font-size: 40px; -fx-text-fill: " + DARK + "; -fx-font-weight: bold;");
         title.setPadding(new Insets(24, 0, 19, 0));
 
         VBox items = new VBox(sumRow("Total Items", itemCount, false));
         items.setAlignment(Pos.CENTER_LEFT);
-        fixHeight(items, 111);
+        fixHeight(items, 78);
 
-        VBox amounts = new VBox(10, sumRow("Subtotal", subtotalValue, false), sumRow("VAT", vatValue, false));
-        amounts.setPadding(new Insets(42, 0, 0, 0));
-        fixHeight(amounts, 153);
+        // Subtotal, then the VAT breakdown (as on the receipt): prices include VAT, so these add up to the TOTAL.
+        VBox breakdown = new VBox(4, vatRow("VATable", vatableValue), vatRow("VAT", vatValue),
+                vatRow("VAT-Exempt", exemptValue), vatRow("VAT-Zero", zeroRatedValue));
+        breakdown.setPadding(new Insets(6, 0, 0, 0));
+        VBox amounts = new VBox(6, sumRow("Subtotal", subtotalValue, false), breakdown);
+        amounts.setPadding(new Insets(20, 0, 20, 0));
 
         VBox total = new VBox(sumRow("TOTAL", totalValue, true));
-        total.setPadding(new Insets(41, 0, 0, 0));
+        total.setPadding(new Insets(22, 0, 0, 0));
 
         payHint.setWrapText(true);
         payHint.setStyle("-fx-font-size: 16px; -fx-text-fill: " + RED + ";");
@@ -802,6 +1005,28 @@ public final class PosScreen {
         card.setPadding(new Insets(0, 19, 24, 19));
         card.setStyle("-fx-background-color: white; -fx-border-color: #E3E7ED; -fx-border-width: 2;");
         return card;
+    }
+
+    /** VATable / VAT / VAT-Exempt / VAT-Zero (VAT-Zero is always 0.00: no product is zero-rated yet). */
+    private void showVat(BigDecimal vatable, BigDecimal vat, BigDecimal exempt) {
+        vatableValue.setText(peso(vatable));
+        vatValue.setText(peso(vat));
+        exemptValue.setText(peso(exempt));
+        zeroRatedValue.setText(peso(Money.ZERO));
+    }
+
+    /** A smaller grey row of the VAT breakdown, indented under Subtotal. */
+    private static Node vatRow(String name, Label value) {
+        String style = "-fx-font-size: 20px; -fx-text-fill: " + Theme.SECONDARY_TEXT + ";";
+        Label label = new Label(name);
+        label.setStyle(style);
+        value.setStyle(style);
+        Region grow = new Region();
+        HBox.setHgrow(grow, Priority.ALWAYS);
+        HBox row = new HBox(label, grow, value);
+        row.setAlignment(Pos.CENTER_LEFT);
+        row.setPadding(new Insets(0, 6, 0, 24));
+        return row;
     }
 
     private static Node sumRow(String name, Label value, boolean strong) {
@@ -864,6 +1089,14 @@ public final class PosScreen {
         b.setGraphic(keyed(main, key, color, -Math.round(size / 5.0)));
         decorate(b, kind, onClick);
         return b;
+    }
+
+    /** Changes the text of a red {@link #keyButton} (e.g. "Remove Item" to "Void Item"); its action stays. */
+    private static void relabel(Button b, String name, String key, int size) {
+        Label main = new Label(name);
+        main.setStyle("-fx-font-size: " + size + "px; -fx-font-weight: bold; -fx-text-fill: white;");
+        b.setGraphic(keyed(main, key, "white", -Math.round(size / 5.0)));
+        b.setAccessibleText(name);
     }
 
     private static Button iconKeyButton(Node icon, String key, Runnable onClick) {

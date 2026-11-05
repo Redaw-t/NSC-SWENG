@@ -75,7 +75,7 @@ final class TopProductsPane implements ReportsPane {
         FlowPane toolbar = new FlowPane(12, 12, period.getView(), ranking, size, apply);
         toolbar.setAlignment(Pos.CENTER_LEFT);
 
-        Label note = new Label("Sales amounts are before VAT. Share = the product's amount out of all products sold "
+        Label note = new Label("Sales amounts include VAT. Share = the product's amount out of all products sold "
                 + "in the period.");
         Styles.muted(note);
         note.setWrapText(true);

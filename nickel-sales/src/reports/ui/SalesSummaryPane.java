@@ -30,8 +30,8 @@ import java.util.List;
  */
 final class SalesSummaryPane implements ReportsPane {
 
-    private static final String SPLIT_NOTE = "Retail and wholesale are line amounts before VAT, so together they "
-            + "equal VATable + VAT-exempt sales, not the total income.";
+    private static final String SPLIT_NOTE = "Retail and wholesale are line amounts, VAT included, so together they "
+            + "equal the total income (older sales made when prices were before VAT do not include it).";
 
     private final ScreenContext screen;
     private final SalesReportService sales;

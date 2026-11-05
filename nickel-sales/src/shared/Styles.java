@@ -7,6 +7,7 @@ import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListView;
+import javafx.scene.control.ScrollPane;
 import javafx.scene.control.TableCell;
 import javafx.scene.control.TableRow;
 import javafx.scene.control.TableView;
@@ -15,6 +16,8 @@ import javafx.scene.effect.DropShadow;
 import javafx.scene.layout.Region;
 import javafx.scene.paint.Color;
 
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.Locale;
 
 /**
@@ -418,4 +421,39 @@ public final class Styles {
                 + "-fx-text-fill: " + Theme.PRIMARY_TEXT + "; -fx-background-color: ";
         withHover(button, base + Theme.BORDER + ";", base + darker(Theme.BORDER) + ";");
     }
+
+    /* ------------------------------ slim scroll bar ------------------------------ */
+
+    /**
+     * The slim, rounded scroll bar of the Dashboard: no arrows, no track, a soft blue thumb that
+     * widens and darkens a little under the mouse. Also removes the ScrollPane's own grey frame.
+     */
+    public static void slimScrollBar(ScrollPane scroll) {
+        scroll.getStyleClass().add("slim-scroll");
+        scroll.getStylesheets().add(SLIM_SCROLL_CSS);
+    }
+
+    private static final String SLIM_SCROLL_CSS = "data:text/css;base64," + Base64.getEncoder().encodeToString(
+            String.join("\n",
+                    ".slim-scroll, .slim-scroll:focused { -fx-background-color: transparent; -fx-background-insets: 0; "
+                            + "-fx-padding: 0; -fx-border-color: transparent; }",
+                    ".slim-scroll > .viewport { -fx-background-color: transparent; }",
+                    ".slim-scroll > .corner { -fx-background-color: transparent; }",
+                    ".slim-scroll .scroll-bar:vertical { -fx-background-color: transparent; -fx-pref-width: 12; "
+                            + "-fx-padding: 4 3 4 3; }",
+                    ".slim-scroll .scroll-bar:vertical:hover { -fx-padding: 4 1 4 1; }",
+                    ".slim-scroll .scroll-bar:horizontal { -fx-background-color: transparent; -fx-pref-height: 12; "
+                            + "-fx-padding: 3 4 3 4; }",
+                    ".slim-scroll .scroll-bar:horizontal:hover { -fx-padding: 1 4 1 4; }",
+                    ".slim-scroll .scroll-bar .track, .slim-scroll .scroll-bar .track-background { "
+                            + "-fx-background-color: transparent; -fx-border-color: transparent; }",
+                    ".slim-scroll .scroll-bar .thumb { -fx-background-color: rgba(36, 87, 166, 0.28); "
+                            + "-fx-background-radius: 999; -fx-background-insets: 0; }",
+                    ".slim-scroll .scroll-bar .thumb:hover { -fx-background-color: rgba(36, 87, 166, 0.5); }",
+                    ".slim-scroll .scroll-bar .thumb:pressed { -fx-background-color: rgba(36, 87, 166, 0.7); }",
+                    ".slim-scroll .scroll-bar .increment-button, .slim-scroll .scroll-bar .decrement-button { "
+                            + "-fx-background-color: transparent; -fx-padding: 0; -fx-pref-height: 0; -fx-pref-width: 0; }",
+                    ".slim-scroll .scroll-bar .increment-arrow, .slim-scroll .scroll-bar .decrement-arrow { "
+                            + "-fx-shape: \" \"; -fx-padding: 0; }")
+                    .getBytes(StandardCharsets.UTF_8));
 }

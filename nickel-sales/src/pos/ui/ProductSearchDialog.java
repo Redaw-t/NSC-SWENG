@@ -71,7 +71,7 @@ final class ProductSearchDialog {
             }
             status.setText(found.isEmpty() ? "No products found." : found.size() + " found"
                     + (found.size() == MAX_RESULTS ? " (showing the first " + MAX_RESULTS + ")" : "")
-                    + ".  Prices are before VAT.");
+                    + ".  Prices include VAT.");
         };
         query.textProperty().addListener((o, was, is) -> search.run());
         search.run();

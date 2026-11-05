@@ -4,7 +4,7 @@
 products through `ProductService`; the **Products** button on the home screen manages them.
 
 **Responsibility:** the product catalog: create/edit/discontinue products, categories,
-suppliers, prices (retail + wholesale, both before VAT), VAT flag, barcodes, and finding
+suppliers, prices (retail + wholesale, both VAT included), VAT flag, barcodes, and finding
 products by ID, name or barcode.
 
 | Folder | What is there |

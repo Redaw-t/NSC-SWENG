@@ -78,14 +78,14 @@ public class CheckoutCheck {
         CheckoutService checkout = new CheckoutService(repo, new InvoiceNumberGenerator(), stock, audit);
 
         check("Cash: must cover the total (VAT included); change is worked out", db, () -> {
-            Sale sale = cart(new SalesService(products, terminal), PAPER, "1");   // 250.00 + 30.00 VAT
+            Sale sale = cart(new SalesService(products, terminal), PAPER, "1");   // 250.00, VAT already inside
             PaymentRecord p = payments.recordPayment(sale, PaymentMethod.CASH, Money.of("500"), null);
             expect(p.amountTendered(), "500.00");
-            expect(p.amountApplied(), "280.00");
-            expect(p.change(), "220.00");
-            expect(payments.recordPayment(sale, PaymentMethod.CASH, Money.of("280"), null).change(), "0.00");
-            expectMessage(() -> payments.recordPayment(sale, PaymentMethod.CASH, Money.of("279.99"), null),
-                    "Cash received (279.99) is less than the total (280.00).");
+            expect(p.amountApplied(), "250.00");
+            expect(p.change(), "250.00");
+            expect(payments.recordPayment(sale, PaymentMethod.CASH, Money.of("250"), null).change(), "0.00");
+            expectMessage(() -> payments.recordPayment(sale, PaymentMethod.CASH, Money.of("249.99"), null),
+                    "Cash received (249.99) is less than the total (250.00).");
             expectMessage(() -> payments.recordPayment(sale, PaymentMethod.CASH, null, null),
                     "Enter the cash received.");
             expect(payments.computeChange(Money.of("638.75"), Money.of("1000")), "361.25");
@@ -95,7 +95,7 @@ public class CheckoutCheck {
             Sale sale = cart(new SalesService(products, terminal), PAPER, "1");
             PaymentRecord g = payments.recordPayment(sale, PaymentMethod.GCASH, null, " 1009 876 543210 ");
             expectText(g.referenceNo(), "1009 876 543210");
-            expect(g.amountTendered(), "280.00");
+            expect(g.amountTendered(), "250.00");
             expect(g.change(), "0.00");
             expectMessage(() -> payments.recordPayment(sale, PaymentMethod.MAYA, null, " "),
                     "Enter the Maya reference number.");
@@ -147,10 +147,10 @@ public class CheckoutCheck {
                 saved.add(rec);
                 expectText(rec.invoiceNo(), terminal + "-" + year + "-000001");
                 expectText(rec.saleId(), sale.getSaleId());
-                expect(rec.vatableSales(), "560.00");
-                expect(rec.vatAmount(), "67.20");
-                expect(rec.total(), "627.20");
-                expect(rec.payments().get(0).change(), "372.80");
+                expect(rec.vatableSales(), "500.00");                 // 560.00 with VAT inside
+                expect(rec.vatAmount(), "60.00");
+                expect(rec.total(), "560.00");
+                expect(rec.payments().get(0).change(), "440.00");
                 expectTrue(sale.getStatus() == SaleStatus.COMPLETED, "sale is COMPLETED");
                 expectTrue(pos.currentSale().isEmpty(), "no open sale afterwards");
                 expect(TestCatalog.stockOf("P-0001"), "38.000");
@@ -218,15 +218,15 @@ public class CheckoutCheck {
             check("GCash sale with VAT-exempt kg items reads back exactly", db, () -> {
                 SalesService pos = new SalesService(products, new PricingService(), terminal, checkout);
                 Sale sale = cart(pos, RICE, "1.5");                       // 78.75 VAT-exempt
-                pos.addItem(BALLPEN, q("2"));                             // 24.00 VATable + 2.88 VAT
+                pos.addItem(BALLPEN, q("2"));                             // 24.00 VATable, VAT 2.57 inside
                 SaleRecord rec = pos.finalizeSale(payments.recordPayment(sale, PaymentMethod.GCASH, null, "1009876543210"));
                 saved.add(rec);
                 SaleRecord back = repo.findById(rec.saleId()).orElseThrow();
                 expectTrue(back.equals(rec), "reads back exactly as saved");
                 expect(back.vatExemptSales(), "78.75");
-                expect(back.vatableSales(), "24.00");
-                expect(back.vatAmount(), "2.88");
-                expect(back.total(), "105.63");
+                expect(back.vatableSales(), "21.43");
+                expect(back.vatAmount(), "2.57");
+                expect(back.total(), "102.75");
                 expect(back.lines().get(0).quantity(), "1.500");
                 expectText(back.payments().get(0).method() + " " + back.payments().get(0).referenceNo(),
                         "GCASH 1009876543210");

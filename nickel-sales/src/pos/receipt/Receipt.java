@@ -10,33 +10,41 @@ import shared.Money;
 import shared.PhTime;
 import shared.Quantity;
 
+import java.math.BigDecimal;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 
 /**
- * A receipt for one completed sale (Receipt in the class diagram), built by
- * {@link ReceiptBuilder} from the SAVED sale, so it can only show what was
- * saved. {@link #toParts(int)} lays it out as fixed-width text blocks with a
- * Code 128 barcode of the invoice number just above the "not an official
- * receipt" notice; the on-screen preview and the printer both use exactly these
- * parts. {@link #toText(int)} is the same receipt as text lines only (the barcode
- * is a picture, so it is left out; its invoice-number caption is kept).
+ * A receipt (sales invoice) for one completed sale (Receipt in the class diagram), built by
+ * {@link ReceiptBuilder} from the SAVED sale, so it can only show what was saved.
  *
- * Amounts are in pesos without the sign (receipt printer fonts may not have
- * the peso sign). Item prices are before VAT; VAT is added under Subtotal. Not BIR-accredited: every receipt says it is not an
- * official receipt.
+ * <p>{@link #lines()} is WHAT the receipt says, top to bottom: the store header, "SALES INVOICE",
+ * the invoice details, the items, totals, payment, change, the VAT breakdown, the customer's
+ * fill-in lines, a Code 128 barcode of the invoice number and the closing note. Two things draw it:
+ * {@link ReceiptRenderer} (the picture that is printed AND shown in the preview, so they always
+ * match) and {@link #toText(int)} (plain fixed-width text, used by the checks).
+ *
+ * <p>Shelf prices include VAT, so the line totals add up to the TOTAL; the VAT breakdown shows
+ * how much of it is VAT. Item flags: V = VATable, E = VAT-exempt, W = wholesale price.
  *
  * @param cashierName the cashier's name at the time the receipt is made
  * @param reprint     true for a copy printed later (marked REPRINT)
  */
 public record Receipt(StoreInfo store, SaleRecord sale, String cashierName, boolean reprint) {
 
-    public static final int DEFAULT_WIDTH = 32;   // characters per line on 58 mm paper (Change to 42 if using 80mm thermal printer)
+    public static final int DEFAULT_WIDTH = 32;   // characters per line on 58 mm paper (42-48 for 80 mm)
     public static final int MIN_WIDTH = 32;       // 58 mm paper
     public static final int MAX_WIDTH = 58;
 
-    public static final String NOT_OFFICIAL = "THIS IS NOT AN OFFICIAL RECEIPT";
+    public static final String TITLE = "SALES INVOICE";
+    public static final String REPRINT_MARK = "** REPRINT **";
+    public static final String CLOSING = "THIS SERVES AS YOUR SALES INVOICE";
+    public static final String THANKS = "Thank you!";
+
+    private static final DateTimeFormatter WHEN = DateTimeFormatter.ofPattern("MMM d, yyyy h:mm a", Locale.US);
 
     public Receipt {
         Objects.requireNonNull(store, "store");
@@ -49,131 +57,175 @@ public record Receipt(StoreInfo store, SaleRecord sale, String cashierName, bool
         return sale.invoiceNo();
     }
 
-    /** One piece of the receipt: a block of text lines, or the barcode picture. */
-    public sealed interface Part permits TextBlock, BarcodeBlock { }
+    /* ------------------------------ what the receipt says ------------------------------ */
 
-    /** Lines of at most the receipt width, printed as text. */
-    public record TextBlock(List<String> lines) implements Part { }
+    /** How a line of text looks. */
+    public enum Style { SMALL, NORMAL, BOLD, LARGE, TOTAL }
 
-    /** A Code 128 barcode of {@code value}, centered on its own, drawn as a picture. */
-    public record BarcodeBlock(String value) implements Part { }
+    /** One piece of the receipt, top to bottom. */
+    public sealed interface Line permits Header, Rule, Gap, Center, Left, Pair, Item, FillIn, Barcode { }
 
-    /** The receipt as lines of at most {@code width} characters (no barcode picture). */
-    public List<String> toText(int width) {
-        List<String> all = new ArrayList<>();
-        for (Part part : toParts(width)) {
-            if (part instanceof TextBlock block) {
-                all.addAll(block.lines());
-            }
+    /** The logo and the store details. */
+    public record Header(StoreInfo store) implements Line { }
+
+    /** A dotted line across the paper. */
+    public record Rule() implements Line { }
+
+    /** A little empty space. */
+    public record Gap() implements Line { }
+
+    /** Centred text. */
+    public record Center(String text, Style style) implements Line { }
+
+    /** Text on the left. */
+    public record Left(String text, Style style) implements Line { }
+
+    /** Text on the left and a value on the right. */
+    public record Pair(String left, String right, Style style) implements Line { }
+
+    /** A sold item: its name, then "6 pc x 95.00 W" on the left and "PHP 570.00 V" on the right. */
+    public record Item(String name, String detail, String amount) implements Line { }
+
+    /** "Name: ............" for the customer to fill in. */
+    public record FillIn(String label) implements Line { }
+
+    /** A Code 128 barcode of {@code value}, with the value printed under it. */
+    public record Barcode(String value) implements Line { }
+
+    /** The receipt, top to bottom. */
+    public List<Line> lines() {
+        List<Line> out = new ArrayList<>();
+        out.add(new Header(store));
+        out.add(new Rule());
+        out.add(new Center(TITLE, Style.LARGE));
+        if (reprint) {
+            out.add(new Center(REPRINT_MARK, Style.BOLD));
         }
-        return all;
+        out.add(new Gap());
+        out.add(new Pair("Sales Invoice #", sale.invoiceNo(), Style.SMALL));
+        out.add(new Pair("Transaction Date & Time", WHEN.format(PhTime.of(sale.completedAt())), Style.SMALL));
+        out.add(new Pair("POS Terminal", sale.terminalId(), Style.SMALL));
+        out.add(new Pair("Cashier", cashierName, Style.SMALL));
+        out.add(new Rule());
+
+        boolean wholesale = false;
+        BigDecimal pieces = BigDecimal.ZERO;
+        for (SaleLineRecord line : sale.lines()) {
+            boolean w = line.priceType() == PriceType.WHOLESALE;
+            wholesale |= w;
+            pieces = pieces.add(line.quantity());
+            String detail = Quantity.format(line.quantity()) + " " + line.unit() + " x "
+                    + Money.format(line.unitPrice()) + (w ? " W" : "");
+            out.add(new Item(line.productName(), detail, peso(line.lineTotal()) + (line.vatable() ? " V" : " E")));
+        }
+        out.add(new Rule());
+
+        out.add(new Left("Item Count   " + Quantity.format(pieces), Style.NORMAL));
+        if (wholesale) {
+            out.add(new Left("Wholesale (W)", Style.SMALL));
+        }
+        out.add(new Gap());
+        out.add(new Pair("Subtotal", peso(sale.subtotal()), Style.LARGE));
+        out.add(new Pair("TOTAL", peso(sale.total()), Style.TOTAL));
+        out.add(new Gap());
+
+        out.add(new Left("Payment Method", Style.NORMAL));
+        BigDecimal change = Money.ZERO;
+        for (PaymentRecord p : sale.payments()) {
+            out.add(new Pair(label(p.method()), peso(p.amountTendered()), Style.NORMAL));
+            if (p.method() != PaymentMethod.CASH && p.referenceNo() != null) {
+                out.add(new Pair("Ref. No.", p.referenceNo(), Style.SMALL));
+            }
+            change = change.add(p.change());
+        }
+        out.add(new Gap());
+        out.add(new Pair("CHANGE", peso(change), Style.BOLD));
+        out.add(new Rule());
+
+        out.add(new Pair("VATable (V)", Money.format(sale.vatableSales()), Style.SMALL));
+        out.add(new Pair("VAT", Money.format(sale.vatAmount()), Style.SMALL));
+        out.add(new Pair("VAT-Exempt (E)", Money.format(sale.vatExemptSales()), Style.SMALL));
+        out.add(new Pair("VAT-Zero (Z)", Money.format(Money.ZERO), Style.SMALL));
+        out.add(new Rule());
+
+        out.add(new FillIn("Name"));
+        out.add(new FillIn("Address"));
+        out.add(new FillIn("TIN"));
+        out.add(new FillIn("Business Style"));
+        out.add(new Rule());
+
+        if (Code128.canEncode(sale.invoiceNo())) {
+            out.add(new Barcode(sale.invoiceNo()));   // scan this to find the transaction again
+        }
+        out.add(new Gap());
+        out.add(new Center(CLOSING, Style.SMALL));
+        out.add(new Center(THANKS, Style.SMALL));
+        return out;
     }
 
-    /** The receipt as text blocks and the barcode, in print order, for the printer and the preview. */
-    public List<Part> toParts(int width) {
+    /** "PHP 1,250.00". Receipt fonts may not have the peso sign. */
+    static String peso(BigDecimal amount) {
+        return "PHP " + Money.format(amount);
+    }
+
+    static String label(PaymentMethod method) {
+        return switch (method) {
+            case CASH -> "CASH";
+            case GCASH -> "GCASH";
+            case MAYA -> "MAYA";
+            case QRPH -> "QRPH";
+        };
+    }
+
+    /* ------------------------------ as plain text ------------------------------ */
+
+    /**
+     * The receipt as fixed-width text lines of at most {@code width} characters (the barcode picture is
+     * left out; its number is kept). Same content and order as the printed picture.
+     */
+    public List<String> toText(int width) {
         if (width < MIN_WIDTH || width > MAX_WIDTH) {
             throw new IllegalArgumentException("Receipt width must be " + MIN_WIDTH + "-" + MAX_WIDTH);
         }
         Lines out = new Lines(width);
-        out.center(store.name());
-        out.centerWrapped(store.address());
-        if (!store.tin().isEmpty()) {
-            out.centerWrapped("TIN " + store.tin());
-        }
-        if (!store.phone().isEmpty()) {
-            out.centerWrapped("Tel. " + store.phone());
-        }
-        if (reprint) {
-            out.blank();
-            out.center("*** REPRINT ***");
-        }
-        out.rule();
-        out.pair("Invoice", sale.invoiceNo());
-        out.pair("Date", PhTime.format(sale.completedAt()));
-        out.pair("Terminal", sale.terminalId());
-        out.pairWrapped("Cashier", cashierName);
-        out.rule();
-
-        boolean wholesale = false;
-        boolean exempt = false;
-        for (SaleLineRecord line : sale.lines()) {
-            out.wrapped(line.productName());
-            String flags = (line.priceType() == PriceType.WHOLESALE ? "W" : "") + (line.vatable() ? "" : "E");
-            wholesale |= line.priceType() == PriceType.WHOLESALE;
-            exempt |= !line.vatable();
-            String detail = "  " + Quantity.format(line.quantity()) + " " + line.unit() + " x "
-                    + Money.format(line.unitPrice()) + (flags.isEmpty() ? "" : " " + flags);
-            out.pair(detail, Money.format(line.lineTotal()));
-        }
-        out.rule();
-        out.pair("Subtotal", Money.format(sale.subtotal()));
-        out.pair("  VATable sales", Money.format(sale.vatableSales()));
-        out.pair("  VAT-exempt sales", Money.format(sale.vatExemptSales()));
-        out.pair("VAT (12%)", Money.format(sale.vatAmount()));
-        out.pair("TOTAL", Money.format(sale.total()));
-        out.rule();
-        for (PaymentRecord p : sale.payments()) {
-            if (p.method() == PaymentMethod.CASH) {
-                out.pair("Cash", Money.format(p.amountTendered()));
-                out.pair("Change", Money.format(p.change()));
-            } else {
-                out.pair(label(p.method()), Money.format(p.amountApplied()));
-                out.pairWrapped("Ref. no.", p.referenceNo());
+        for (Line line : lines()) {
+            switch (line) {
+                case Header h -> {
+                    out.center(h.store().name());
+                    out.centerWrapped(h.store().address());
+                    if (!h.store().proprietor().isEmpty()) {
+                        out.centerWrapped(h.store().proprietor() + " - PROPRIETOR");
+                    }
+                    if (!h.store().tin().isEmpty()) {
+                        out.centerWrapped("VAT-REG TIN: " + h.store().tin());
+                    }
+                    if (!h.store().phone().isEmpty()) {
+                        out.centerWrapped("Tel. " + h.store().phone());
+                    }
+                }
+                case Rule r -> out.rule();
+                case Gap g -> out.blank();
+                case Center c -> out.center(c.text());
+                case Left l -> out.wrapped(l.text());
+                case Pair p -> out.pair(p.left(), p.right());
+                case Item i -> {
+                    out.wrapped(i.name());
+                    out.pair("  " + i.detail(), i.amount());
+                }
+                case FillIn f -> out.fillIn(f.label());
+                case Barcode b -> out.center(b.value());
             }
         }
-        out.rule();
-        out.pair("Lines", String.valueOf(sale.lines().size()));
-        out.wrapped("Prices are before VAT.");
-        if (wholesale || exempt) {
-            out.wrapped((wholesale ? "W = wholesale price" : "") + (wholesale && exempt ? ", " : "")
-                    + (exempt ? "E = VAT-exempt" : ""));
-        }
-        out.blank();
-        if (Code128.canEncode(sale.invoiceNo())) {
-            out.barcode(sale.invoiceNo());       // scan this to find the transaction again
-            out.centerWrapped(sale.invoiceNo());
-            out.blank();
-        }
-        out.centerWrapped(NOT_OFFICIAL);
-        out.center("Thank you!");
-        return out.finish();
-    }
-
-    private static String label(PaymentMethod method) {
-        return switch (method) {
-            case CASH -> "Cash";
-            case GCASH -> "GCash";
-            case MAYA -> "Maya";
-            case QRPH -> "QRPh";
-        };
+        return out.lines;
     }
 
     /** Builds fixed-width lines. */
     private static final class Lines {
         final int width;
         final List<String> lines = new ArrayList<>();
-        final List<Part> parts = new ArrayList<>();
 
         Lines(int width) {
             this.width = width;
-        }
-
-        /** The barcode goes here: the lines so far become one block, then the barcode. */
-        void barcode(String value) {
-            flush();
-            parts.add(new BarcodeBlock(value));
-        }
-
-        private void flush() {
-            if (!lines.isEmpty()) {
-                parts.add(new TextBlock(List.copyOf(lines)));
-                lines.clear();
-            }
-        }
-
-        List<Part> finish() {
-            flush();
-            return parts;
         }
 
         void blank() {
@@ -182,6 +234,11 @@ public record Receipt(StoreInfo store, SaleRecord sale, String cashierName, bool
 
         void rule() {
             lines.add(".".repeat(width));
+        }
+
+        void fillIn(String label) {
+            String start = label + ": ";
+            lines.add(start + ".".repeat(Math.max(0, width - start.length())));
         }
 
         void center(String text) {
@@ -207,19 +264,8 @@ public record Receipt(StoreInfo store, SaleRecord sale, String cashierName, bool
                 lines.add(left + " ".repeat(width - left.length() - right.length()) + right);
             } else {
                 lines.addAll(wrap(left, width));
-                lines.add(" ".repeat(Math.max(0, width - right.length())) + right);
-            }
-        }
-
-        /** "Label  value" where a long value wraps under the label. */
-        void pairWrapped(String label, String value) {
-            String text = value == null ? "" : value;
-            if (label.length() + 1 + text.length() <= width) {
-                pair(label, text);
-            } else {
-                lines.add(label);
-                for (String part : wrap(text, width - 2)) {
-                    lines.add("  " + part);
+                for (String part : wrap(right, width)) {
+                    lines.add(" ".repeat(Math.max(0, width - part.length())) + part);
                 }
             }
         }

@@ -14,7 +14,7 @@ import java.util.Objects;
  * @param lineNo      1, 2, 3 ... in the order shown on the receipt
  * @param barcode     copied from the product; null if it had none
  * @param quantity    more than 0, up to 3 decimals (see Quantity)
- * @param unitPrice   price charged per unit, before VAT
+ * @param unitPrice   price charged per unit, VAT included
  * @param priceType   RETAIL or WHOLESALE
  * @param vatable     copied from the product; false = VAT-exempt line
  * @param lineTotal   quantity x unitPrice, rounded to 2 decimals (checked)

@@ -1,8 +1,5 @@
 package pos.receipt;
 
-import barcode.service.Code128;
-import barcode.service.EscPosBarcode;
-
 import javax.print.DocFlavor;
 import javax.print.DocPrintJob;
 import javax.print.PrintException;
@@ -10,27 +7,30 @@ import javax.print.PrintService;
 import javax.print.SimpleDoc;
 import shared.PrinterSettings;
 
+import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
-import java.nio.charset.StandardCharsets;
-import java.util.List;
 
 /**
- * Prints receipts straight to a thermal printer with ESC/POS commands, like the
- * printer maker's own test print: no page, no margins, no extra paper.
+ * Prints receipts straight to a thermal printer with ESC/POS commands, like the printer maker's own
+ * test print: no page, no margins, no extra paper.
  *
  * Uses the receipt printer chosen in Settings > Printers; if none is chosen, the printer named in
  * the environment variable NSC_PRINTER_NAME (e.g. POS-58), else the Windows default printer.
- * Text is plain ASCII (anything else prints as '?'). The invoice-number barcode is sent
- * as a raster picture (GS v 0), which 58 mm and 80 mm ESC/POS printers support.
+ *
+ * The whole receipt (logo, text, barcode) is drawn by {@link ReceiptRenderer} and sent as a picture
+ * (GS v 0, in strips so small printers can keep up), never with the printer's own fonts. So it
+ * prints exactly like the on-screen preview, on any ESC/POS printer.
  */
 public class EscPosReceiptPrinter implements PrinterPort {
 
     /** Blank lines fed after the receipt so the last line clears the tear bar. 2-4 is usual. */
-    private static final int FEED_LINES = 3;
+    private static final int FEED_LINES = 4;
+    /** Rows per picture strip: small enough for any printer's buffer. */
+    private static final int STRIP_ROWS = 128;
 
     private final int width;
 
-    /** @param width characters per line (32 for 58 mm paper) */
+    /** @param width the receipt width setting (32 for 58 mm paper, 42-48 for 80 mm) */
     public EscPosReceiptPrinter(int width) {
         this.width = width;
     }
@@ -38,7 +38,7 @@ public class EscPosReceiptPrinter implements PrinterPort {
     @Override
     public void printReceipt(Receipt receipt) throws ReceiptPrintException {
         PrintService service = findPrinter();
-        byte[] data = toBytes(receipt.toParts(width), width);
+        byte[] data = toBytes(ReceiptRenderer.render(receipt, width));
         try {
             DocPrintJob job = service.createPrintJob();
             job.print(new SimpleDoc(data, DocFlavor.BYTE_ARRAY.AUTOSENSE, null), null);
@@ -57,28 +57,35 @@ public class EscPosReceiptPrinter implements PrinterPort {
         }
     }
 
-    private static byte[] toBytes(List<Receipt.Part> parts, int width) {
+    /** The ESC/POS bytes for a rendered receipt (public so a check can verify them without a printer). */
+    public static byte[] toBytes(BufferedImage picture) {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         out.write(0x1B);                       // ESC @  : reset the printer
         out.write(0x40);
-        for (Receipt.Part part : parts) {
-            if (part instanceof Receipt.TextBlock block) {
-                for (String line : block.lines()) {
-                    byte[] text = line.getBytes(StandardCharsets.US_ASCII);   // non-ASCII becomes '?'
-                    out.write(text, 0, text.length);
-                    out.write('\n');
+        out.write(0x1B);                       // ESC a 1 : centre the picture on the paper
+        out.write(0x61);
+        out.write(1);
+        int w = picture.getWidth();
+        int widthBytes = (w + 7) / 8;
+        for (int top = 0; top < picture.getHeight(); top += STRIP_ROWS) {
+            int rows = Math.min(STRIP_ROWS, picture.getHeight() - top);
+            out.write(0x1D);                   // GS v 0 m xL xH yL yH d1...dk
+            out.write(0x76);
+            out.write(0x30);
+            out.write(0);
+            out.write(widthBytes & 0xFF);
+            out.write(widthBytes >> 8);
+            out.write(rows & 0xFF);
+            out.write(rows >> 8);
+            byte[] row = new byte[widthBytes];
+            for (int y = top; y < top + rows; y++) {
+                java.util.Arrays.fill(row, (byte) 0);
+                for (int x = 0; x < w; x++) {
+                    if ((picture.getRGB(x, y) & 0xFFFFFF) == 0) {   // black dot
+                        row[x / 8] |= (byte) (0x80 >> (x % 8));
+                    }
                 }
-            } else if (part instanceof Receipt.BarcodeBlock code) {
-                boolean[] modules = Code128.modules(code.value());
-                byte[] picture = EscPosBarcode.raster(modules, ReceiptBarcode.moduleDots(code.value(), width),
-                        ReceiptBarcode.HEIGHT_DOTS);
-                out.write(0x1B);               // ESC a 1 : center, so the paper margins are the quiet zone
-                out.write(0x61);
-                out.write(1);
-                out.write(picture, 0, picture.length);
-                out.write(0x1B);               // ESC a 0 : back to left
-                out.write(0x61);
-                out.write(0);
+                out.write(row, 0, row.length);
             }
         }
         out.write(0x1B);                       // ESC d n : feed n lines

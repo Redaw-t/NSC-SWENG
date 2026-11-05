@@ -16,11 +16,16 @@ import java.util.Objects;
  * | NSC_TERMINAL_ID          | this terminal's code, used in invoice nos.     | T01                 |
  * | NSC_IDLE_TIMEOUT_MINUTES | minutes without activity before logout        | 30                  |
  * | NSC_STORE_NAME           | store name at the top of receipts             | NICKEL SALES CENTER |
- * | NSC_STORE_ADDRESS        | address on receipts (left off if not set)     |                     |
- * | NSC_STORE_TIN            | TIN on receipts (left off if not set)         |                     |
+ * | NSC_STORE_ADDRESS        | address on receipts                           | the store's address |
+ * | NSC_STORE_PROPRIETOR     | owner, printed "NAME - PROPRIETOR"            | the store's owner   |
+ * | NSC_STORE_TIN            | VAT-REG TIN on receipts                       | the store's TIN     |
  * | NSC_STORE_PHONE          | phone on receipts (left off if not set)       |                     |
  * | NSC_RECEIPT_WIDTH        | characters per receipt line: 42 for 80 mm     | 42                  |
  * |                          | paper, 32 for 58 mm (32-48)                   |                     |
+ *
+ * The address, proprietor and TIN default to Nickel Sales Center's own details
+ * (pos.receipt.StoreInfo.NICKEL_*); set a variable to override it, or to a blank
+ * value to leave that line off the receipt.
  *
  * Give each terminal its own ID (T01, T02, ...) so their invoice numbers
  * never clash. On Windows:  setx NSC_TERMINAL_ID T02  (then open a new window).
@@ -70,8 +75,11 @@ public record AppConfig(String terminalId, Duration idleTimeout, StoreInfo store
         }
         long idleMinutes = number(env, "NSC_IDLE_TIMEOUT_MINUTES", DEFAULT_IDLE_TIMEOUT.toMinutes(), 1, Long.MAX_VALUE);
         int width = (int) number(env, "NSC_RECEIPT_WIDTH", Receipt.DEFAULT_WIDTH, Receipt.MIN_WIDTH, Receipt.MAX_WIDTH);
-        StoreInfo store = new StoreInfo(env.get("NSC_STORE_NAME"), env.get("NSC_STORE_ADDRESS"),
-                env.get("NSC_STORE_TIN"), env.get("NSC_STORE_PHONE"));
+        StoreInfo store = new StoreInfo(env.get("NSC_STORE_NAME"),
+                env.getOrDefault("NSC_STORE_ADDRESS", StoreInfo.NICKEL_ADDRESS),
+                env.getOrDefault("NSC_STORE_PROPRIETOR", StoreInfo.NICKEL_PROPRIETOR),
+                env.getOrDefault("NSC_STORE_TIN", StoreInfo.NICKEL_TIN),
+                env.get("NSC_STORE_PHONE"));
         return new AppConfig(terminal, Duration.ofMinutes(idleMinutes), store, width);
     }
 

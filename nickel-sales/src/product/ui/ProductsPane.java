@@ -36,7 +36,7 @@ import java.util.List;
 /**
  * The "Products" tab: search, Category / Status / Supplier filters, "+ Add Product" and the
  * product table with View, Edit and Deactivate buttons on every row, 20 rows to a page.
- * Prices are BEFORE VAT, as in POS. Stock is shown only in the View dialog and is never
+ * Prices includes VAT, as in POS. Stock is shown only in the View dialog and is never
  * edited here (Inventory owns it). Every action goes through the services, which check the
  * permission again and write the audit log.
  */
@@ -106,6 +106,7 @@ final class ProductsPane {
                 p -> Money.format(p.retailPrice())));
         table.getColumns().add(Tables.<Product>textColumn("Wholesale\nPrice", 90,
                 p -> p.wholesalePrice() == null ? "" : Money.format(p.wholesalePrice())));
+        table.getColumns().add(Tables.<Product>nodeColumn("VAT", 60, 56, this::vatCell));
         table.getColumns().add(Tables.<Product>nodeColumn("Status", 90, 90, p -> ProductUi.pill(p.active())));
         table.getColumns().add(Tables.<Product>nodeColumn("Actions", 250, 230, this::actions));
         table.setPlaceholder(new Label("No products found."));
@@ -185,6 +186,14 @@ final class ProductsPane {
         Label code = new Label(p.barcode());
         code.setStyle("-fx-text-fill: " + Theme.PRIMARY_TEXT + ";");
         return code;
+    }
+
+    /** The VAT cell: a green check when VAT applies to the product, empty when it is VAT-exempt. */
+    private Node vatCell(Product p) {
+        Label mark = new Label(p.vatable() ? "\u2714" : "");
+        mark.setStyle("-fx-font-size: 18px; -fx-font-weight: bold; -fx-text-fill: " + Theme.SUCCESS + ";");
+        mark.setAccessibleText(p.vatable() ? "VAT applies" : "VAT-exempt");
+        return mark;
     }
 
     /* -------------------------------- actions -------------------------------- */

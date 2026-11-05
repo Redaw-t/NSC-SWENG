@@ -93,7 +93,7 @@ final class ProductFormDialog {
         supplier.setValue(currentSupplier);
 
         TextField retail = new TextField(creating ? "" : existing.retailPrice().toPlainString());
-        retail.setPromptText("Price before VAT");
+        retail.setPromptText("Price, VAT included");
         Styles.underline(retail);
         TextField wholesale = new TextField(creating || existing.wholesalePrice() == null
                 ? "" : existing.wholesalePrice().toPlainString());

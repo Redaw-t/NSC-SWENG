@@ -16,7 +16,7 @@ import java.util.Objects;
  *
  * @param barcode   null if the product has none
  * @param quantity  more than 0, up to 3 decimals
- * @param unitPrice price per unit, before VAT
+ * @param unitPrice price per unit, VAT included
  * @param vatable   false = VAT-exempt product
  */
 public record SaleLineItem(

@@ -1,12 +1,14 @@
 package pos.ui;
 
 import javafx.application.Platform;
+import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.TableCell;
 import javafx.scene.control.TableRow;
 import javafx.scene.control.TableView;
+import javafx.scene.layout.VBox;
 import javafx.scene.layout.Region;
 import shared.Theme;
 
@@ -61,6 +63,29 @@ final class PosStyle {
     /* -------------------------------- buttons -------------------------------- */
 
     /** Colours a button; call again to change its colour later (e.g. the chosen payment method). */
+    /**
+     * A pop-up button with its key underneath, like the payment card's Cancel [ESC] / Complete
+     * Transaction [ENTER]: same height and corners as the other pop-up buttons (shared.Styles.modalButton).
+     * The caller still sets setDefaultButton / setCancelButton so the key works.
+     */
+    static Button modalKeyButton(String name, String key, Kind kind) {
+        String color = kind == Kind.SECONDARY ? Theme.PRIMARY_TEXT : "white";
+        Label main = new Label(name);
+        main.setStyle("-fx-font-size: 18px; -fx-text-fill: " + color + ";");
+        Label hint = new Label("[" + key + "]");
+        hint.setStyle("-fx-font-size: 11px; -fx-text-fill: " + color + "; -fx-opacity: 0.85;");
+        VBox graphic = new VBox(-2, main, hint);
+        graphic.setAlignment(Pos.CENTER);
+        Button b = new Button();
+        b.setGraphic(graphic);
+        b.setAccessibleText(name + " (" + key + ")");
+        button(b, kind);
+        b.setMinWidth(160);
+        b.setMinHeight(56);
+        b.setPrefHeight(56);
+        return b;
+    }
+
     static void button(Button button, Kind kind) {
         button.getProperties().remove(PLAIN_EXTRA);
         button.getProperties().put(KIND, kind);

@@ -181,14 +181,16 @@ number) · **Enter** to finish, then **Enter** again to print the receipt
 (**Esc** skips printing). **F7** reprints a past receipt, **F9** cancels the
 sale, **Esc** goes back.
 
-Prices are **before VAT**: the screen and receipt show the subtotal, the 12%
-VAT added on VATable items, and the total the customer pays.
+Prices **include VAT**: the customer pays the sum of the line prices, and the
+screen and receipt show how much of it is VAT (VATable sales = price / 1.12).
 
-The receipt prints on the computer's default printer. To put your store's
-details on it (Windows, then open a new window):
+The receipt (logo, store details, items, totals, VAT breakdown, invoice barcode)
+is drawn as one picture, so the preview and the printout are identical. It prints
+on the receipt printer chosen in Settings > Printers. The store details default to
+Nickel Sales Center's own; to change them (Windows, then open a new window):
 `setx NSC_STORE_ADDRESS "123 Rizal Ave., Manila"`, and likewise
-`NSC_STORE_TIN`, `NSC_STORE_PHONE`, `NSC_STORE_NAME`. For 58 mm receipt
-paper: `setx NSC_RECEIPT_WIDTH 32`.
+`NSC_STORE_PROPRIETOR`, `NSC_STORE_TIN`, `NSC_STORE_PHONE`, `NSC_STORE_NAME`.
+Paper width: `setx NSC_RECEIPT_WIDTH 32` for 58 mm (the default), 48 for 80 mm.
 Products live in MySQL (`Product`, `Category`, `Supplier`). The database script adds nine test
 products (barcodes `4800000000019`, `4800000000026`, `4800000000040`, ...). If your database was
 created before the Products module, run `setup.bat` again to add the product tables.

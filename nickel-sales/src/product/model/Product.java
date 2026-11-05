@@ -19,8 +19,8 @@ import java.util.Objects;
  * @param barcode        what a scanner reads; null when the product has none
  * @param name           shown on screen and printed on the receipt
  * @param unit           e.g. "pc", "box", "kg"
- * @param retailPrice    per unit, BEFORE VAT
- * @param wholesalePrice per unit, BEFORE VAT, once a sale line reaches the wholesale quantity; null = none
+ * @param retailPrice    per unit, VAT included
+ * @param wholesalePrice per unit, VAT included, once a sale line reaches the wholesale quantity; null = none
  * @param vatable        false = VAT-exempt
  * @param active         false = discontinued (POS will not sell it)
  * @param categoryId     the product's category, or null
