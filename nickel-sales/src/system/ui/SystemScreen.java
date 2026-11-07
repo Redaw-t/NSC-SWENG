@@ -14,6 +14,7 @@ import shared.Styles;
 import shared.TabBar;
 import system.service.ActivityLogService;
 import system.service.InventoryLogService;
+import system.service.SaleLineLogService;
 import system.service.SyncLogService;
 
 import java.util.Arrays;
@@ -21,16 +22,17 @@ import java.util.List;
 
 /**
  * Audit Logs, laid out like the Reports design: a tab strip (Activity Logs | Inventory Logs |
- * Sync Logs) above the tab's own screen, inside the app's sidebar frame. System Status and
- * Backup &amp; Restore moved to the Settings screen ({@link SystemSettingsTabs}).
+ * Sync Logs | Open Items &amp; Price Edits) above the tab's own screen, inside the app's sidebar frame.
+ * System Status and Backup &amp; Restore moved to the Settings screen ({@link SystemSettingsTabs}).
  *
- * Keyboard: Ctrl+1 to Ctrl+3 open the tabs, Ctrl+F goes to the search box, Ctrl+E exports and F5
+ * Keyboard: Ctrl+1 to Ctrl+4 open the tabs, Ctrl+F goes to the search box, Ctrl+E exports and F5
  * reloads. They work wherever the focus is on this screen, and not while a pop-up is open.
  */
 public final class SystemScreen {
 
     private enum Tab {
-        ACTIVITY("Activity Logs"), INVENTORY("Inventory Logs"), SYNC("Sync Logs");
+        ACTIVITY("Activity Logs"), INVENTORY("Inventory Logs"), SYNC("Sync Logs"),
+        SALE_LINES("Open Items & Price Edits");
 
         private final String label;
 
@@ -39,7 +41,8 @@ public final class SystemScreen {
         }
     }
 
-    private static final List<KeyCode> TAB_KEYS = List.of(KeyCode.DIGIT1, KeyCode.DIGIT2, KeyCode.DIGIT3);
+    private static final List<KeyCode> TAB_KEYS = List.of(KeyCode.DIGIT1, KeyCode.DIGIT2, KeyCode.DIGIT3,
+            KeyCode.DIGIT4);
 
     private final List<SystemPane> panes;
     private final TabBar tabs = new TabBar(Arrays.stream(Tab.values()).map(t -> t.label).toList(),
@@ -51,11 +54,11 @@ public final class SystemScreen {
     private SystemPane current;
 
     public SystemScreen(ScreenContext screen, ActivityLogService activity, InventoryLogService inventory,
-                        SyncLogService sync) {
+                        SyncLogService sync, SaleLineLogService saleLines) {
         this.panes = List.of(new ActivityLogPane(screen, activity), new InventoryLogPane(screen, inventory),
-                new SyncLogPane(screen, sync));
+                new SyncLogPane(screen, sync), new SaleLineLogPane(screen, saleLines));
 
-        Label hint = new Label("Ctrl+1 to Ctrl+3: tabs   |   Ctrl+F: search   |   Ctrl+E: export   |   F5: refresh");
+        Label hint = new Label("Ctrl+1 to Ctrl+4: tabs   |   Ctrl+F: search   |   Ctrl+E: export   |   F5: refresh");
         Styles.muted(hint);
         VBox header = new VBox(6, tabs.getView(), hint);
         header.setAlignment(Pos.CENTER_RIGHT);

@@ -60,8 +60,8 @@ final class ReportsUi {
     }
 
     /**
-     * A grey date box with a calendar; typing a date like 11/4/2026 also works. Enter takes in
-     * the typed date and runs {@code onEnter}.
+     * A grey date box: a click opens the calendar (the date can't be typed); Delete clears it.
+     * Enter runs {@code onEnter}.
      */
     static DatePicker datePicker(String prompt, Runnable onEnter) {
         DatePicker picker = new DatePicker();
@@ -100,6 +100,8 @@ final class ReportsUi {
                 n.setStyle("-fx-background-color: transparent; -fx-cursor: hand;")));
         picker.getEditor().setStyle("-fx-background-color: transparent; -fx-font-size: 14px; -fx-text-fill: "
                 + Theme.PRIMARY_TEXT + "; -fx-prompt-text-fill: " + Theme.SECONDARY_TEXT + ";");
+        Styles.calendarPopup(picker);   // rounded calendar, like the drop-down panels
+        Styles.pickOnly(picker);        // no typing: a click opens the calendar
         return picker;
     }
 

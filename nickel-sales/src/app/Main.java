@@ -139,6 +139,8 @@ public final class Main {
         app.register(ActivityLogService.class, new ActivityLogService(activityLog, systemAccess, app.audit()));
         app.register(InventoryLogService.class,
                 new InventoryLogService(new MySqlInventoryLogRepository(), systemAccess, app.audit()));
+        app.register(system.service.SaleLineLogService.class, new system.service.SaleLineLogService(
+                new system.repository.MySqlSaleLineLogRepository(), systemAccess, app.audit()));
         app.register(SyncLogService.class, syncLog);
         app.register(SyncLogWriter.class, syncLog);
         app.register(BackupService.class, backups);

@@ -47,9 +47,8 @@ final class SystemUi {
     private SystemUi() { }
 
     /**
-     * A grey "From Date" / "To Date" box with a calendar; typing a date like 10/29/2026 also works.
-     * Enter takes in the typed date (the picker itself only does that when it loses focus) and runs
-     * {@code onEnter}.
+     * A grey "From Date" / "To Date" box: a click opens the calendar (the date can't be typed);
+     * Delete clears it. Enter runs {@code onEnter}.
      */
     static DatePicker datePicker(String prompt, Runnable onEnter) {
         DatePicker picker = new DatePicker();
@@ -89,6 +88,8 @@ final class SystemUi {
                 n.setStyle("-fx-background-color: transparent; -fx-cursor: hand;")));
         picker.getEditor().setStyle("-fx-background-color: transparent; -fx-font-size: 14px; -fx-text-fill: "
                 + Theme.PRIMARY_TEXT + "; -fx-prompt-text-fill: " + Theme.SECONDARY_TEXT + ";");
+        Styles.calendarPopup(picker);   // rounded calendar, like the drop-down panels
+        Styles.pickOnly(picker);        // no typing: a click opens the calendar
         return picker;
     }
 

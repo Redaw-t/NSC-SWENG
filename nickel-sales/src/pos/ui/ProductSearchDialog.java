@@ -33,6 +33,9 @@ import java.util.Optional;
 final class ProductSearchDialog {
 
     private static final int MAX_RESULTS = 30;
+    /** Height of one product row, and how many rows the list shows at once. */
+    private static final double ROW_HEIGHT = 56;
+    private static final int VISIBLE_ROWS = 6;
 
     private ProductSearchDialog() { }
 
@@ -46,8 +49,10 @@ final class ProductSearchDialog {
         Styles.input(query);
 
         ListView<ProductInfo> list = new ListView<>();
-        list.setPrefHeight(360);
-        list.setFixedCellSize(56);
+        list.setFixedCellSize(ROW_HEIGHT);
+        list.setPrefHeight(VISIBLE_ROWS * ROW_HEIGHT);   // whole rows only: no half-cut row at the top or bottom
+        list.setMinHeight(VISIBLE_ROWS * ROW_HEIGHT);
+        list.setMaxHeight(VISIBLE_ROWS * ROW_HEIGHT);
         Styles.pickerList(list);
         list.setCellFactory(v -> new ProductCell());
         list.setPlaceholder(new Label("No products found."));
@@ -96,7 +101,7 @@ final class ProductSearchDialog {
                 int i = list.getSelectionModel().getSelectedIndex() + (e.getCode() == KeyCode.DOWN ? 1 : -1);
                 if (i >= 0 && i < list.getItems().size()) {
                     list.getSelectionModel().select(i);
-                    list.scrollTo(i);
+                    reveal(list, i);
                 }
                 e.consume();
             }
@@ -117,6 +122,18 @@ final class ProductSearchDialog {
         });
         modal.showAndWait();
         return Optional.ofNullable(chosen[0]);
+    }
+
+    /**
+     * Scrolls just enough to show row {@code index} in full: nothing if it is already on screen, one
+     * row at the edges. (ListView.scrollTo would put the row at the TOP every time, so the list jumped.)
+     */
+    private static void reveal(ListView<?> list, int index) {
+        if (list.lookup(".virtual-flow") instanceof javafx.scene.control.skin.VirtualFlow<?> flow) {
+            flow.scrollTo(index);
+        } else {
+            list.scrollTo(index);   // not laid out yet
+        }
     }
 
     /** Name and details on the left, the price on the right; tinted under the mouse or when chosen. */

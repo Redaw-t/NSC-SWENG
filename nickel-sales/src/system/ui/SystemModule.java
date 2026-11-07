@@ -8,6 +8,7 @@ import auth.permission.Permission;
 import javafx.scene.Parent;
 import system.service.ActivityLogService;
 import system.service.InventoryLogService;
+import system.service.SaleLineLogService;
 import system.service.SyncLogService;
 
 /**
@@ -24,7 +25,7 @@ public final class SystemModule implements AppModule {
 
     @Override
     public String description() {
-        return "Activity, inventory and sync logs";
+        return "Activity, inventory, sync, open item and price edit logs";
     }
 
     @Override
@@ -42,9 +43,10 @@ public final class SystemModule implements AppModule {
         ActivityLogService activity = screen.app().find(ActivityLogService.class).orElse(null);
         InventoryLogService inventory = screen.app().find(InventoryLogService.class).orElse(null);
         SyncLogService sync = screen.app().find(SyncLogService.class).orElse(null);
-        if (activity == null || inventory == null || sync == null) {
+        SaleLineLogService saleLines = screen.app().find(SaleLineLogService.class).orElse(null);
+        if (activity == null || inventory == null || sync == null || saleLines == null) {
             return ComingSoonView.notice(title(), "The system module is not connected in this build.");
         }
-        return new SystemScreen(screen, activity, inventory, sync).getView();
+        return new SystemScreen(screen, activity, inventory, sync, saleLines).getView();
     }
 }

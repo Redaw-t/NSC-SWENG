@@ -230,7 +230,7 @@ public final class InventoryScreen {
         GridPane grid = Modal.grid();
         int r = 0;
         r = Modal.row(grid, r, "Product Name", modalValue(row.name()));
-        r = Modal.row(grid, r, "Product Code", modalValue(row.barcodeOrId()));
+        r = Modal.row(grid, r, "Product Code", row.hasBarcode() ? modalValue(row.barcode()) : noBarcode(modalValue("No Barcode")));
         r = Modal.row(grid, r, "Current Stock", modalValue(Quantity.format(row.onHand()) + " " + row.unit()));
         r = Modal.row(grid, r, "Reorder Level", modalValue(reorderText(row)));
         r = Modal.row(grid, r, "Status", statusPill(row.status()));
@@ -316,7 +316,7 @@ public final class InventoryScreen {
 
     private void buildStockTable() {
         stockTable.getColumns().add(Tables.<StockRow>numberColumn(stockPager));
-        stockTable.getColumns().add(Tables.<StockRow>textColumn("Code", 120, StockRow::barcodeOrId));
+        stockTable.getColumns().add(Tables.<StockRow>nodeColumn("Code", 120, 100, InventoryScreen::codeCell));
         stockTable.getColumns().add(Tables.<StockRow>textColumn("Description", 220, StockRow::name));
         stockTable.getColumns().add(Tables.<StockRow>textColumn("Current\nStock", 90,
                 r -> Quantity.format(r.onHand()) + " " + r.unit()));
@@ -509,6 +509,24 @@ public final class InventoryScreen {
         box.setStyle("-fx-background-color: " + Theme.PRIMARY_BLUE + "; -fx-background-radius: 4; "
                 + "-fx-padding: 10 28 10 28;");
         return box;
+    }
+
+    /** The Code cell, as on the Products page: the barcode, or a faint "No Barcode" when the product has none. */
+    private static Node codeCell(StockRow row) {
+        if (!row.hasBarcode()) {
+            Label none = new Label("No Barcode");
+            Styles.muted(none);
+            return noBarcode(none);
+        }
+        Label code = new Label(row.barcode());
+        code.setStyle("-fx-text-fill: " + Theme.PRIMARY_TEXT + ";");
+        return code;
+    }
+
+    /** Makes "No Barcode" faint, like the Products page. */
+    private static Label noBarcode(Label label) {
+        label.setOpacity(0.5);
+        return label;
     }
 
     private static Label modalValue(String text) {

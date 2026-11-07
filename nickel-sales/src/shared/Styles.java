@@ -336,6 +336,103 @@ public final class Styles {
                 + "-fx-font-size: 15px;");
     }
 
+    /* ------------------------------ calendar pop-up ------------------------------ */
+
+    /**
+     * Draws a DatePicker's calendar like the drop-down panel of a SearchPicker ({@link #pickerPopup}):
+     * white, rounded corners, a light border, rounded day cells with the same soft blue hover, and
+     * the chosen day in the primary blue. Only the pop-up changes; style the box itself as before.
+     */
+    public static void calendarPopup(javafx.scene.control.DatePicker picker) {
+        picker.getStylesheets().add(CALENDAR_CSS);   // reaches the pop-up on most JavaFX versions...
+        java.util.function.Consumer<javafx.scene.control.Skin<?>> apply = skin -> {
+            if (skin instanceof javafx.scene.control.skin.DatePickerSkin s) {
+                javafx.scene.Node content = s.getPopupContent();   // ...and this makes sure of it
+                if (content instanceof javafx.scene.Parent p && !p.getStylesheets().contains(CALENDAR_CSS)) {
+                    p.getStylesheets().add(CALENDAR_CSS);
+                }
+            }
+        };
+        if (picker.getSkin() != null) {
+            apply.accept(picker.getSkin());
+        }
+        picker.skinProperty().addListener((obs, old, skin) -> apply.accept(skin));
+    }
+
+    /**
+     * Makes a DatePicker pick-only: the date can't be typed, and a click anywhere on the box opens
+     * the calendar. Delete or Backspace clears the date (so a filter can be emptied again).
+     */
+    public static void pickOnly(javafx.scene.control.DatePicker picker) {
+        picker.setEditable(false);
+        javafx.scene.control.TextField editor = picker.getEditor();
+        editor.setMouseTransparent(true);    // clicks go to the picker box, which opens the calendar
+        editor.setFocusTraversable(false);
+        picker.setCursor(javafx.scene.Cursor.HAND);
+        picker.addEventFilter(javafx.scene.input.MouseEvent.MOUSE_CLICKED, e -> {
+            if (e.getButton() == javafx.scene.input.MouseButton.PRIMARY && !picker.isShowing()) {
+                picker.requestFocus();
+                picker.show();
+            }
+        });
+        picker.addEventFilter(javafx.scene.input.KeyEvent.KEY_PRESSED, e -> {
+            switch (e.getCode()) {
+                case DELETE, BACK_SPACE -> {
+                    picker.setValue(null);
+                    e.consume();
+                }
+                case SPACE, DOWN -> {
+                    if (!picker.isShowing()) {
+                        picker.show();
+                        e.consume();
+                    }
+                }
+                default -> { }
+            }
+        });
+        picker.setTooltip(new javafx.scene.control.Tooltip("Click to pick a date. Delete clears it."));
+    }
+
+    private static final String CALENDAR_CSS ="data:text/css;base64," + Base64.getEncoder().encodeToString(
+            String.join("\n",
+                    ".date-picker-popup { -fx-background-color: " + Theme.SURFACE + "; -fx-background-insets: 0; "
+                            + "-fx-background-radius: 10; -fx-border-color: " + Theme.BORDER + "; -fx-border-radius: 10; "
+                            + "-fx-border-width: 1; -fx-padding: 8 10 10 10; -fx-font-family: \"" + Theme.FONT_FAMILY
+                            + "\"; -fx-font-size: 14px; }",
+                    // month / year header with < > buttons
+                    ".date-picker-popup > .month-year-pane { -fx-background-color: transparent; -fx-background-insets: 0; "
+                            + "-fx-padding: 2 2 8 2; }",
+                    ".date-picker-popup > .month-year-pane > .spinner { -fx-spacing: 2; }",
+                    ".date-picker-popup .spinner > .label { -fx-font-size: 15px; -fx-font-weight: bold; -fx-text-fill: "
+                            + Theme.PRIMARY_TEXT + "; }",
+                    ".date-picker-popup .spinner > .button { -fx-background-color: transparent; -fx-background-insets: 0; "
+                            + "-fx-background-radius: 6; -fx-padding: 6 9 6 9; -fx-cursor: hand; }",
+                    ".date-picker-popup .spinner > .button:hover { -fx-background-color: " + rgba(Theme.PRIMARY_BLUE, 0.08) + "; }",
+                    ".date-picker-popup .spinner > .button:pressed { -fx-background-color: " + rgba(Theme.PRIMARY_BLUE, 0.14) + "; }",
+                    ".date-picker-popup .spinner > .button > .left-arrow, .date-picker-popup .spinner > .button > .right-arrow "
+                            + "{ -fx-background-color: " + Theme.PRIMARY_TEXT + "; }",
+                    // the grid of days
+                    ".date-picker-popup .calendar-grid { -fx-background-color: transparent; -fx-padding: 0; "
+                            + "-fx-hgap: 2; -fx-vgap: 2; }",
+                    ".date-picker-popup .day-name-cell, .date-picker-popup .week-number-cell { -fx-background-color: "
+                            + "transparent; -fx-text-fill: " + Theme.SECONDARY_TEXT + "; -fx-font-size: 12px; "
+                            + "-fx-font-weight: bold; -fx-padding: 4 0 6 0; }",
+                    ".date-picker-popup .date-cell { -fx-background-color: transparent; -fx-background-insets: 0; "
+                            + "-fx-background-radius: 6; -fx-border-color: transparent; -fx-border-radius: 6; "
+                            + "-fx-padding: 6 0 6 0; -fx-pref-width: 36; -fx-alignment: center; -fx-text-fill: "
+                            + Theme.PRIMARY_TEXT + "; }",
+                    ".date-picker-popup .day-cell:hover { -fx-background-color: " + rgba(Theme.PRIMARY_BLUE, 0.08)
+                            + "; -fx-cursor: hand; }",
+                    ".date-picker-popup .day-cell:focused { -fx-background-color: " + rgba(Theme.PRIMARY_BLUE, 0.14) + "; }",
+                    ".date-picker-popup .previous-month, .date-picker-popup .next-month { -fx-text-fill: "
+                            + Theme.SECONDARY_TEXT + "; -fx-opacity: 0.55; }",
+                    ".date-picker-popup .today { -fx-border-color: " + Theme.PRIMARY_BLUE + "; -fx-font-weight: bold; }",
+                    ".date-picker-popup .selected, .date-picker-popup .selected:hover, .date-picker-popup .selected:focused "
+                            + "{ -fx-background-color: " + Theme.PRIMARY_BLUE + "; -fx-text-fill: white; "
+                            + "-fx-font-weight: bold; }",
+                    ".date-picker-popup .day-cell:disabled { -fx-opacity: 0.35; }")
+                    .getBytes(StandardCharsets.UTF_8));
+
     /* --------------------------------- modals --------------------------------- */
 
     /** The white rounded card of a pop-up, with a soft shadow. */

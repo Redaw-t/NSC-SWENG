@@ -10,9 +10,14 @@ import java.time.Instant;
 public record StockRow(String productId, String name, String barcode, String unit,
                        BigDecimal onHand, BigDecimal reorderLevel, Instant updatedAt) {
 
-    /** The "Product Code" column: the barcode, or the product ID when it has none. */
+    /** The barcode, or the product ID when it has none (for pickers, where the ID tells products apart). */
     public String barcodeOrId() {
         return barcode == null || barcode.isBlank() ? productId : barcode;
+    }
+
+    /** True when the product has a barcode. */
+    public boolean hasBarcode() {
+        return barcode != null && !barcode.isBlank();
     }
 
     public StockStatus status() {

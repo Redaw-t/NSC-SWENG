@@ -22,6 +22,7 @@ public class NickelSalesApp extends Application {
         if (context == null) {
             throw new IllegalStateException("Start the app through app.Main, not NickelSalesApp directly");
         }
+        shared.GlobalStyles.installEverywhere();   // focus ring on Tab, Dashboard-style scroll bars everywhere
         DashboardRouter router = new DashboardRouter(stage, context, Modules.all());
         java.io.InputStream icon = NickelSalesApp.class.getResourceAsStream("/images/nickel-logo-icon.png");
         if (icon != null) {
