@@ -42,11 +42,13 @@ import pos.cart.SalesService;
 import pos.cart.StockProblem;
 import pos.checkout.CheckoutException;
 import pos.checkout.PaymentService;
+import pos.contract.PaymentMethod;
 import pos.contract.PaymentRecord;
 import pos.contract.PriceType;
 import pos.contract.SaleLineRecord;
 import pos.contract.SaleRecord;
 import pos.receipt.Receipt;
+import pos.receipt.ReceiptPrintException;
 import product.contract.ProductInfo;
 import product.contract.ProductLookup;
 import shared.Modal;
@@ -74,14 +76,14 @@ import java.util.regex.Pattern;
  * | Key          | Does                                                          |
  * | Enter        | (barcode box) add the item; (cart) change the line's quantity  |
  * | F1           | search for a product (items without a barcode)                 |
- * | F2           | Open Item                                  (NOT BUILT YET)     |
+ * | F2           | open item: sell something not in the catalog (no stock, not saved as a product) |
  * | F3 / Enter   | (cart) change the selected line's quantity                     |
- * | F4           | Edit Price                                 (NOT BUILT YET)     |
+ * | F4           | (cart) edit the selected line's price for this sale only (PRICE EDITED) |
  * | + / -        | (cart) one more / one less of the selected line                |
  * | Delete       | (cart) remove the selected line                                |
  * | Up / Down    | move in the cart (from the barcode box too)                    |
  * | F5           | pay (only when the sale can be paid)                           |
- * | F6           | reprint a receipt by invoice number                            |
+ * | F6           | reprint a receipt by invoice number (retrieved sale: its receipt) |
  * | F7           | Retrieve Transaction                       (NOT BUILT YET)     |
  * | F8           | New Transaction                            (NOT BUILT YET)     |
  * | F9           | cancel the transaction                                         |
@@ -148,23 +150,38 @@ public final class PosScreen {
     private final List<Button> lockedWhileRetrieved = new java.util.ArrayList<>();
     private Button removeButton;   // "Remove Item" normally, "Void Item" while a sale is retrieved
     private Button cancelButton;   // "Cancel Transaction" normally, "Void Transaction" while retrieved
+    /** Dimmed while the cart is empty (already ready for a new sale); always on while a sale is retrieved. */
+    private Button newTransactionButton;
 
     /**
      * One line in the cart table: a line of the open sale ({@code line}, with its stock problem or
      * null), or a line of a retrieved, already completed sale ({@code saved}; {@code line} is null).
      */
-    record Row(int no, SaleLineItem line, SaleLineRecord saved, StockProblem problem) {
+    record Row(int no, SaleLineItem line, SaleLineRecord saved, StockProblem problem, boolean priceEdited) {
 
-        Row(int no, SaleLineItem line, StockProblem problem) {
-            this(no, line, null, problem);
+        Row(int no, SaleLineItem line, StockProblem problem, boolean priceEdited) {
+            this(no, line, null, problem, priceEdited);
         }
 
+        /** A completed sale's line; PRICE EDITED comes from its saved original price (SaleLine.OriginalPrice). */
         static Row of(SaleLineRecord saved) {
-            return new Row(saved.lineNo(), null, saved, null);
+            return new Row(saved.lineNo(), null, saved, null, saved.priceEdited());
         }
 
         String productName() {
             return line != null ? line.productName() : saved.productName();
+        }
+
+        boolean openItem() {
+            return line != null ? line.openItem() : saved.openItem();
+        }
+
+        /**
+         * The Item column: the name, with "(OPEN-ITEM)" after open items and "(PRICE EDITED)" after
+         * lines whose price was changed with F4 (screen only, not the receipt).
+         */
+        String itemLabel() {
+            return productName() + (openItem() ? " (OPEN-ITEM)" : "") + (priceEdited ? " (PRICE EDITED)" : "");
         }
 
         BigDecimal quantity() {
@@ -353,7 +370,7 @@ public final class PosScreen {
             return;
         }
         int lines = sale.getItems().size();
-        if (Modal.confirm(screen.stage(), "Cancel Transaction",
+        if (PosConfirm.ask(screen.stage(), "Cancel Transaction",
                 "Cancel this transaction? All " + lines + (lines == 1 ? " line" : " lines")
                         + " will be removed. Nothing is saved.", "Cancel Transaction", "Keep Sale")) {
             pos.cancelSale();
@@ -401,36 +418,141 @@ public final class PosScreen {
         pos.startSale(screen.user().getUserId());
         refresh(null);
         showInfo("Sale " + done.invoiceNo() + " saved. Ready for the next customer.");
+        Receipt receipt;
         try {
-            Receipt receipt = screen.app().receipts().build(done);
-            SaleCompleteDialog.show(screen.stage(), done, receipt, screen.app().receiptPrinter(),
-                    screen.app().config().receiptWidth());
+            receipt = screen.app().receipts().build(done);
         } catch (RuntimeException e) {
             System.err.println("[RECEIPT] " + e);
-            showError("Sale " + done.invoiceNo() + " is saved, but its receipt could not be shown. "
+            showError("Sale " + done.invoiceNo() + " is saved, but its receipt could not be made. "
                     + "Press F6 to reprint it.");
+            focusBarcode();
+            return;
+        }
+        if (PosSettings.autoPrintReceipt()) {
+            autoPrint(done, receipt);
+        } else {
+            try {
+                if (SaleCompleteDialog.show(screen.stage(), done, receipt, screen.app().receiptPrinter(),
+                        screen.app().config().receiptWidth())) {
+                    checkPrintedLater(done.invoiceNo());
+                }
+            } catch (RuntimeException e) {
+                System.err.println("[RECEIPT] " + e);
+                showError("Sale " + done.invoiceNo() + " is saved, but its receipt could not be shown. "
+                        + "Press F6 to reprint it.");
+            }
         }
         focusBarcode();
     }
 
-    /** F6: find a saved sale by invoice number and show / print its receipt again. */
-    private void reprint() {
-        Optional<SaleRecord> sale = ReprintDialog.ask(screen.stage(), screen.app().saleHistory(), lastInvoice);
-        if (sale.isPresent()) {
-            try {
-                Receipt receipt = screen.app().receipts().buildReprint(sale.get());
-                boolean printed = ReceiptDialog.show(screen.stage(), "Reprint Receipt", "Invoice "
-                        + sale.get().invoiceNo(), null, receipt, screen.app().receiptPrinter(),
-                        screen.app().config().receiptWidth());
-                if (printed) {
-                    showInfo("Reprinted the receipt for " + sale.get().invoiceNo() + ".");
-                }
-            } catch (RuntimeException e) {
-                System.err.println("[RECEIPT] " + e);
-                showError("The receipt could not be shown. Try again.");
-            }
+    /**
+     * POS Settings "auto print" is on: print the new sale's receipt with no preview. The change to
+     * hand back goes in the status bar. If printing fails, a small notification asks the cashier to
+     * check the printer; the sale itself is already saved.
+     *
+     * Windows takes the job into its queue even when the printer is unplugged or off, so a print
+     * that "succeeds" is checked again {@link #PRINT_CHECK_DELAY} later: if the printer is then
+     * stopped, offline or still has jobs waiting (as System Status shows), the same notification
+     * appears. The check runs in the background, so the cashier can keep scanning.
+     */
+    private void autoPrint(SaleRecord done, Receipt receipt) {
+        PaymentRecord p = done.payments().get(0);
+        String change = p.method() == PaymentMethod.CASH ? "Change " + peso(p.change()) + ". " : "";
+        try {
+            screen.app().receiptPrinter().printReceipt(receipt);
+            showInfo("Sale " + done.invoiceNo() + " saved. " + change + "Receipt sent to the printer.");
+        } catch (ReceiptPrintException | RuntimeException e) {
+            System.err.println("[PRINT] " + e);
+            showInfo("Sale " + done.invoiceNo() + " saved. " + change);
+            receiptNotPrinted(done.invoiceNo());
+            return;
         }
+        checkPrintedLater(done.invoiceNo());
+    }
+
+    /**
+     * After a receipt was handed to Windows (auto-print, the Sale Complete preview or Reprint):
+     * {@link #PRINT_CHECK_DELAY} later, check the receipt printer in the background, and show the
+     * "Receipt not printed" notification if it is stopped, offline or still has jobs waiting.
+     * Windows queues the job even when the printer is unplugged, so the print call alone can't tell.
+     */
+    private void checkPrintedLater(String invoiceNo) {
+        javafx.animation.PauseTransition wait = new javafx.animation.PauseTransition(PRINT_CHECK_DELAY);
+        wait.setOnFinished(ev -> {
+            Thread check = new Thread(() -> {
+                String trouble;
+                try {
+                    trouble = shared.PrinterSettings.trouble(shared.PrinterSettings.Use.RECEIPT);
+                } catch (RuntimeException e) {
+                    System.err.println("[PRINT] could not check the printer: " + e);
+                    return;   // can't tell: say nothing rather than guess
+                }
+                if (trouble != null) {
+                    System.err.println("[PRINT] after " + invoiceNo + ": " + trouble);
+                    javafx.application.Platform.runLater(() -> receiptNotPrinted(invoiceNo));
+                }
+            }, "receipt-print-check");
+            check.setDaemon(true);
+            check.start();
+        });
+        wait.play();
+    }
+
+    /** How long after printing the printer is checked (a receipt normally prints well within this). */
+    private static final javafx.util.Duration PRINT_CHECK_DELAY = javafx.util.Duration.seconds(5);
+
+    /** The "Receipt not printed" notification (no red status bar line: the notification is enough). */
+    private void receiptNotPrinted(String invoiceNo) {
+        PosToast.warn(content, "Receipt not printed",
+                "Check that the printer is plugged in, turned on and has paper. The receipt will print "
+                        + "as soon as the printer is detected. If it doesn't, use Reprint Receipt (F6) "
+                        + "for invoice " + invoiceNo + ".");
+    }
+
+    /** Menu > POS Settings. */
+    private void openSettings() {
+        if (PosSettingsDialog.show(screen.stage())) {
+            showInfo(PosSettings.autoPrintReceipt()
+                    ? "Settings saved. Receipts now print automatically after payment."
+                    : "Settings saved. The receipt preview shows after payment.");
+        }
+        if (retrieved != null) {
+            table.requestFocus();   // the barcode box is locked while a sale is retrieved
+        } else {
+            focusBarcode();
+        }
+    }
+
+    /**
+     * F6: show / print a receipt again. While a sale is retrieved (F7) it opens that sale's receipt
+     * straight away; otherwise it asks for the invoice number first.
+     */
+    private void reprint() {
+        if (retrieved != null) {
+            showReprint(retrieved);
+            table.requestFocus();   // the barcode box is locked while a sale is retrieved
+            return;
+        }
+        Optional<SaleRecord> sale = ReprintDialog.ask(screen.stage(), screen.app().saleHistory(), lastInvoice);
+        sale.ifPresent(this::showReprint);
         focusBarcode();
+    }
+
+    /** The Reprint Receipt modal for one saved sale. */
+    private void showReprint(SaleRecord sale) {
+        try {
+            Receipt receipt = screen.app().receipts().buildReprint(sale);
+            boolean printed = ReceiptDialog.show(screen.stage(), "Reprint Receipt", "Invoice "
+                    + sale.invoiceNo(), null, receipt, screen.app().receiptPrinter(),
+                    screen.app().config().receiptWidth());
+            if (printed) {
+                showInfo("Sent the receipt for " + sale.invoiceNo() + " to the printer.");
+                checkPrintedLater(sale.invoiceNo());
+            }
+        } catch (RuntimeException e) {
+            System.err.println("[RECEIPT] " + e);
+            showError("The receipt could not be shown. Try again.");
+        }
     }
 
     /* ------------------------------ display ------------------------------- */
@@ -468,7 +590,8 @@ public final class PosScreen {
         List<SaleLineItem> items = sale.getItems();
         rows.clear();
         for (int i = 0; i < items.size(); i++) {
-            rows.add(new Row(i + 1, items.get(i), problems.get(items.get(i).productId())));
+            String id = items.get(i).productId();
+            rows.add(new Row(i + 1, items.get(i), problems.get(id), sale.isPriceEdited(id)));
         }
         if (keep != null) {
             for (Row r : rows) {
@@ -489,6 +612,7 @@ public final class PosScreen {
         }
         itemCount.setText(Quantity.format(pieces));
         lock(payButton, !canPay);
+        lock(newTransactionButton, sale.isEmpty());   // empty cart = already ready for a new sale
         payHint.setText(hint);
     }
 
@@ -576,7 +700,7 @@ public final class PosScreen {
         Sale sale = pos.currentSale().orElse(null);
         if (sale != null && !sale.isEmpty()) {
             int lines = sale.getItems().size();
-            if (!Modal.confirm(screen.stage(), "Log Out",
+            if (!PosConfirm.ask(screen.stage(), "Log Out",
                     "Log out? This sale has " + lines + (lines == 1 ? " line" : " lines")
                             + "; they will be discarded. Nothing is saved.", "Log Out", "Stay")) {
                 focusBarcode();
@@ -591,25 +715,70 @@ public final class PosScreen {
         }
     }
 
-    /** F2 - TODO(skeleton): sell something that is not in the catalog (ask for a name, a price and a quantity). */
+    /**
+     * F2: sell something that is not in the catalog (a side product, a one-off). Asks for a name,
+     * price, quantity and VAT; the item is only part of this sale and is never added to the
+     * Product table or stock (see SalesService.addOpenItem). A quantity typed in the barcode box
+     * first ("3*") is used as the starting quantity.
+     */
     private void openItem() {
-        showNotice("Open Item is not available yet.");
+        Entry entry = readEntry();
+        if (entry == null) {
+            return;
+        }
+        SaleLineItem[] added = {null};
+        boolean ok = OpenItemDialog.show(screen.stage(), entry.quantity(), typed -> {
+            try {
+                added[0] = pos.addOpenItem(typed.name(), typed.unit(), typed.unitPrice(), typed.quantity(), typed.vatable());
+                return null;
+            } catch (CartException e) {
+                return e.getMessage();
+            } catch (RuntimeException e) {
+                return UiErrors.message(e, "The item could not be added. Try again.");
+            }
+        });
+        if (ok) {
+            barcodeField.clear();
+            refresh(added[0].productId());
+            showInfo("Added open item " + describe(added[0]));
+        }
+        focusBarcode();
     }
 
-    /** F4 - TODO(skeleton): change the unit price of the selected line (decide which role may do it). */
+    /**
+     * F4: change the selected line's unit price for this sale only (any cashier may). The product's
+     * price in the catalog is not changed; the line shows "(PRICE EDITED)" and the edit is written to
+     * the audit log when the sale is completed (see SalesService.editPrice).
+     */
     private void editPrice() {
         Row row = table.getSelectionModel().getSelectedItem();
-        if (row == null) {
+        if (row == null || row.line() == null) {
             showError("Select a line first (Up / Down).");
             return;
         }
-        showNotice("Edit Price is not available yet.");
+        SaleLineItem line = row.line();
+        SaleLineItem[] changed = {null};
+        boolean ok = EditPriceDialog.show(screen.stage(), line, price -> {
+            try {
+                changed[0] = pos.editPrice(line.productId(), price);
+                return null;
+            } catch (CartException e) {
+                return e.getMessage();
+            } catch (RuntimeException e) {
+                return UiErrors.message(e, "The price could not be changed. Try again.");
+            }
+        });
+        if (ok) {
+            refresh(changed[0].productId());
+            showInfo("Price edited: " + describe(changed[0]));
+        }
+        table.requestFocus();
     }
 
     /**
      * F7: find a completed sale by invoice number and show it in the cart, read only. The barcode box
-     * and every button are locked except Void Item, Void Transaction and New Transaction (F8), which
-     * goes back. The open sale is left as it was and comes back with New Transaction.
+     * and every button are locked except Reprint Receipt (F6, reprints this sale), Void Item,
+     * Void Transaction and New Transaction (F8), which goes back. The open sale is left as it was and comes back with New Transaction.
      */
     private void retrieveTransaction() {
         if (retrieved != null) {
@@ -645,7 +814,7 @@ public final class PosScreen {
         totalValue.setText(peso(sale.total()));
         summaryTitle.setText("RETRIEVED SALE");
         payHint.setText("Invoice " + sale.invoiceNo() + "  \u00B7  "
-                + RETRIEVED_TIME.format(shared.PhTime.of(sale.completedAt())) + "  \u00B7  read only");
+                + RETRIEVED_TIME.format(shared.PhTime.of(sale.completedAt())));
         payHint.setStyle("-fx-font-size: 16px; -fx-font-weight: bold; -fx-text-fill: " + BLUE + ";");
         applyMode();
         if (!rows.isEmpty()) {
@@ -675,6 +844,9 @@ public final class PosScreen {
             lock(b, locked);
         }
         lock(payButton, locked);
+        if (locked) {
+            lock(newTransactionButton, false);   // F8 is the way back from a retrieved sale
+        }   // when unlocking, refresh() sets it from the cart
         relabel(removeButton, locked ? "Void Item" : "Remove Item", "Del", 22);
         relabel(cancelButton, locked ? "Void Transaction" : "Cancel Transaction", "F9", 26);
     }
@@ -704,12 +876,16 @@ public final class PosScreen {
             leaveRetrieved();
             return;
         }
+        if (newTransactionButton.isDisable()) {
+            showNotice("Already ready for a new sale. Scan an item to start.");
+            return;
+        }
         showNotice("New Transaction is not available yet.");
     }
 
     /**
      * Hamburger menu (top right): a small dropdown styled like the sidebar on the Products screen
-     * (same colours and list rows) with Dashboard and Logout.
+     * (same colours and list rows) with Dashboard, POS Settings and Logout.
      */
     private void showMenu(Node anchor) {
         Popup popup = new Popup();
@@ -720,18 +896,23 @@ public final class PosScreen {
             popup.hide();
             screen.goHome();
         });
+        Button settings = new Button("POS Settings");
+        settings.setOnAction(e -> {
+            popup.hide();
+            openSettings();
+        });
         Button logout = new Button("Logout");
         logout.setOnAction(e -> {
             popup.hide();
             logout();
         });
-        for (Button item : List.of(dashboard, logout)) {
+        for (Button item : List.of(dashboard, settings, logout)) {
             item.setMaxWidth(Double.MAX_VALUE);
             item.setFocusTraversable(false);
             Styles.navItem(item, false);
         }
 
-        VBox menu = new VBox(dashboard, logout);
+        VBox menu = new VBox(dashboard, settings, logout);
         menu.setMinWidth(MENU_WIDTH);
         menu.setPrefWidth(MENU_WIDTH);
         menu.setMaxWidth(MENU_WIDTH);
@@ -805,9 +986,10 @@ public final class PosScreen {
         });
     }
 
-    /** Keys while a retrieved sale is shown: F8 back, F9 void transaction, Delete void item, Esc home. */
+    /** Keys while a retrieved sale is shown: F6 reprint it, F8 back, F9 void transaction, Delete void item, Esc home. */
     private void handleRetrievedKey(KeyEvent e) {
         switch (e.getCode()) {
+            case F6 -> reprint();
             case F8 -> newTransaction();
             case F9 -> voidTransaction();
             case DELETE, BACK_SPACE -> voidItem();
@@ -820,7 +1002,7 @@ public final class PosScreen {
             }
             default -> { }
         }
-        e.consume();   // every other key (F1-F7, Enter, +, -, typing) does nothing
+        e.consume();   // every other key (F1-F5, F7, Enter, +, -, typing) does nothing
     }
 
     /** Online - Cashier: name - [message] - menu (Dashboard, Logout). */
@@ -863,7 +1045,8 @@ public final class PosScreen {
         Button newTransaction = keyButton("New Transaction", "F8", PosStyle.Kind.SECONDARY, DARK, 26, this::newTransaction);
         Button cancel = keyButton("Cancel Transaction", "F9", PosStyle.Kind.DANGER, "white", 26, this::cancelOrVoid);
         cancelButton = cancel;
-        lockedWhileRetrieved.addAll(List.of(reprint, retrieve));
+        newTransactionButton = newTransaction;
+        lockedWhileRetrieved.add(retrieve);   // Reprint stays on: it reprints the retrieved sale
         for (Button b : List.of(reprint, retrieve, newTransaction, cancel)) {
             fixHeight(b, 70);
             b.setMaxWidth(Double.MAX_VALUE);
@@ -886,7 +1069,7 @@ public final class PosScreen {
         PosStyle.placeholder(empty);
         table.setPlaceholder(empty);
         table.getColumns().add(column("#", 73, r -> String.valueOf(r.no())));
-        table.getColumns().add(column("Item", 503, Row::productName));
+        table.getColumns().add(column("Item", 503, Row::itemLabel));
         table.getColumns().add(column("Qty", 99, r -> Quantity.format(r.quantity()) + " " + r.unit()));
         table.getColumns().add(column("Unit Price", 188, r -> Money.format(r.unitPrice()) + r.vatFlag()));
         table.getColumns().add(column("Price", 218,

@@ -18,6 +18,8 @@ import java.util.Objects;
  * @param priceType   RETAIL or WHOLESALE
  * @param vatable     copied from the product; false = VAT-exempt line
  * @param lineTotal   quantity x unitPrice, rounded to 2 decimals (checked)
+ * @param originalPrice null = the price was not edited; else the unit price before the cashier
+ *                    changed it with F4 Edit Price (VAT included). Saved as SaleLine.OriginalPrice.
  */
 public record SaleLineRecord(
         int lineNo,
@@ -29,9 +31,28 @@ public record SaleLineRecord(
         BigDecimal unitPrice,
         PriceType priceType,
         boolean vatable,
-        BigDecimal lineTotal) {
+        BigDecimal lineTotal,
+        BigDecimal originalPrice) {
+
+    /** A line whose price was not edited. */
+    public SaleLineRecord(int lineNo, String productId, String barcode, String productName, String unit,
+                          BigDecimal quantity, BigDecimal unitPrice, PriceType priceType, boolean vatable,
+                          BigDecimal lineTotal) {
+        this(lineNo, productId, barcode, productName, unit, quantity, unitPrice, priceType, vatable, lineTotal, null);
+    }
+
+    /** True when the cashier changed this line's price (F4); {@link #originalPrice} has the old one. */
+    public boolean priceEdited() {
+        return originalPrice != null;
+    }
 
     public SaleLineRecord {
+        if (originalPrice != null) {
+            originalPrice = Money.round(originalPrice);
+            if (Money.isNegative(originalPrice)) {
+                throw new IllegalArgumentException("Original price cannot be negative (line " + lineNo + ")");
+            }
+        }
         Objects.requireNonNull(productId, "productId");
         Objects.requireNonNull(productName, "productName");
         Objects.requireNonNull(unit, "unit");
@@ -51,6 +72,23 @@ public record SaleLineRecord(
         if (lineTotal.compareTo(totalOf(quantity, unitPrice)) != 0) {
             throw new IllegalArgumentException("lineTotal must be quantity x unitPrice (line " + lineNo + ")");
         }
+    }
+
+    /**
+     * Product IDs of open items start with this. An open item is typed in at the till (F2) for
+     * something the store sells that is not in the catalog: it has no Product row, is never added
+     * to the Product table, and moves no stock. Catalog IDs look like "P-0001", so they never clash.
+     */
+    public static final String OPEN_ITEM_PREFIX = "OPEN-";
+
+    /** True for an open item (not a catalog product; see {@link #OPEN_ITEM_PREFIX}). */
+    public static boolean isOpenItem(String productId) {
+        return productId != null && productId.startsWith(OPEN_ITEM_PREFIX);
+    }
+
+    /** True when this line is an open item, not a catalog product. */
+    public boolean openItem() {
+        return isOpenItem(productId);
     }
 
     /** quantity x unitPrice, rounded to 2 decimals: the one way a line total is worked out. */

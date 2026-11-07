@@ -137,6 +137,7 @@ CREATE TABLE IF NOT EXISTS `SaleLine` (
     Unit VARCHAR(10) NOT NULL,
     Quantity DECIMAL(12,3) NOT NULL,
     UnitPrice DECIMAL(12,2) NOT NULL,            -- VAT-inclusive
+    OriginalPrice DECIMAL(12,2) NULL,            -- NULL = normal; else the price before the cashier's F4 Edit Price
     PriceType VARCHAR(10) NOT NULL,              -- RETAIL / WHOLESALE
     Vatable BOOLEAN NOT NULL,
     LineTotal DECIMAL(12,2) NOT NULL,
@@ -279,6 +280,12 @@ PREPARE upgrade FROM @ddl; EXECUTE upgrade; DEALLOCATE PREPARE upgrade;
 SET @missing = (SELECT COUNT(*) = 0 FROM information_schema.STATISTICS
     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'SaleLine' AND INDEX_NAME = 'idx_saleline_product');
 SET @ddl = IF(@missing, 'ALTER TABLE `SaleLine` ADD INDEX idx_saleline_product (ProductID)', 'DO 0');
+PREPARE upgrade FROM @ddl; EXECUTE upgrade; DEALLOCATE PREPARE upgrade;
+
+-- SaleLine.OriginalPrice (POS: F4 Edit Price; NULL = price not edited, so old sales stay as they were)
+SET @missing = (SELECT COUNT(*) = 0 FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'SaleLine' AND COLUMN_NAME = 'OriginalPrice');
+SET @ddl = IF(@missing, 'ALTER TABLE `SaleLine` ADD COLUMN OriginalPrice DECIMAL(12,2) NULL AFTER UnitPrice', 'DO 0');
 PREPARE upgrade FROM @ddl; EXECUTE upgrade; DEALLOCATE PREPARE upgrade;
 
 -- Users.LastSignIn (Auth: time of the user's last successful sign in)

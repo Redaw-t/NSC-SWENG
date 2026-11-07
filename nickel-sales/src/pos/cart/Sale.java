@@ -22,7 +22,18 @@ public final class Sale {
     private final String cashierId;
     private final Instant createdAt = Instant.now();
     private final List<SaleLineItem> items = new ArrayList<>();
+    /** Lines whose unit price the cashier changed (F4), by product ID, in the order edited. */
+    private final java.util.Map<String, PriceEdit> priceEdits = new java.util.LinkedHashMap<>();
     private SaleStatus status = SaleStatus.OPEN;
+
+    /**
+     * A unit price changed by the cashier for this sale only (F4 Edit Price). The product's own
+     * price in the catalog is never changed.
+     *
+     * @param originalPrice the line's unit price before the first edit (VAT included)
+     * @param newPrice      the price the cashier typed (VAT included, 0 or more)
+     */
+    public record PriceEdit(String productId, String productName, BigDecimal originalPrice, BigDecimal newPrice) { }
 
     Sale(String terminalId, String cashierId) {
         this.terminalId = Objects.requireNonNull(terminalId, "terminalId");
@@ -66,6 +77,21 @@ public final class Sale {
         return items.stream().filter(l -> l.productId().equals(productId)).findFirst();
     }
 
+    /** True if the cashier changed this line's unit price (shown as PRICE EDITED). */
+    public boolean isPriceEdited(String productId) {
+        return priceEdits.containsKey(productId);
+    }
+
+    /** The edited price of this line, if it was edited. */
+    public Optional<PriceEdit> priceEdit(String productId) {
+        return Optional.ofNullable(priceEdits.get(productId));
+    }
+
+    /** Every price edit still in the sale (lines removed since are left out), in the order edited. */
+    public List<PriceEdit> getPriceEdits() {
+        return List.copyOf(priceEdits.values());
+    }
+
     /** Total, VATable, VAT-exempt and VAT amounts. */
     public SaleTotals totals() {
         return SaleTotals.of(items);
@@ -92,12 +118,22 @@ public final class Sale {
 
     boolean removeLine(String productId) {
         requireOpen();
+        priceEdits.remove(productId);
         return items.removeIf(l -> l.productId().equals(productId));
     }
 
     void clear() {
         requireOpen();
         items.clear();
+        priceEdits.clear();
+    }
+
+    /** Remembers an edited price; the original is kept from the first edit. */
+    void putPriceEdit(PriceEdit edit) {
+        requireOpen();
+        PriceEdit first = priceEdits.get(edit.productId());
+        priceEdits.put(edit.productId(), first == null ? edit
+                : new PriceEdit(edit.productId(), edit.productName(), first.originalPrice(), edit.newPrice()));
     }
 
     void cancel() {

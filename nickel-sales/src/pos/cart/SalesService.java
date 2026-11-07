@@ -4,17 +4,22 @@ import inventory.contract.InsufficientStockException;
 import pos.checkout.CheckoutException;
 import pos.checkout.CheckoutService;
 import pos.contract.PaymentRecord;
+import pos.contract.PriceType;
+import pos.contract.SaleLineRecord;
 import pos.contract.SaleRecord;
 import pos.repository.InvoiceNumberGenerator;
 import product.contract.ProductInfo;
 import product.contract.ProductLookup;
+import product.contract.ProductUnits;
 import shared.Quantity;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
 
 /**
  * Runs the sale on one terminal (SalesService in the class diagram):
@@ -137,6 +142,56 @@ public class SalesService {
         return add(sale, find(productId), quantity);
     }
 
+    /** Longest open item name (SaleLine.ProductName is VARCHAR(100)). */
+    public static final int OPEN_ITEM_NAME_MAX = 100;
+    /** Highest unit price an open item may have, VAT included (guards against typos). */
+    public static final BigDecimal OPEN_ITEM_PRICE_MAX = new BigDecimal("999999.99");
+
+    /**
+     * Adds an open item: something sold in the store that is not in the catalog (a side
+     * product, a one-off). The cashier types its name and price; it gets its own line with a
+     * temporary ID ({@link SaleLineRecord#OPEN_ITEM_PREFIX}), is NOT added to the Product table,
+     * is never stock-checked, and moves no stock at checkout. It is saved with the sale like
+     * any other line, so receipts and reports still show it.
+     *
+     * Each open item is a separate line, even when two have the same name. Its price always stays
+     * as typed. The price type follows the store's rule like any line: at 6 or more the line is
+     * WHOLESALE, taking the typed price as the wholesale price; below 6 it is RETAIL.
+     *
+     * @param unit      e.g. "pc" or "box" (the same choices as the product form, see
+     *                  ProductUnits); null or blank = {@link ProductUnits#DEFAULT}
+     * @param unitPrice price per unit, VAT included
+     * @param vatable   false = VAT-exempt
+     */
+    public SaleLineItem addOpenItem(String name, String unit, BigDecimal unitPrice, BigDecimal quantity,
+                                    boolean vatable) throws CartException {
+        Sale sale = open();
+        String n = name == null ? "" : name.trim().replaceAll("\\s+", " ");
+        if (n.isEmpty()) {
+            throw new CartException("Type the item's name.");
+        }
+        if (n.length() > OPEN_ITEM_NAME_MAX) {
+            throw new CartException("The name can be at most " + OPEN_ITEM_NAME_MAX + " characters.");
+        }
+        String u = unit == null || unit.isBlank() ? ProductUnits.DEFAULT : unit.trim();
+        if (u.length() > ProductUnits.MAX_LENGTH) {
+            throw new CartException("The unit can be at most " + ProductUnits.MAX_LENGTH + " characters.");
+        }
+        if (unitPrice == null || unitPrice.signum() <= 0
+                || shared.Money.round(unitPrice).signum() <= 0) {
+            throw new CartException("The price must be more than 0.");
+        }
+        if (unitPrice.compareTo(OPEN_ITEM_PRICE_MAX) > 0) {
+            throw new CartException("The price can be at most " + shared.Money.format(OPEN_ITEM_PRICE_MAX) + ".");
+        }
+        BigDecimal qty = checkQuantity(quantity);
+        String id = SaleLineRecord.OPEN_ITEM_PREFIX
+                + UUID.randomUUID().toString().replace("-", "").substring(0, 10).toUpperCase(Locale.ROOT);
+        SaleLineItem line = new SaleLineItem(id, null, n, u, qty, unitPrice, pricing.priceType(qty), vatable);
+        sale.addLine(line);
+        return line;
+    }
+
     /* ------------------------------ changing ------------------------------ */
 
     /**
@@ -149,13 +204,66 @@ public class SalesService {
         SaleLineItem line = sale.findLine(productId)
                 .orElseThrow(() -> new CartException("That product is not in this sale."));
         BigDecimal qty = checkQuantity(quantity);
+        if (line.openItem()) {
+            // not in the catalog: keep the typed price, no stock to check; only the price type
+            // follows the quantity (6+ = wholesale)
+            SaleLineItem changed = new SaleLineItem(line.productId(), line.barcode(), line.productName(),
+                    line.unit(), qty, line.unitPrice(), pricing.priceType(qty), line.vatable());
+            sale.addLine(changed);
+            return changed;
+        }
         ProductInfo product = find(productId);
         if (qty.compareTo(line.quantity()) > 0) {
             checkCanSell(product, qty);
         }
-        SaleLineItem priced = pricing.priceLine(product, qty);
+        SaleLineItem priced = keepEditedPrice(sale, pricing.priceLine(product, qty));
         sale.addLine(priced);
         return priced;
+    }
+
+    /** Highest unit price the cashier may type (Edit Price), VAT included (guards against typos). */
+    public static final BigDecimal PRICE_MAX = OPEN_ITEM_PRICE_MAX;
+
+    /**
+     * F4 Edit Price: sets a line's unit price (VAT included) for THIS SALE ONLY. The product's price
+     * in the catalog is never changed. The line is shown as PRICE EDITED, and the edit is written to
+     * the audit log when the sale is completed.
+     *
+     * The edited price stays when the quantity changes or the item is scanned again; the price type
+     * still follows the quantity (6 or more = WHOLESALE, the edited price taken as the wholesale
+     * price). 0 is allowed (given free); below 0 is refused.
+     */
+    public SaleLineItem editPrice(String productId, BigDecimal newPrice) throws CartException {
+        Sale sale = open();
+        SaleLineItem line = sale.findLine(productId)
+                .orElseThrow(() -> new CartException("That product is not in this sale."));
+        if (newPrice == null) {
+            throw new CartException("Type the new price.");
+        }
+        if (newPrice.signum() < 0) {
+            throw new CartException("The price can't be below 0.");
+        }
+        if (newPrice.compareTo(PRICE_MAX) > 0) {
+            throw new CartException("The price can be at most " + shared.Money.format(PRICE_MAX) + ".");
+        }
+        BigDecimal price = shared.Money.round(newPrice);
+        if (price.compareTo(line.unitPrice()) == 0) {
+            throw new CartException(line.productName() + " is already " + shared.Money.format(price) + ".");
+        }
+        sale.putPriceEdit(new Sale.PriceEdit(line.productId(), line.productName(), line.unitPrice(), price));
+        SaleLineItem changed = new SaleLineItem(line.productId(), line.barcode(), line.productName(), line.unit(),
+                line.quantity(), price, pricing.priceType(line.quantity()), line.vatable());
+        sale.addLine(changed);
+        return changed;
+    }
+
+    /** A freshly priced catalog line, with the cashier's edited price if this line has one. */
+    private SaleLineItem keepEditedPrice(Sale sale, SaleLineItem priced) {
+        return sale.priceEdit(priced.productId())
+                .map(edit -> new SaleLineItem(priced.productId(), priced.barcode(), priced.productName(),
+                        priced.unit(), priced.quantity(), edit.newPrice(), pricing.priceType(priced.quantity()),
+                        priced.vatable()))
+                .orElse(priced);
     }
 
     /** Removes a product's line. */
@@ -238,6 +346,9 @@ public class SalesService {
     public List<StockProblem> findStockProblems() {
         List<StockProblem> problems = new ArrayList<>();
         for (SaleLineItem line : open().getItems()) {
+            if (line.openItem()) {
+                continue;   // not in the catalog, so it has no stock to run short of
+            }
             Optional<ProductInfo> now = products.findById(line.productId());
             if (now.isEmpty() || !now.get().active()) {
                 problems.add(new StockProblem(line.productId(), line.productName(), line.quantity(),
@@ -264,7 +375,7 @@ public class SalesService {
                 .map(l -> l.quantity().add(qty))
                 .orElse(qty);
         checkCanSell(product, newQty);
-        SaleLineItem priced = pricing.priceLine(product, newQty);
+        SaleLineItem priced = keepEditedPrice(sale, pricing.priceLine(product, newQty));
         sale.addLine(priced);
         return priced;
     }

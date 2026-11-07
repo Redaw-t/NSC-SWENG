@@ -6,6 +6,7 @@ import inventory.contract.StockRecorder;
 import pos.cart.CartException;
 import pos.cart.PricingService;
 import pos.cart.Sale;
+import pos.cart.SaleLineItem;
 import pos.cart.SaleStatus;
 import pos.cart.SalesService;
 import pos.checkout.CheckoutException;
@@ -13,6 +14,7 @@ import pos.checkout.CheckoutService;
 import pos.checkout.PaymentService;
 import pos.contract.PaymentMethod;
 import pos.contract.PaymentRecord;
+import pos.contract.SaleLineRecord;
 import pos.contract.SaleRecord;
 import pos.repository.InvoiceNumberGenerator;
 import pos.repository.MySqlSaleRepository;
@@ -151,6 +153,7 @@ public class CheckoutCheck {
                 expect(rec.vatAmount(), "60.00");
                 expect(rec.total(), "560.00");
                 expect(rec.payments().get(0).change(), "440.00");
+                expectTrue(rec.lines().stream().noneMatch(SaleLineRecord::priceEdited), "normal lines: OriginalPrice is NULL");
                 expectTrue(sale.getStatus() == SaleStatus.COMPLETED, "sale is COMPLETED");
                 expectTrue(pos.currentSale().isEmpty(), "no open sale afterwards");
                 expect(TestCatalog.stockOf("P-0001"), "38.000");
@@ -230,6 +233,42 @@ public class CheckoutCheck {
                 expect(back.lines().get(0).quantity(), "1.500");
                 expectText(back.payments().get(0).method() + " " + back.payments().get(0).referenceNo(),
                         "GCASH 1009876543210");
+            });
+
+            check("Open item is saved with the sale but moves no stock and adds no product", db, () -> {
+                SalesService pos = new SalesService(products, new PricingService(), terminal, checkout);
+                Sale sale = cart(pos, BALLPEN, "1");                      // 12.00 from the catalog
+                SaleLineItem open = pos.addOpenItem("Gift wrapping", "pc", Money.of("25.00"), q("2"), true);
+                int productsBefore = count("SELECT COUNT(*) FROM Product WHERE ProductID LIKE ?", "%");
+                SaleRecord rec = pos.finalizeSale(payments.recordPayment(sale, PaymentMethod.CASH, Money.of("100"), null));
+                saved.add(rec);
+                expect(rec.total(), "62.00");
+                expect(TestCatalog.stockOf("P-0002"), "199.000");         // only the catalog item moved stock
+                SaleRecord back = repo.findById(rec.saleId()).orElseThrow();
+                expectTrue(back.equals(rec), "reads back exactly as saved");
+                expectTrue(back.lines().get(1).openItem() && back.lines().get(1).productId().equals(open.productId()),
+                        "the open item line is kept with its temporary ID");
+                expectText(back.lines().get(1).productName(), "Gift wrapping");
+                expectTrue(count("SELECT COUNT(*) FROM Product WHERE ProductID = ?", open.productId()) == 0,
+                        "not added to the Product table");
+                expectTrue(count("SELECT COUNT(*) FROM Product WHERE ProductID LIKE ?", "%") == productsBefore,
+                        "no product rows were added");
+            });
+
+            check("Edited price is saved on the sale line and logged; the product price is untouched", db, () -> {
+                SalesService pos = new SalesService(products, new PricingService(), terminal, checkout);
+                Sale sale = cart(pos, PAPER, "1");                        // 250.00
+                pos.editPrice("P-0001", Money.of("199.50"));
+                SaleRecord rec = pos.finalizeSale(payments.recordPayment(sale, PaymentMethod.CASH, Money.of("200"), null));
+                saved.add(rec);
+                SaleRecord back = repo.findById(rec.saleId()).orElseThrow();
+                expectTrue(back.equals(rec), "reads back exactly as saved");
+                expect(back.lines().get(0).unitPrice(), "199.50");
+                expectTrue(back.lines().get(0).priceEdited(), "saved as PRICE EDITED");
+                expect(back.lines().get(0).originalPrice(), "250.00");          // SaleLine.OriginalPrice
+                expect(TestCatalog.products().findById("P-0001").orElseThrow().retailPrice(), "250.00");
+                expectTrue(auditLog.contains("PRICE_EDITED " + rec.invoiceNo() + " P-0001 250.00>199.50 by " + CASHIER),
+                        "price edit is logged with the invoice");
             });
 
             check("Sync (SaleExport): unsynced oldest first; markSynced removes them; safe to repeat", db, () -> {

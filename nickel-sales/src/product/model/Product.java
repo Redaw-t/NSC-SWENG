@@ -47,7 +47,7 @@ public record Product(
 
     public static final int MAX_ID_LENGTH = 20;
     public static final int MAX_NAME_LENGTH = 100;
-    public static final int MAX_UNIT_LENGTH = 10;
+    public static final int MAX_UNIT_LENGTH = product.contract.ProductUnits.MAX_LENGTH;
     public static final int MAX_BARCODE_LENGTH = 50;
     /** The largest price that fits the DECIMAL(12,2) column. */
     public static final BigDecimal MAX_PRICE = new BigDecimal("9999999999.99");

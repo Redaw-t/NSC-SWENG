@@ -10,7 +10,6 @@ import pos.contract.SaleHistory;
 import pos.contract.SaleRecord;
 import shared.Modal;
 import shared.Styles;
-import shared.Theme;
 import shared.UiErrors;
 
 import java.util.Locale;
@@ -49,12 +48,10 @@ final class ReprintDialog {
         error.setWrapText(true);
         Styles.error(error);
 
-        Button cancel = new Button("Cancel");
-        Styles.modalButton(cancel, Theme.BORDER, Theme.PRIMARY_TEXT);
+        Button cancel = PosStyle.modalKeyButton("Cancel", "ESC", PosStyle.Kind.SECONDARY);
         cancel.setCancelButton(true);
         cancel.setOnAction(e -> modal.close());
-        Button find = new Button(buttonText);
-        Styles.modalButton(find, Theme.INFORMATION, "white");
+        Button find = PosStyle.modalKeyButton(buttonText, "ENTER", PosStyle.Kind.PRIMARY);
         find.setDefaultButton(true);
         find.setOnAction(e -> {
             String no = invoice.getText() == null ? "" : invoice.getText().trim().toUpperCase(Locale.ROOT);

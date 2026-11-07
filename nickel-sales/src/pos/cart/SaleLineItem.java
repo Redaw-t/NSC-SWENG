@@ -41,6 +41,11 @@ public record SaleLineItem(
         }
     }
 
+    /** True for an open item typed in at the till (no product in the catalog, no stock). */
+    public boolean openItem() {
+        return SaleLineRecord.isOpenItem(productId);
+    }
+
     /** quantity x unitPrice, rounded to 2 decimals. */
     public BigDecimal lineTotal() {
         return SaleLineRecord.totalOf(quantity, unitPrice);
@@ -48,7 +53,12 @@ public record SaleLineItem(
 
     /** This line as it is saved with a completed sale (used at checkout). */
     public SaleLineRecord toRecord(int lineNo) {
+        return toRecord(lineNo, null);
+    }
+
+    /** Same, for a line whose price was edited: {@code originalPrice} is the price before the edit (null = not edited). */
+    public SaleLineRecord toRecord(int lineNo, BigDecimal originalPrice) {
         return new SaleLineRecord(lineNo, productId, barcode, productName, unit, quantity, unitPrice,
-                priceType, vatable, lineTotal());
+                priceType, vatable, lineTotal(), originalPrice);
     }
 }

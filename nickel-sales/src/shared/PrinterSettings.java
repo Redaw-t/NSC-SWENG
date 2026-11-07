@@ -2,6 +2,9 @@ package shared;
 
 import javax.print.PrintService;
 import javax.print.PrintServiceLookup;
+import javax.print.attribute.standard.PrinterIsAcceptingJobs;
+import javax.print.attribute.standard.PrinterState;
+import javax.print.attribute.standard.QueuedJobCount;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -96,6 +99,35 @@ public final class PrinterSettings {
                     + "or set a default printer in Windows.");
         }
         return def;
+    }
+
+    /**
+     * What is wrong with the printer for this use, as Windows sees it: missing, stopped, not
+     * accepting jobs, or jobs still waiting in its queue (the usual sign that it is unplugged,
+     * switched off or out of paper). Null when it looks ready. The same signals as the printer
+     * cards in System Status.
+     */
+    public static String trouble(Use use) {
+        PrintService service;
+        try {
+            service = find(use);
+        } catch (NoPrinterException e) {
+            return e.getMessage();
+        }
+        PrinterState state = service.getAttribute(PrinterState.class);
+        if (state == PrinterState.STOPPED) {
+            return service.getName() + " is stopped.";
+        }
+        PrinterIsAcceptingJobs accepting = service.getAttribute(PrinterIsAcceptingJobs.class);
+        if (accepting == PrinterIsAcceptingJobs.NOT_ACCEPTING_JOBS) {
+            return service.getName() + " is offline.";
+        }
+        QueuedJobCount queued = service.getAttribute(QueuedJobCount.class);
+        int waiting = queued == null ? 0 : queued.getValue();
+        if (waiting > 0) {
+            return service.getName() + " has " + waiting + (waiting == 1 ? " job" : " jobs") + " waiting.";
+        }
+        return null;
     }
 
     /** Where the printer for this use comes from, for messages: "chosen in Settings", etc. */

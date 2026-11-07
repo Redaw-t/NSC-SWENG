@@ -9,6 +9,7 @@ import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.stage.Window;
+import product.contract.ProductUnits;
 import product.model.Category;
 import product.model.Product;
 import product.model.ProductDraft;
@@ -43,8 +44,6 @@ final class ProductFormDialog {
     private static final Category NO_CATEGORY = new Category(null, "(none)", true);
     private static final Supplier NO_SUPPLIER = new Supplier(null, "(none)", null, null, null, null, true);
 
-    /** The units offered in the drop-down; any other unit is typed in the "Others" field inside the list. */
-    private static final List<String> UNITS = List.of("pc", "box", "ream", "pad");
     /** Barcodes made by this store start with 200: GS1 keeps 200-299 for in-store use, so no manufacturer has it. */
     private static final String STORE_PREFIX = "200";
 
@@ -115,12 +114,13 @@ final class ProductFormDialog {
         barcodeRow.setAlignment(Pos.BOTTOM_LEFT);
         HBox.setHgrow(barcode, Priority.ALWAYS);
 
-        // Unit: pick pc / box / ream / pad, or type another unit in the "Others" field inside the list.
+        // Unit: pick one of ProductUnits.CHOICES (shared with POS Open Item), or type another unit
+        // in the "Others" field inside the list.
         SearchPicker<String> unitPicker = new SearchPicker<>(true, false);
-        unitPicker.getItems().addAll(UNITS);
+        unitPicker.getItems().addAll(ProductUnits.CHOICES);
         unitPicker.allowCustom("Others", typed -> typed);
         unitPicker.setPromptText("Select");
-        unitPicker.setValue(creating ? "pc" : existing.unit());
+        unitPicker.setValue(creating ? ProductUnits.DEFAULT : existing.unit());
 
         CheckBox vatable = new CheckBox("VAT applies (12%)");
         vatable.setSelected(creating || existing.vatable());

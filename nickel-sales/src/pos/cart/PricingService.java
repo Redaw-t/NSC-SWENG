@@ -25,6 +25,14 @@ public final class PricingService {
     }
 
     /**
+     * RETAIL or WHOLESALE for {@code quantity} under the store's rule (wholesale from 6). Used for
+     * open items: their price is typed by the cashier, so only the price type follows the rule.
+     */
+    public PriceType priceType(BigDecimal quantity) {
+        return rule.priceType(quantity);
+    }
+
+    /**
      * The line for {@code quantity} of {@code product}, with the unit price and
      * price type the rule gives. A product with no wholesale price is always
      * recorded as RETAIL, whatever the quantity.

@@ -31,7 +31,8 @@ import java.util.Objects;
  *
  * If ANY step fails, everything is rolled back: no sale, no payment, no
  * stock change, and the invoice number is not used up. Only after the
- * commit is the sale logged (AuditLogger event SALE_COMPLETED).
+ * commit is the sale logged (AuditLogger event SALE_COMPLETED, plus PRICE_EDITED
+ * "invoice productId old>new" for each line whose price the cashier changed).
  *
  * Called by SalesService.finalizeSale; screens use that, not this.
  */
@@ -62,7 +63,8 @@ public class CheckoutService {
         Instant completedAt = Instant.now().truncatedTo(ChronoUnit.MILLIS);   // DATETIME(3) keeps ms
         List<SaleLineRecord> lines = new ArrayList<>();
         for (SaleLineItem item : sale.getItems()) {
-            lines.add(item.toRecord(lines.size() + 1));
+            lines.add(item.toRecord(lines.size() + 1,   // F4-edited lines keep the price before the edit
+                    sale.priceEdit(item.productId()).map(Sale.PriceEdit::originalPrice).orElse(null)));
         }
         SaleTotals totals = sale.totals();
 
@@ -75,6 +77,7 @@ public class CheckoutService {
                         totals.vatableSales(), totals.vatExemptSales(), totals.vatAmount(), totals.total());
                 sales.save(record, tx);
                 List<StockLine> stockOut = record.lines().stream()
+                        .filter(line -> !line.openItem())   // open items are not in the catalog: no stock moves
                         .map(line -> new StockLine(line.productId(), line.quantity()))
                         .toList();
                 stock.recordSale(record.invoiceNo(), stockOut, tx);
@@ -86,6 +89,12 @@ public class CheckoutService {
 
         try {
             audit.log("SALE_COMPLETED " + saved.invoiceNo(), saved.cashierUserId());
+            // F4 Edit Price: who changed which price, on which invoice (the catalog price is untouched)
+            for (Sale.PriceEdit edit : sale.getPriceEdits()) {
+                audit.log("PRICE_EDITED " + saved.invoiceNo() + " " + edit.productId() + " "
+                        + shared.Money.format(edit.originalPrice()) + ">" + shared.Money.format(edit.newPrice()),
+                        saved.cashierUserId());
+            }
         } catch (RuntimeException logFailure) {
             // The sale is saved; a logging problem must not make it look failed.
             System.err.println("[AUDIT] could not log sale " + saved.invoiceNo() + ": " + logFailure);

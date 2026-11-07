@@ -63,7 +63,8 @@ public class MySqlSaleRepository implements SaleRepository, SaleExport {
         }
         try (PreparedStatement ps = tx.prepareStatement(
                 "INSERT INTO SaleLine (SaleID, LineNo, ProductID, Barcode, ProductName, Unit, Quantity, "
-                        + "UnitPrice, PriceType, Vatable, LineTotal) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")) {
+                        + "UnitPrice, PriceType, Vatable, LineTotal, OriginalPrice) "
+                        + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")) {
             for (SaleLineRecord line : sale.lines()) {
                 ps.setString(1, sale.saleId());
                 ps.setInt(2, line.lineNo());
@@ -76,6 +77,7 @@ public class MySqlSaleRepository implements SaleRepository, SaleExport {
                 ps.setString(9, line.priceType().name());
                 ps.setBoolean(10, line.vatable());
                 ps.setBigDecimal(11, line.lineTotal());
+                ps.setBigDecimal(12, line.originalPrice());   // null = not edited (setBigDecimal sends SQL NULL)
                 ps.addBatch();
             }
             ps.executeBatch();
@@ -190,7 +192,7 @@ public class MySqlSaleRepository implements SaleRepository, SaleExport {
             throws SQLException {
         try (PreparedStatement ps = c.prepareStatement(
                 "SELECT SaleID, LineNo, ProductID, Barcode, ProductName, Unit, Quantity, UnitPrice, PriceType, "
-                        + "Vatable, LineTotal FROM SaleLine WHERE SaleID IN (" + marks(ids.size()) + ") "
+                        + "Vatable, LineTotal, OriginalPrice FROM SaleLine WHERE SaleID IN (" + marks(ids.size()) + ") "
                         + "ORDER BY SaleID, LineNo")) {
             bind(ps, ids);
             try (ResultSet rs = ps.executeQuery()) {
@@ -199,7 +201,8 @@ public class MySqlSaleRepository implements SaleRepository, SaleExport {
                             rs.getInt("LineNo"), rs.getString("ProductID"), rs.getString("Barcode"),
                             rs.getString("ProductName"), rs.getString("Unit"), rs.getBigDecimal("Quantity"),
                             rs.getBigDecimal("UnitPrice"), PriceType.valueOf(rs.getString("PriceType")),
-                            rs.getBoolean("Vatable"), rs.getBigDecimal("LineTotal")));
+                            rs.getBoolean("Vatable"), rs.getBigDecimal("LineTotal"),
+                            rs.getBigDecimal("OriginalPrice")));
                 }
             }
         }

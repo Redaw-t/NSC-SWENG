@@ -76,12 +76,10 @@ final class ProductSearchDialog {
         query.textProperty().addListener((o, was, is) -> search.run());
         search.run();
 
-        Button cancel = new Button("Cancel");
-        Styles.modalButton(cancel, Theme.BORDER, Theme.PRIMARY_TEXT);
+        Button cancel = PosStyle.modalKeyButton("Cancel", "ESC", PosStyle.Kind.SECONDARY);
         cancel.setCancelButton(true);
         cancel.setOnAction(e -> modal.close());
-        Button add = new Button("Add to Sale");
-        Styles.modalButton(add, Theme.INFORMATION, "white");
+        Button add = PosStyle.modalKeyButton("Add to Sale", "ENTER", PosStyle.Kind.PRIMARY);
         add.setDefaultButton(true);
         add.disableProperty().bind(list.getSelectionModel().selectedItemProperty().isNull());
         Runnable take = () -> {
@@ -109,7 +107,7 @@ final class ProductSearchDialog {
             }
         });
 
-        Label keys = new Label("↑ ↓ choose   ·   Enter add   ·   Esc close");
+        Label keys = new Label("↑ ↓ choose   ·   double-click to add");   // Esc / Enter are on the buttons
         Styles.muted(keys);
         modal.card().getChildren().addAll(Modal.title("Find a Product"), query, list, status, keys,
                 Modal.buttons(cancel, add));

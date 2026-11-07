@@ -272,6 +272,81 @@ public class CartCheck {
                     t.vatableSales(), t.vatExemptSales(), t.vatAmount(), t.total());   // throws if inconsistent
         });
 
+        check("Open items: typed in, not in the catalog, never stock-checked", () -> {
+            SalesService pos = newSale();
+            pos.addItem(PAPER);
+            SaleLineItem wrap = pos.addOpenItem("  Gift   wrapping ", "pc", Money.of("25.00"), q("2"), true);
+            SaleLineItem wrap2 = pos.addOpenItem("Gift wrapping", "pc", Money.of("25.00"), q("1"), true);
+            SaleLineItem eggs = pos.addOpenItem("Native eggs", " box ", Money.of("9.50"), q("12"), false);
+            expectText(eggs.unit(), "box");
+            expectText(wrap.unit(), "pc");
+            expectTrue(wrap.openItem() && !wrap.productId().equals(wrap2.productId()), "each open item is its own line");
+            expectTrue(wrap.productId().startsWith(SaleLineRecord.OPEN_ITEM_PREFIX) && wrap.productId().length() <= 20,
+                    "temporary ID fits SaleLine.ProductID");
+            expectTrue(TestCatalog.products().findById(wrap.productId()).isEmpty(), "not in the catalog");
+            expectText(wrap.productName(), "Gift wrapping");
+            expect(wrap.lineTotal(), "50.00");
+            expectTrue(wrap.priceType() == PriceType.RETAIL, "2 pieces are retail");
+            expectTrue(eggs.priceType() == PriceType.WHOLESALE && eggs.unitPrice().compareTo(Money.of("9.50")) == 0,
+                    "12 pieces are wholesale, and the typed price is taken as the wholesale price");
+            expectTrue(pos.findStockProblems().isEmpty() && pos.canCheckout(), "no stock problems, Pay is on");
+            SaleLineItem raised = pos.updateQuantity(wrap.productId(), q("500"));
+            expect(raised.lineTotal(), "12500.00");                      // no stock limit, price unchanged
+            expectTrue(raised.priceType() == PriceType.WHOLESALE, "raising to 6+ switches to wholesale");
+            SaleLineItem lowered = pos.updateQuantity(wrap.productId(), q("5"));
+            expectTrue(lowered.priceType() == PriceType.RETAIL && lowered.unitPrice().compareTo(Money.of("25.00")) == 0,
+                    "back to retail at 5, same price");
+            pos.updateQuantity(wrap.productId(), q("500"));
+            expect(pos.getTotals().vatExemptSales(), "114.00");
+            pos.removeItem(wrap2.productId());
+            expectTrue(pos.currentSale().orElseThrow().getItems().size() == 3, "removed like any line");
+            expectMessage(() -> pos.addOpenItem(" ", "pc", Money.of("1.00"), q("1"), true), "Type the item's name.");
+            expectMessage(() -> pos.addOpenItem("X", "pc", Money.of("0.00"), q("1"), true), "The price must be more than 0.");
+            expectMessage(() -> pos.addOpenItem("X", "pc", Money.of("1.00"), q("0"), true), "Quantity must be more than 0.");
+            expectMessage(() -> pos.addOpenItem("X".repeat(101), "pc", Money.of("1.00"), q("1"), true),
+                    "The name can be at most 100 characters.");
+            SaleLineItem blank = pos.addOpenItem("Bag", " ", Money.of("1.00"), q("1"), true);
+            expectText(blank.unit(), "pc");                              // no unit picked = the default
+            pos.removeItem(blank.productId());
+            expectMessage(() -> pos.addOpenItem("X", "kilogramsxx", Money.of("1.00"), q("1"), true),
+                    "The unit can be at most 10 characters.");
+        });
+
+        check("Edit Price: this sale only, kept on quantity changes, never below 0", () -> {
+            SalesService pos = newSale();
+            pos.addItem(PAPER);                                          // 250.00
+            SaleLineItem edited = pos.editPrice("P-0001", Money.of("200.00"));
+            expect(edited.unitPrice(), "200.00");
+            Sale sale = pos.currentSale().orElseThrow();
+            expectTrue(sale.isPriceEdited("P-0001"), "marked PRICE EDITED");
+            expect(pos.addItem(PAPER).unitPrice(), "200.00");            // scanned again: price kept
+            SaleLineItem six = pos.updateQuantity("P-0001", q("6"));
+            expectTrue(six.priceType() == PriceType.WHOLESALE, "6 is wholesale");
+            expect(six.unitPrice(), "200.00");                           // edited price, not the 235.00 wholesale
+            expect(six.lineTotal(), "1200.00");
+            expect(pos.updateQuantity("P-0001", q("2")).unitPrice(), "200.00");
+            expect(TestCatalog.products().findById("P-0001").orElseThrow().retailPrice(), "250.00");   // catalog untouched
+
+            pos.editPrice("P-0001", Money.of("180.00"));                 // edited twice: original kept
+            Sale.PriceEdit edit = sale.priceEdit("P-0001").orElseThrow();
+            expect(edit.originalPrice(), "250.00");
+            expect(edit.newPrice(), "180.00");
+
+            expectMessage(() -> pos.editPrice("P-0001", Money.of("-1.00")), "The price can't be below 0.");
+            expectMessage(() -> pos.editPrice("P-0001", Money.of("180.00")), "Bond Paper A4 (ream) is already 180.00.");
+            expectMessage(() -> pos.editPrice("P-0003", Money.of("1.00")), "That product is not in this sale.");
+            expect(pos.editPrice("P-0001", Money.ZERO).lineTotal(), "0.00");   // free is allowed
+
+            SaleLineItem open = pos.addOpenItem("Gift wrapping", "pc", Money.of("25.00"), q("1"), true);
+            expect(pos.editPrice(open.productId(), Money.of("20.00")).unitPrice(), "20.00");
+            expect(pos.updateQuantity(open.productId(), q("3")).unitPrice(), "20.00");
+            expectTrue(sale.isPriceEdited(open.productId()), "open items can be edited too");
+
+            pos.removeItem("P-0001");
+            expectTrue(!sale.isPriceEdited("P-0001") && sale.getPriceEdits().size() == 1, "removing the line drops its edit");
+            expect(pos.addItem(PAPER).unitPrice(), "250.00");            // added back: catalog price again
+        });
+
         check("Starting, cancelling and the one-open-sale rule", () -> {
             SalesService pos = new SalesService(TestCatalog.products(), new PricingService(), "T01");
             expectTrue(pos.currentSale().isEmpty(), "no sale yet");

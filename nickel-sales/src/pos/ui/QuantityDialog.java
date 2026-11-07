@@ -10,7 +10,6 @@ import pos.cart.SaleLineItem;
 import shared.Modal;
 import shared.Quantity;
 import shared.Styles;
-import shared.Theme;
 
 import java.math.BigDecimal;
 import java.util.Optional;
@@ -38,12 +37,10 @@ final class QuantityDialog {
         error.setWrapText(true);
         Styles.error(error);
 
-        Button cancel = new Button("Cancel");
-        Styles.modalButton(cancel, Theme.BORDER, Theme.PRIMARY_TEXT);
+        Button cancel = PosStyle.modalKeyButton("Cancel", "ESC", PosStyle.Kind.SECONDARY);
         cancel.setCancelButton(true);
         cancel.setOnAction(e -> modal.close());
-        Button apply = new Button("Apply");
-        Styles.modalButton(apply, Theme.INFORMATION, "white");
+        Button apply = PosStyle.modalKeyButton("Apply", "ENTER", PosStyle.Kind.PRIMARY);
         apply.setDefaultButton(true);
         apply.setOnAction(e -> {
             BigDecimal q = parse(field.getText());

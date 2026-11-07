@@ -26,7 +26,7 @@ public final class PosTables {
             "Sale.SaleID", "Sale.InvoiceNo", "Sale.TerminalID", "Sale.CashierUserID", "Sale.CompletedAt",
             "Sale.VatableSales", "Sale.VatExemptSales", "Sale.VatAmount", "Sale.Total", "Sale.SyncedAt",
             "SaleLine.SaleID", "SaleLine.LineNo", "SaleLine.ProductID", "SaleLine.Barcode",
-            "SaleLine.ProductName", "SaleLine.Unit", "SaleLine.Quantity", "SaleLine.UnitPrice",
+            "SaleLine.ProductName", "SaleLine.Unit", "SaleLine.Quantity", "SaleLine.UnitPrice", "SaleLine.OriginalPrice",
             "SaleLine.PriceType", "SaleLine.Vatable", "SaleLine.LineTotal",
             "Payment.SaleID", "Payment.PaymentNo", "Payment.Method", "Payment.ReferenceNo",
             "Payment.AmountTendered", "Payment.AmountApplied", "Payment.ChangeGiven",

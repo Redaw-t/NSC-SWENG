@@ -19,7 +19,8 @@ final class SaleCompleteDialog {
 
     private SaleCompleteDialog() { }
 
-    static void show(Window owner, SaleRecord sale, Receipt receipt, PrinterPort printer, int width) {
+    /** @return true if Print Receipt was pressed and the receipt was handed to the printer */
+    static boolean show(Window owner, SaleRecord sale, Receipt receipt, PrinterPort printer, int width) {
         PaymentRecord p = sale.payments().get(0);
         Label top;
         if (p.method() == PaymentMethod.CASH) {
@@ -32,7 +33,7 @@ final class SaleCompleteDialog {
         Label total = new Label("Total " + PosScreen.peso(sale.total())
                 + (p.method() == PaymentMethod.CASH ? "   ·   Cash " + PosScreen.peso(p.amountTendered()) : ""));
         total.setStyle("-fx-font-size: 15px;");
-        ReceiptDialog.show(owner, "Sale Complete", "Invoice " + sale.invoiceNo(),
+        return ReceiptDialog.show(owner, "Sale Complete", "Invoice " + sale.invoiceNo(),
                 new VBox(4, top, total), receipt, printer, width);
     }
 }
