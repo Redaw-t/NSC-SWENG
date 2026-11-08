@@ -49,6 +49,9 @@ import java.util.function.Consumer;
  *       type the Main POS's IP address; the Main POS (its API) answers with this computer's terminal ID
  *       (T02, T03 ...) and adds it to its own list; then T01's address and this computer's own row are
  *       saved here.</li>
+ *   <li><b>Additional POS: Syncing Data</b>: a loading screen while the Main POS sends its whole store
+ *       database (never its nickelsales_appconfig) and it is loaded here ({@link InitialSync}). Only then
+ *       is this computer saved as set up; TRY AGAIN repeats a failed sync.</li>
  *   <li><b>Done</b>: shows which terminal this computer is, then goes on to the login page.</li>
  * </ol>
  */
@@ -416,16 +419,15 @@ public final class InstallationSetupScreen {
             Thread call = new Thread(() -> {
                 try {
                     String id = new MainPosClient(main, ApiServer.port(), apiKey).requestTerminalId(mine, name);
-                    terminals.completeAdditionalSetup(main, id, mine, name, apiKey);
                     System.out.println("[SETUP] the Main POS at " + main + " gave this computer terminal ID " + id);
-                    Platform.runLater(() -> showDoneStep(id, "This computer is an Additional POS of the Main POS at "
-                            + main + "."));
+                    // next: copy the store's data; this computer counts as set up only once that is done
+                    Platform.runLater(() -> showSyncStep(main, id, mine, name));
                 } catch (MainPosClient.MainPosException e) {
                     Platform.runLater(() -> failed(e.getMessage(), next, back));
                 } catch (RuntimeException e) {
                     System.err.println("[SETUP] " + e + (e.getCause() == null ? "" : " / " + e.getCause()));
-                    Platform.runLater(() -> failed(UiErrors.message(e, "The terminal ID was given, but it could not "
-                            + "be saved on this computer. Check that MySQL is running, then try again."), next, back));
+                    Platform.runLater(() -> failed(UiErrors.message(e, "The Main POS could not give a terminal ID. "
+                            + "Try again."), next, back));
                 }
             }, "setup-register");
             call.setDaemon(true);
@@ -438,6 +440,84 @@ public final class InstallationSetupScreen {
                 caption("Main POS IP Address"), gap(6), mainIp, gap(22),
                 caption("This computer's IP Address"), gap(6), myIp, gap(12), errorLabel, gap(29), next,
                 gap(16), back);
+    }
+
+    /* --------------------- 3b-2. Additional POS: first sync -------------------- */
+
+    /**
+     * The loading screen "Syncing data": the Main POS sends its whole store database (users, products,
+     * stock, sales ...; never its nickelsales_appconfig) and it is loaded into this computer's own.
+     * Only then is this computer saved as set up (terminal ID, Main POS address, API key), so if the
+     * sync fails, TRY AGAIN repeats it, and closing the app shows setup again next time.
+     */
+    private void showSyncStep(String mainIp, String terminalId, String myIp, String name) {
+        javafx.scene.control.ProgressIndicator spinner = new javafx.scene.control.ProgressIndicator();
+        spinner.setPrefSize(72, 72);
+        spinner.setMaxSize(72, 72);
+        Label status = note("Copying the store's data from the Main POS at " + mainIp
+                + ": users, products, stock and sales. Keep both computers on.");
+        Button retry = primary("TRY AGAIN");
+        retry.setVisible(false);
+        retry.setManaged(false);
+        Label id = new Label("Terminal " + terminalId);
+        id.setStyle("-fx-font-size: 28px; -fx-font-weight: bold; -fx-text-fill: " + Theme.PRIMARY_BLUE + ";");
+        showStep(null, stepTitle("Syncing Data"), gap(10), id, gap(24), spinner, gap(24), status, gap(12),
+                errorLabel, gap(20), retry);
+
+        Runnable sync = () -> {
+            hideError();
+            spinner.setVisible(true);
+            retry.setVisible(false);
+            retry.setManaged(false);
+            status.setText("Copying the store's data from the Main POS at " + mainIp
+                    + ": users, products, stock and sales. Keep both computers on.");
+            Thread work = new Thread(() -> {
+                java.nio.file.Path copy = null;
+                try {
+                    copy = java.nio.file.Files.createTempFile("nickelsales-sync-", ".sql.gz");
+                    new MainPosClient(mainIp, ApiServer.port(), apiKey).downloadSnapshot(copy);
+                    Platform.runLater(() -> status.setText("Saving the data on this computer..."));
+                    InitialSync.Result loaded = InitialSync.load(copy);
+                    terminals.completeAdditionalSetup(mainIp, terminalId, myIp, name, apiKey);
+                    System.out.println("[SETUP] first sync done: " + loaded.tables() + " tables from the Main POS at "
+                            + mainIp + "; this computer is " + terminalId);
+                    Platform.runLater(() -> showDoneStep(terminalId, "This computer is an Additional POS of the Main "
+                            + "POS at " + mainIp + ". The store's data has been copied: sign in with the same "
+                            + "username and password as on the Main POS."));
+                } catch (MainPosClient.MainPosException e) {
+                    Platform.runLater(() -> syncFailed(e.getMessage(), spinner, status, retry));
+                } catch (IllegalArgumentException e) {   // the copy was cut off or is not a store copy
+                    Platform.runLater(() -> syncFailed(e.getMessage() + " Nothing was changed. Try again.",
+                            spinner, status, retry));
+                } catch (Exception e) {
+                    System.err.println("[SETUP] sync: " + e + (e.getCause() == null ? "" : " / " + e.getCause()));
+                    Platform.runLater(() -> syncFailed(UiErrors.message(e instanceof RuntimeException r ? r
+                            : new RuntimeException(e), "The data could not be saved on this computer. Check that "
+                            + "MySQL is running, then try again."), spinner, status, retry));
+                } finally {
+                    if (copy != null) {
+                        try {
+                            java.nio.file.Files.deleteIfExists(copy);
+                        } catch (IOException ignored) {
+                            // a temp file; Windows cleans it up later
+                        }
+                    }
+                }
+            }, "setup-sync");
+            work.setDaemon(true);
+            work.start();
+        };
+        retry.setOnAction(e -> sync.run());
+        sync.run();
+    }
+
+    private void syncFailed(String message, javafx.scene.control.ProgressIndicator spinner, Label status, Button retry) {
+        spinner.setVisible(false);
+        status.setText("The data was not copied yet.");
+        showError(message);
+        retry.setVisible(true);
+        retry.setManaged(true);
+        retry.requestFocus();
     }
 
     private void failed(String message, Button next, Button back) {

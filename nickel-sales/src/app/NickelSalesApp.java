@@ -93,7 +93,9 @@ public class NickelSalesApp extends Application {
         try {
             boolean main = terminals.thisTerminalId().map(PosTerminalRepository.MAIN_ID::equals).orElse(false);
             if (main) {
-                api = ApiServer.start(ApiServer.port(), PosTerminalRepository.MAIN_ID, terminals);
+                // The new Additional POS's first sync: the whole store database, never nickelsales_appconfig
+                api = ApiServer.start(ApiServer.port(), PosTerminalRepository.MAIN_ID, terminals,
+                        out -> app.install.InitialSync.writeStoreData(out, PosTerminalRepository.MAIN_ID));
             }
         } catch (IOException e) {
             System.err.println("[API] could not listen on port " + ApiServer.port() + " (" + e.getMessage()

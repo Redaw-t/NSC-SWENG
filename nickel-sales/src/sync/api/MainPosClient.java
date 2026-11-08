@@ -72,6 +72,48 @@ public final class MainPosClient {
         }
     }
 
+    /** How long the first sync's download may take (a store database can be large on a slow network). */
+    private static final Duration DOWNLOAD_TIMEOUT = Duration.ofMinutes(10);
+
+    /**
+     * Downloads the Main POS's whole store database (gzip of the backup text) to {@code file}, for this
+     * new Additional POS's first sync. Loading it is up to the caller (app.install.InitialSync).
+     */
+    public void downloadSnapshot(java.nio.file.Path file) throws MainPosException {
+        HttpRequest request = HttpRequest.newBuilder(uri("/api/sync/snapshot"))
+                .timeout(DOWNLOAD_TIMEOUT)
+                .header(ApiKey.HEADER, apiKey)
+                .GET()
+                .build();
+        HttpResponse<java.io.InputStream> response;
+        try {
+            response = http.send(request, HttpResponse.BodyHandlers.ofInputStream());
+        } catch (HttpConnectTimeoutException | ConnectException e) {
+            throw new MainPosException("Can't reach the Main POS at " + mainIp + " to copy its data. Check that it is "
+                    + "on with the Nickel Sales app open and on the same network, then try again.");
+        } catch (HttpTimeoutException e) {
+            throw new MainPosException("Copying the data from the Main POS took too long. Try again.");
+        } catch (IOException e) {
+            throw new MainPosException("The data could not be copied from the Main POS (" + e.getMessage() + "). Try again.");
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new MainPosException("Stopped before the data was copied.");
+        }
+        try (java.io.InputStream body = response.body()) {
+            if (response.statusCode() != 200) {
+                Map<String, String> error = Json.fields(new String(body.readNBytes(4096), StandardCharsets.UTF_8));
+                if (response.statusCode() == 401) {
+                    throw new MainPosException("The Main POS did not accept the API key, so its data was not copied.");
+                }
+                throw new MainPosException(error.getOrDefault("error",
+                        "The Main POS could not send its data (error " + response.statusCode() + "). Try again."));
+            }
+            java.nio.file.Files.copy(body, file, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        } catch (IOException e) {
+            throw new MainPosException("The data stopped coming from the Main POS (" + e.getMessage() + "). Try again.");
+        }
+    }
+
     private URI uri(String path) throws MainPosException {
         try {
             return URI.create("http://" + mainIp + ":" + port + path);

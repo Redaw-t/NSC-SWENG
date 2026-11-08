@@ -22,6 +22,8 @@ import java.util.regex.Pattern;
  * | GET    | /api/ping                | no   | {"status":"ok","terminalId":"T01"}: the Main POS is up |
  * | POST   | /api/terminals/register  | yes  | body {"ipAddress":"192.168.1.21","computerName":"..."} |
  * |        |                          |      | reply {"terminalId":"T02"}                            |
+ * | GET    | /api/sync/snapshot       | yes  | the whole store database (gzip of DatabaseDump text), |
+ * |        |                          |      | for a new Additional POS's first sync                 |
  *
  * Calls that need the key must send the developer's key in the X-API-Key header ({@link ApiKey});
  * without it they get 401. Runs on background threads; the app can close while it is running.
@@ -61,6 +63,15 @@ public final class ApiServer {
      * @throws IOException the port is taken (another copy of the app, or another program)
      */
     public static ApiServer start(int port, String terminalId, TerminalRegistrar registrar) throws IOException {
+        return start(port, terminalId, registrar, null);
+    }
+
+    /**
+     * As above, also answering /api/sync/snapshot with {@code snapshots} (null = that call says it is
+     * not available).
+     */
+    public static ApiServer start(int port, String terminalId, TerminalRegistrar registrar, SnapshotSource snapshots)
+            throws IOException {
         Objects.requireNonNull(registrar, "registrar");
         HttpServer server = HttpServer.create(new InetSocketAddress(port), 0);
         ExecutorService threads = Executors.newFixedThreadPool(4, r -> {
@@ -82,6 +93,20 @@ public final class ApiServer {
             String assigned = registrar.register(ip, name == null || name.isBlank() ? null : name.trim());
             System.out.println("[API] " + ip + (name == null ? "" : " (" + name + ")") + " registered as " + assigned);
             reply(ex, 200, Json.object("terminalId", assigned));
+        }));
+        server.createContext("/api/sync/snapshot", ex -> handle(ex, "GET", true, () -> {
+            if (snapshots == null) {
+                reply(ex, 503, Json.object("error", "This Main POS can't send its data."));
+                return;
+            }
+            System.out.println("[API] sending the store's data to " + ex.getRemoteAddress());
+            ex.getResponseHeaders().set("Content-Type", "application/gzip");
+            ex.sendResponseHeaders(200, 0);   // length unknown: sent as it is written
+            // A failure part-way just cuts the copy short; the Additional POS sees it is incomplete.
+            try (java.util.zip.GZIPOutputStream zip = new java.util.zip.GZIPOutputStream(ex.getResponseBody())) {
+                snapshots.writeTo(zip);
+            }
+            System.out.println("[API] the store's data was sent to " + ex.getRemoteAddress());
         }));
         server.start();
         System.out.println("[API] Main POS API listening on port " + port);
