@@ -271,6 +271,28 @@ public class InventoryService implements StockRecorder, StockOverview {
         }
     }
 
+    /**
+     * Puts voided items of a completed sale back into stock, joining POS's void transaction
+     * ({@code tx}). One RETURN movement per product, products locked in ID order like recordSale.
+     */
+    @Override
+    public void recordReturn(String reference, List<StockLine> lines, Connection tx) throws SQLException {
+        Objects.requireNonNull(reference, "reference");
+        Map<String, BigDecimal> back = new TreeMap<>();
+        for (StockLine line : lines) {
+            back.merge(line.productId(), line.quantity(), BigDecimal::add);
+        }
+        Instant now = Instant.now();
+        for (Map.Entry<String, BigDecimal> entry : back.entrySet()) {
+            BigDecimal qty = Quantity.normalize(entry.getValue());
+            StockLevel current = repository.lockOrCreate(tx, entry.getKey(), now);
+            StockLevel next = current.withQuantity(current.quantityOnHand().add(qty), now);
+            repository.update(tx, next);
+            repository.addMovement(tx, new StockMovement(0, entry.getKey(), MovementType.RETURN,
+                    qty, current.quantityOnHand(), next.quantityOnHand(), null, reference, null, null, now));
+        }
+    }
+
     // ---- helpers -------------------------------------------------------------
 
     private ProductInfo requireProduct(String productId) throws InventoryException {

@@ -49,6 +49,8 @@ final class PosStyle {
     private static final String GRID_LINE = "#D9DDE5";
     private static final String SELECTED_ROW = Theme.BORDER;
     private static final String PROBLEM_ROW = "#fbe3e3";
+    /** A red-tinted row (stock problem, voided / to-void line) while it is the selected one. */
+    private static final String SELECTED_PROBLEM_ROW = "#f2b8b8";
 
     private static final String BUTTON_BASE = "-fx-background-radius: 10; -fx-padding: 0; -fx-cursor: hand; "
             + "-fx-focus-color: transparent; -fx-faint-focus-color: transparent; ";
@@ -79,6 +81,10 @@ final class PosStyle {
         Button b = new Button();
         b.setGraphic(graphic);
         b.setAccessibleText(name + " (" + key + ")");
+        // Never takes the keyboard focus: on Windows, Enter presses whichever button has the focus, which
+        // was the first one ("Keep Sale") instead of the [ENTER] one. Now Enter always presses the button
+        // marked [ENTER] (the default button) and Esc the one marked [ESC], as the labels say.
+        b.setFocusTraversable(false);
         button(b, kind);
         b.setMinWidth(160);
         b.setMinHeight(56);
@@ -175,7 +181,8 @@ final class PosStyle {
 
         private void paint() {
             boolean filled = !isEmpty() && getItem() != null;
-            String background = filled && problem.test(getItem()) ? PROBLEM_ROW
+            boolean red = filled && problem.test(getItem());
+            String background = red ? (isSelected() ? SELECTED_PROBLEM_ROW : PROBLEM_ROW)   // darker red = selected
                     : filled && isSelected() ? SELECTED_ROW : Theme.APP_BACKGROUND;
             setStyle("-fx-background-color: " + background + "; -fx-background-insets: 0; -fx-padding: 0; -fx-border-width: 0;");
         }

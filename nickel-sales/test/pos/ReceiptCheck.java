@@ -174,7 +174,7 @@ public class ReceiptCheck {
             List<String> text = new Receipt(STORE, g, "Juan", false).toText(42);
             expect(amountAtEnd(only(text, l -> l.startsWith("GCASH"), "GCash")), "250.00");   // VAT already inside
             only(text, l -> l.startsWith("Ref. No.") && l.endsWith("1009876543210"), "reference");
-            expect(amountAtEnd(only(text, l -> l.startsWith("CHANGE"), "Change")), "0.00");
+            expectTrue(text.stream().noneMatch(l -> l.startsWith("CHANGE")), "no CHANGE line: only cash gives change");
             expectTrue(text.stream().noneMatch(l -> l.startsWith("CASH ")), "no cash line");
         });
 

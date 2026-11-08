@@ -64,6 +64,8 @@ public final class ActivityDescription {
             Map.entry("SUPPLIER_DEACTIVATED", "Supplier deactivated."),
             // POS
             Map.entry("SALE_COMPLETED", "Sale completed."),
+            Map.entry("SALE_ITEM_VOIDED", "Item(s) voided from a completed sale and refunded."),
+            Map.entry("SALE_VOIDED", "Completed sale voided (Void Transaction) and refunded."),
             // System (the file or record is in the Target column)
             Map.entry("BACKUP_CREATED", "Database backup created."),
             Map.entry("BACKUP_FAILED", "Database backup failed."),

@@ -60,7 +60,7 @@ final class InventoryPane implements ReportsPane {
         this.service = service;
 
         table.getColumns().add(Tables.numberColumn(pager));
-        table.getColumns().add(Tables.<StockSnapshot>textColumn("Product Code", 150, InventoryPane::code));
+        table.getColumns().add(Tables.<StockSnapshot>nodeColumn("Product Code", 150, 120, InventoryPane::codeCell));
         table.getColumns().add(Tables.<StockSnapshot>textColumn("Product", 260, StockSnapshot::name));
         table.getColumns().add(Tables.<StockSnapshot>textColumn("On Hand", 110,
                 s -> Quantity.format(s.onHand()) + " " + s.unit()));
@@ -143,9 +143,22 @@ final class InventoryPane implements ReportsPane {
         Styles.error(message);
     }
 
-    /** The barcode, or the product ID when it has none (as on Inventory's screen). */
+    /** For the search box: the barcode, or the product ID when it has none (so P-0007 still finds it). */
     private static String code(StockSnapshot s) {
         return s.barcode() == null || s.barcode().isBlank() ? s.productId() : s.barcode();
+    }
+
+    /** The Product Code cell: the barcode, or a faint "No Barcode" (as on Products > Products). */
+    private static Node codeCell(StockSnapshot s) {
+        if (s.barcode() == null || s.barcode().isBlank()) {
+            Label none = new Label("No Barcode");
+            Styles.muted(none);
+            none.setOpacity(0.5);
+            return none;
+        }
+        Label code = new Label(s.barcode());
+        code.setStyle("-fx-text-fill: " + Theme.PRIMARY_TEXT + ";");
+        return code;
     }
 
     /** Green / amber / red chip with the words (style guide: never colour alone). */

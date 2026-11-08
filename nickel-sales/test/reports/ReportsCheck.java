@@ -264,6 +264,46 @@ public class ReportsCheck {
                     "");   // the other filters still apply
         });
 
+        check("History: returns are listed as their own rows with a minus total and their return number", () -> {
+            // 1 of S4's 3 Rice (an Oct 31 sale) returned on Nov 4, 10:00 PH, at T02 by NSC-00006, refunded by GCash
+            pos.contract.ReturnRecord ret = new pos.contract.ReturnRecord("R1", "T01-2026-000003-01", "S4",
+                    "T01-2026-000003", "T02", "NSC-00006", java.time.Instant.parse("2026-11-04T02:00:00Z"), false,
+                    PaymentMethod.GCASH, "GC-123456",
+                    List.of(new pos.contract.ReturnLineRecord(1, 1, "P-2", null, "Rice", "kg", new BigDecimal("1"),
+                            new BigDecimal("50.00"), PriceType.RETAIL, false, new BigDecimal("50.00"))),
+                    new BigDecimal("0.00"), new BigDecimal("50.00"), new BigDecimal("0.00"), new BigDecimal("50.00"));
+            pos.contract.ReturnHistory returns = new pos.contract.ReturnHistory() {
+                public List<pos.contract.ReturnRecord> findBySaleId(String saleId) {
+                    return saleId.equals("S4") ? List.of(ret) : List.of();
+                }
+                public java.util.Optional<pos.contract.ReturnRecord> findByReturnNo(String no) {
+                    return no.equalsIgnoreCase(ret.returnNo()) ? java.util.Optional.of(ret) : java.util.Optional.empty();
+                }
+                public List<pos.contract.ReturnRecord> findReturned(java.time.Instant from, java.time.Instant to) {
+                    return !ret.returnedAt().isBefore(from) && ret.returnedAt().isBefore(to) ? List.of(ret) : List.of();
+                }
+            };
+            TransactionHistoryService withReturns = new TransactionHistoryService(HISTORY, returns, ACCESS);
+            ReportPeriod day = ReportPeriod.day(NOV_4);
+            TransactionList list = withReturns.find(ADMIN, ReportFilter.of(day));
+            expectText(numbers(list), "T02-2026-000001,T01-2026-000003-01,T01-2026-000001");   // newest first
+            reports.model.TransactionRow r = list.rows().get(1);
+            expectTrue(r.isReturn() && r.total().compareTo(new BigDecimal("-50.00")) == 0, "minus total");
+            expectText(r.cashierId() + " " + r.terminalId() + " " + r.methods(), "NSC-00006 T02 [GCASH]");
+            expectText(invoices(list), "T02-2026-000001,T01-2026-000001");   // sales only, as before
+            // filters: the return's own cashier / refund method; its number; exact return number on any date
+            expectText(numbers(withReturns.find(ADMIN, new ReportFilter(day, null, null, PaymentMethod.GCASH, null))),
+                    "T02-2026-000001,T01-2026-000003-01");
+            expectText(numbers(withReturns.find(ADMIN, new ReportFilter(day, null, null, null, "-01"))),
+                    "T01-2026-000003-01");
+            expectText(numbers(withReturns.find(ADMIN, new ReportFilter(ReportPeriod.day(LocalDate.of(2026, 1, 1)),
+                    null, null, null, "t01-2026-000003-01"))), "T01-2026-000003-01");
+            // the exact invoice brings its returns along
+            expectText(numbers(withReturns.find(ADMIN, new ReportFilter(day, null, null, null, "T01-2026-000003"))),
+                    "T01-2026-000003-01,T01-2026-000003");
+            expectTrue(withReturns.openReturn(ADMIN, "T01-2026-000003-01").isPresent(), "open the return");
+        });
+
         check("History: open one sale with its lines and payments", () -> {
             SaleRecord s = TRANSACTIONS.open(ADMIN, "S1").orElseThrow();
             expectTrue(s.lines().size() == 2 && s.payments().size() == 1, "2 lines, 1 payment");
@@ -478,6 +518,11 @@ public class ReportsCheck {
 
     static String invoices(TransactionList list) {
         return String.join(",", list.sales().stream().map(SaleRecord::invoiceNo).toList());
+    }
+
+    /** Every row's invoice / return number, as the table lists them. */
+    static String numbers(TransactionList list) {
+        return String.join(",", list.rows().stream().map(reports.model.TransactionRow::number).toList());
     }
 
     // =========================== check helpers (as in AppCheck) ===========================

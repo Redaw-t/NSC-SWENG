@@ -11,11 +11,12 @@ import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import pos.contract.PaymentMethod;
-import pos.contract.PaymentRecord;
+import pos.contract.ReturnRecord;
 import pos.contract.SaleRecord;
 import reports.model.ReportFilter;
 import reports.model.ReportPeriod;
 import reports.model.TransactionList;
+import reports.model.TransactionRow;
 import reports.service.ReportException;
 import reports.service.TransactionHistoryService;
 import reports.ui.ReportsUi.Choice;
@@ -36,8 +37,9 @@ import java.util.Objects;
 
 /**
  * The "Transactions" tab: completed sales of a period (default today), filtered by cashier,
- * terminal, payment method and invoice number, newest first. View opens a sale's lines and
- * payments. Read-only.
+ * terminal, payment method and invoice number, newest first. Returns (POS voids) are listed too:
+ * their return number, who voided them, the refund method and a MINUS total. View opens a sale's
+ * lines and payments, or a return's summary. Read-only.
  */
 final class TransactionsPane implements ReportsPane {
 
@@ -53,14 +55,14 @@ final class TransactionsPane implements ReportsPane {
     private final SearchPicker<Choice<String>> terminal = new SearchPicker<>(false, false);
     private final SearchPicker<Choice<PaymentMethod>> method = new SearchPicker<>(false, false);
     private final TextField invoice = ReportsUi.searchField("Invoice no.", this::load);
-    private final TableView<SaleRecord> table = Tables.create();
+    private final TableView<TransactionRow> table = Tables.create();
     private final TablePager pager = TablePager.boxed(this::showPage);
     private final Label countValue = new Label("0");
     private final Label totalValue = new Label(ReportsUi.peso(Money.ZERO));
     private final Label message = ReportsUi.messageLabel();
     private final VBox view = new VBox(16);
 
-    private List<SaleRecord> rows = List.of();
+    private List<TransactionRow> rows = List.of();
 
     TransactionsPane(ScreenContext screen, TransactionHistoryService history) {
         this.screen = screen;
@@ -68,16 +70,17 @@ final class TransactionsPane implements ReportsPane {
         this.names = new UserNames(screen);
 
         table.getColumns().add(Tables.numberColumn(pager));
-        table.getColumns().add(Tables.<SaleRecord>textColumn("Date / Time", 130,
-                s -> ROW_TIME.format(PhTime.of(s.completedAt()))));
-        table.getColumns().add(Tables.<SaleRecord>textColumn("Invoice No.", 150, SaleRecord::invoiceNo));
-        table.getColumns().add(Tables.<SaleRecord>textColumn("Cashier", 170, s -> names.name(s.cashierUserId())));
-        table.getColumns().add(Tables.<SaleRecord>textColumn("Terminal", 80, SaleRecord::terminalId));
-        table.getColumns().add(Tables.<SaleRecord>textColumn("Payment", 100, TransactionsPane::methods));
-        table.getColumns().add(Tables.<SaleRecord>textColumn("Items", 60, s -> String.valueOf(s.lines().size())));
-        table.getColumns().add(Tables.<SaleRecord>textColumn("Total", 110, s -> ReportsUi.peso(s.total())));
-        table.getColumns().add(Tables.<SaleRecord>nodeColumn("Actions", 90, 80,
-                s -> ReportsUi.viewButton(() -> showDetails(s))));
+        table.getColumns().add(Tables.<TransactionRow>textColumn("Date / Time", 130,
+                r -> ROW_TIME.format(PhTime.of(r.when()))));
+        // a return shows its return number (the invoice number + -01 ...)
+        table.getColumns().add(Tables.<TransactionRow>textColumn("Invoice No.", 150, TransactionRow::number));
+        table.getColumns().add(Tables.<TransactionRow>textColumn("Cashier", 170, r -> names.name(r.cashierId())));
+        table.getColumns().add(Tables.<TransactionRow>textColumn("Terminal", 80, TransactionRow::terminalId));
+        table.getColumns().add(Tables.<TransactionRow>textColumn("Payment", 100, TransactionsPane::methods));
+        table.getColumns().add(Tables.<TransactionRow>textColumn("Items", 60, r -> String.valueOf(r.items())));
+        table.getColumns().add(Tables.<TransactionRow>textColumn("Total", 110, r -> signedPeso(r.total())));
+        table.getColumns().add(Tables.<TransactionRow>nodeColumn("Actions", 90, 80,
+                r -> ReportsUi.viewButton(() -> showDetails(r))));
         ReportsUi.placeholder(table, EMPTY);
         pager.fitToHeight(table, Tables.HEADER_HEIGHT, Tables.ROW_HEIGHT, this::showPage);
 
@@ -99,7 +102,7 @@ final class TransactionsPane implements ReportsPane {
         toolbar.setAlignment(Pos.CENTER_LEFT);
 
         view.getChildren().addAll(toolbar, table, message, ReportsUi.footer(pager,
-                ReportsUi.tile("Transactions", countValue), ReportsUi.tile("Total Sales", totalValue)));
+                ReportsUi.tile("Transactions", countValue), ReportsUi.tile("Net Sales", totalValue)));
         VBox.setVgrow(table, Priority.ALWAYS);
     }
 
@@ -125,16 +128,17 @@ final class TransactionsPane implements ReportsPane {
         }
         try {
             TransactionList list = history.find(screen.sessionId(), filter);
-            rows = list.sales();
+            rows = list.rows();
             list.cashierIds().forEach(names::remember);
             setChoices(cashier, "All Cashiers", list.cashierIds(), names::label);
             setChoices(terminal, "All Terminals", list.terminalIds(), id -> id);
             ReportsUi.placeholder(table, EMPTY);
-            message.setText(filter.invoiceNo() != null && rows.size() == 1
-                    && rows.get(0).invoiceNo().equalsIgnoreCase(filter.invoiceNo())
-                    && !filter.period().contains(rows.get(0).completedAt())
-                    ? "Invoice " + rows.get(0).invoiceNo() + " is from " + PhTime.format(rows.get(0).completedAt())
-                    + ", outside the chosen dates." : "");
+            TransactionRow first = rows.isEmpty() ? null : rows.get(rows.size() - 1);   // oldest = the sale
+            message.setText(filter.invoiceNo() != null && first != null
+                    && first.number().equalsIgnoreCase(filter.invoiceNo())
+                    && !filter.period().contains(first.when())
+                    ? (first.isReturn() ? "Return " : "Invoice ") + first.number() + " is from "
+                    + PhTime.format(first.when()) + ", outside the chosen dates." : "");
             Styles.muted(message);
         } catch (ReportException e) {
             loadFailed(e.getMessage());
@@ -142,21 +146,29 @@ final class TransactionsPane implements ReportsPane {
             loadFailed(UiErrors.message(e, "The sales could not be loaded. Try again."));
         }
         BigDecimal total = Money.ZERO;
-        for (SaleRecord s : rows) {
-            total = total.add(s.total());
+        for (TransactionRow r : rows) {
+            total = total.add(r.total());   // returns are minus: Net Sales = sales - refunds
         }
         countValue.setText(ReportsUi.count(rows.size()));
-        totalValue.setText(ReportsUi.peso(total));
+        totalValue.setText(signedPeso(total));
         pager.reset();
         showPage();
     }
 
-    private void showDetails(SaleRecord row) {
+    private void showDetails(TransactionRow row) {
         try {
             // Read again through the service, so a user who lost the permission cannot open it.
-            SaleRecord sale = history.open(screen.sessionId(), row.saleId()).orElse(row);
+            SaleRecord sale = history.open(screen.sessionId(), row.sale().saleId()).orElse(row.sale());
             names.remember(sale.cashierUserId());
-            SaleDetailsDialog.show(screen.stage(), sale, names.label(sale.cashierUserId()));
+            if (!row.isReturn()) {
+                SaleDetailsDialog.show(screen.stage(), sale, names.label(sale.cashierUserId()));
+                return;
+            }
+            ReturnRecord ret = history.openReturn(screen.sessionId(), row.ret().returnNo()).orElse(row.ret());
+            names.remember(ret.cashierUserId());
+            if (ReturnDetailsDialog.show(screen.stage(), sale, ret, names.label(ret.cashierUserId()))) {
+                SaleDetailsDialog.show(screen.stage(), sale, names.label(sale.cashierUserId()));   // View Sale
+            }
         } catch (ReportException e) {
             showError(e.getMessage());
         }
@@ -201,9 +213,13 @@ final class TransactionsPane implements ReportsPane {
         return picker.getValue() == null ? null : picker.getValue().value();
     }
 
-    private static String methods(SaleRecord sale) {
-        return String.join(", ", sale.payments().stream().map(PaymentRecord::method).distinct()
-                .map(TransactionsPane::methodLabel).toList());
+    private static String methods(TransactionRow row) {
+        return String.join(", ", row.methods().stream().map(TransactionsPane::methodLabel).toList());
+    }
+
+    /** "₱750.00", or "-₱150.00" for a return. */
+    static String signedPeso(BigDecimal amount) {
+        return amount.signum() < 0 ? "-" + ReportsUi.peso(amount.negate()) : ReportsUi.peso(amount);
     }
 
     /** "Cash", "GCash", "Maya", "QRPh". */

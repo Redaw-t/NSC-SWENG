@@ -45,10 +45,14 @@ import pos.checkout.PaymentService;
 import pos.contract.PaymentMethod;
 import pos.contract.PaymentRecord;
 import pos.contract.PriceType;
+import pos.contract.ReturnLineRecord;
+import pos.contract.ReturnRecord;
 import pos.contract.SaleLineRecord;
 import pos.contract.SaleRecord;
 import pos.receipt.Receipt;
 import pos.receipt.ReceiptPrintException;
+import pos.returns.ReturnException;
+import pos.returns.ReturnService;
 import product.contract.ProductInfo;
 import product.contract.ProductLookup;
 import shared.Modal;
@@ -80,16 +84,18 @@ import java.util.regex.Pattern;
  * | F3 / Enter   | (cart) change the selected line's quantity                     |
  * | F4           | (cart) edit the selected line's price for this sale only (PRICE EDITED) |
  * | + / -        | (cart) one more / one less of the selected line                |
- * | Delete       | (cart) remove the selected line                                |
+ * | Delete       | (cart) remove the line; (retrieved) mark / unmark it to void   |
  * | Up / Down    | move in the cart (from the barcode box too)                    |
- * | F5           | pay (only when the sale can be paid)                           |
+ * | F5           | pay (when the sale can be paid); (retrieved) REFUND the marked |
  * | F6           | reprint a receipt by invoice number (retrieved sale: its receipt) |
- * | F7           | Retrieve Transaction                       (NOT BUILT YET)     |
- * | F8           | New Transaction                            (NOT BUILT YET)     |
- * | F9           | cancel the transaction                                         |
+ * | F7           | Retrieve Transaction: show a completed sale (read only)        |
+ * | F8           | New Transaction (NOT BUILT YET); back from a retrieved sale    |
+ * | F9           | cancel the transaction; (retrieved) mark everything to void    |
  * | Esc          | back to the home screen (the sale stays open)                  |
  *
  * Quantity before scanning: type {@code 5*4800000000019} in the barcode box to add 5.
+ * Scanning the barcode of a RETURN slip (e.g. T01-2026-000123-01) in the barcode box, or in F7
+ * Retrieve Transaction, shows that return's summary (Return Details); an invoice number in F7 retrieves the sale.
  *
  * Features marked NOT BUILT YET are skeletons: the button and key exist and show a short
  * notice. Search this file for "TODO(skeleton)" to find the methods to fill in.
@@ -145,6 +151,21 @@ public final class PosScreen {
 
     /** The completed sale shown by F7 Retrieve Transaction; null = the normal cart is shown. */
     private SaleRecord retrieved;
+    /**
+     * The sale just paid, still on screen (read only, with its change) until the cashier presses New
+     * Transaction (F8); null otherwise. Meanwhile F6 prints its receipt again (no REPRINT mark).
+     */
+    private SaleRecord completed;
+    private Button retrieveButton;
+    private Button reprintButton;
+    private Button editQtyButton;
+    private Button editPriceButton;
+    /** The voids of {@link #retrieved}, oldest first. */
+    private List<ReturnRecord> retrievedReturns = List.of();
+    /** Lines marked with Void Item / Void Transaction, not refunded yet: sale line no. -> quantity. */
+    private final Map<Integer, BigDecimal> pendingVoids = new java.util.LinkedHashMap<>();
+    /** What REFUND would save for {@link #pendingVoids} (amounts, VAT); null when nothing is marked. */
+    private ReturnRecord pendingPreview;
     private final Label summaryTitle = new Label("ORDER SUMMARY");
     /** Every button that is locked (dimmed, not clickable) while a retrieved sale is shown. */
     private final List<Button> lockedWhileRetrieved = new java.util.ArrayList<>();
@@ -157,55 +178,80 @@ public final class PosScreen {
      * One line in the cart table: a line of the open sale ({@code line}, with its stock problem or
      * null), or a line of a retrieved, already completed sale ({@code saved}; {@code line} is null).
      */
-    record Row(int no, SaleLineItem line, SaleLineRecord saved, StockProblem problem, boolean priceEdited) {
+    record Row(int no, SaleLineItem line, SaleLineRecord saved, StockProblem problem, boolean priceEdited,
+               ReturnLineRecord returned, String returnNo) {
 
         Row(int no, SaleLineItem line, StockProblem problem, boolean priceEdited) {
-            this(no, line, null, problem, priceEdited);
+            this(no, line, null, problem, priceEdited, null, null);
         }
 
         /** A completed sale's line; PRICE EDITED comes from its saved original price (SaleLine.OriginalPrice). */
         static Row of(SaleLineRecord saved) {
-            return new Row(saved.lineNo(), null, saved, null, saved.priceEdited());
+            return new Row(saved.lineNo(), null, saved, null, saved.priceEdited(), null, null);
+        }
+
+        /**
+         * A voided line of a retrieved sale, listed under the sold items with minus amounts.
+         * {@code returnNo} null = marked to void but not refunded yet (saved by REFUND).
+         */
+        static Row voided(int no, ReturnLineRecord returned, String returnNo) {
+            return new Row(no, null, null, null, false, returned, returnNo);
+        }
+
+        /** A void line, saved or only marked. */
+        boolean isVoid() {
+            return returned != null;
+        }
+
+        /** Marked to void, not refunded (saved) yet. */
+        boolean isPending() {
+            return returned != null && returnNo == null;
         }
 
         String productName() {
-            return line != null ? line.productName() : saved.productName();
+            return line != null ? line.productName() : saved != null ? saved.productName() : returned.productName();
         }
 
         boolean openItem() {
-            return line != null ? line.openItem() : saved.openItem();
+            return line != null ? line.openItem() : saved != null ? saved.openItem() : returned.openItem();
         }
 
         /**
          * The Item column: the name, with "(OPEN-ITEM)" after open items and "(PRICE EDITED)" after
-         * lines whose price was changed with F4 (screen only, not the receipt).
+         * lines whose price was changed with F4 (screen only, not the receipt); voided lines show
+         * "(VOIDED T01-2026-000123-01)".
          */
         String itemLabel() {
+            if (isVoid()) {
+                return productName() + (returnNo == null ? " (TO VOID)" : " (VOIDED " + returnNo + ")");
+            }
             return productName() + (openItem() ? " (OPEN-ITEM)" : "") + (priceEdited ? " (PRICE EDITED)" : "");
         }
 
+        /** Negative for a voided line. */
         BigDecimal quantity() {
-            return line != null ? line.quantity() : saved.quantity();
+            return line != null ? line.quantity() : saved != null ? saved.quantity() : returned.quantity().negate();
         }
 
         String unit() {
-            return line != null ? line.unit() : saved.unit();
+            return line != null ? line.unit() : saved != null ? saved.unit() : returned.unit();
         }
 
         BigDecimal unitPrice() {
-            return line != null ? line.unitPrice() : saved.unitPrice();
+            return line != null ? line.unitPrice() : saved != null ? saved.unitPrice() : returned.unitPrice();
         }
 
         PriceType priceType() {
-            return line != null ? line.priceType() : saved.priceType();
+            return line != null ? line.priceType() : saved != null ? saved.priceType() : returned.priceType();
         }
 
+        /** Negative for a voided line. */
         BigDecimal lineTotal() {
-            return line != null ? line.lineTotal() : saved.lineTotal();
+            return line != null ? line.lineTotal() : saved != null ? saved.lineTotal() : returned.lineTotal().negate();
         }
 
         boolean vatable() {
-            return line != null ? line.vatable() : saved.vatable();
+            return line != null ? line.vatable() : saved != null ? saved.vatable() : returned.vatable();
         }
 
         /** " V" after a VATable item's price, like the receipt. */
@@ -261,6 +307,10 @@ public final class PosScreen {
             showError("Scan or type a barcode. F1 searches for products without one.");
             return;
         }
+        // the barcode on a RETURN slip (T01-2026-000123-01): show that return's summary instead of adding an item
+        if (retrieveReturnFromBarcode(entry.text())) {
+            return;
+        }
         run(() -> {
             SaleLineItem line = pos.addItem(entry.text(), entry.quantity());
             barcodeField.clear();
@@ -303,6 +353,10 @@ public final class PosScreen {
     }
 
     private void askQuantity() {
+        if (rows.isEmpty()) {
+            showError("Nothing to edit quantity: the cart is empty.");
+            return;
+        }
         Row row = table.getSelectionModel().getSelectedItem();
         if (row == null) {
             showError("Select a line first (Up / Down).");
@@ -327,6 +381,10 @@ public final class PosScreen {
     }
 
     private void removeSelected() {
+        if (rows.isEmpty()) {
+            showError("Nothing to remove: the cart is empty.");
+            return;
+        }
         Row row = table.getSelectionModel().getSelectedItem();
         if (row == null) {
             return;
@@ -366,7 +424,7 @@ public final class PosScreen {
     private void cancelSale() {
         Sale sale = pos.currentSale().orElse(null);
         if (sale == null || sale.isEmpty()) {
-            showInfo("Nothing to cancel.");
+            showError("Nothing to cancel: the cart is empty.");
             return;
         }
         int lines = sale.getItems().size();
@@ -381,9 +439,13 @@ public final class PosScreen {
         focusBarcode();
     }
 
-    /** F5: open the payment card (only when the sale can be paid). */
+    /** F5 / the PAYMENT button: open the payment card (only when the sale can be paid); REFUND while retrieved. */
     private void pay() {
         if (paymentCard != null) {
+            return;
+        }
+        if (retrieved != null) {
+            refund();
             return;
         }
         if (payButton.isDisable()) {
@@ -413,21 +475,30 @@ public final class PosScreen {
             focusBarcode();
             return;
         }
-        // The sale is saved. Get the next one ready, then hand over the receipt.
+        // The sale is saved. The next one is ready behind the scenes, but the paid sale (and its change)
+        // stays on screen until the cashier presses New Transaction (F8).
         lastInvoice = done.invoiceNo();
         pos.startSale(screen.user().getUserId());
+        completed = done;
+        applyMode();
         refresh(null);
-        showInfo("Sale " + done.invoiceNo() + " saved. Ready for the next customer.");
+        showInfo("Sale " + done.invoiceNo() + " saved. Press New Transaction (F8) for the next customer.");
         Receipt receipt;
         try {
             receipt = screen.app().receipts().build(done);
         } catch (RuntimeException e) {
             System.err.println("[RECEIPT] " + e);
             showError("Sale " + done.invoiceNo() + " is saved, but its receipt could not be made. "
-                    + "Press F6 to reprint it.");
-            focusBarcode();
+                    + "Press F6 to print it again.");
+            table.requestFocus();
             return;
         }
+        printOrPreview(done, receipt);
+        table.requestFocus();   // the barcode box is locked until New Transaction
+    }
+
+    /** Hands over a sale's receipt the POS Settings way: printed straight away, or the preview first. */
+    private void printOrPreview(SaleRecord done, Receipt receipt) {
         if (PosSettings.autoPrintReceipt()) {
             autoPrint(done, receipt);
         } else {
@@ -439,10 +510,26 @@ public final class PosScreen {
             } catch (RuntimeException e) {
                 System.err.println("[RECEIPT] " + e);
                 showError("Sale " + done.invoiceNo() + " is saved, but its receipt could not be shown. "
-                        + "Press F6 to reprint it.");
+                        + "Press F6 to print it again.");
             }
         }
-        focusBarcode();
+    }
+
+    /**
+     * F6 while the paid sale is still on screen: its receipt again, exactly as first handed over (no
+     * REPRINT mark), the POS Settings way (printed straight away, or the preview first).
+     */
+    private void printCompletedAgain() {
+        Receipt receipt;
+        try {
+            receipt = screen.app().receipts().build(completed);
+        } catch (RuntimeException e) {
+            System.err.println("[RECEIPT] " + e);
+            showError("The receipt could not be made. Try again.");
+            return;
+        }
+        printOrPreview(completed, receipt);
+        table.requestFocus();
     }
 
     /**
@@ -525,17 +612,67 @@ public final class PosScreen {
 
     /**
      * F6: show / print a receipt again. While a sale is retrieved (F7) it opens that sale's receipt
-     * straight away; otherwise it asks for the invoice number first.
+     * straight away, or the RETURN slip when a voided line is selected; otherwise it asks for the
+     * invoice number (an invoice reprints the sales invoice, a return number its RETURN slip).
      */
     private void reprint() {
+        if (retrieved == null && completed != null) {
+            printCompletedAgain();
+            return;
+        }
         if (retrieved != null) {
-            showReprint(retrieved);
+            Row row = table.getSelectionModel().getSelectedItem();
+            ReturnRecord ret = row != null && row.isVoid() ? returnNamed(row.returnNo()) : null;
+            if (ret != null) {
+                showReturnReprint(retrieved, ret);
+            } else {
+                showReprint(retrieved);
+            }
             table.requestFocus();   // the barcode box is locked while a sale is retrieved
             return;
         }
-        Optional<SaleRecord> sale = ReprintDialog.ask(screen.stage(), screen.app().saleHistory(), lastInvoice);
-        sale.ifPresent(this::showReprint);
+        Optional<ReprintDialog.Found> found = Optional.empty();
+        try {
+            found = ReprintDialog.ask(screen.stage(), screen.app().saleHistory(), screen.app().returnHistory(),
+                    lastInvoice);
+        } catch (RuntimeException e) {
+            showError(UiErrors.message(e, "Sales could not be searched. Try again."));
+        }
+        found.ifPresent(f -> {
+            if (f.ret() != null) {
+                showReturnReprint(f.sale(), f.ret());
+            } else {
+                showReprint(f.sale());
+            }
+        });
         focusBarcode();
+    }
+
+    /** The retrieved sale's void with this number, or null. */
+    private ReturnRecord returnNamed(String returnNo) {
+        for (ReturnRecord r : retrievedReturns) {
+            if (r.returnNo().equals(returnNo)) {
+                return r;
+            }
+        }
+        return null;
+    }
+
+    /** The Reprint Receipt modal for one void's RETURN slip (marked REPRINT). */
+    private void showReturnReprint(SaleRecord sale, ReturnRecord ret) {
+        try {
+            Receipt receipt = screen.app().receipts().buildReturn(sale, ret, true);
+            boolean printed = ReceiptDialog.show(screen.stage(), "Reprint Return Slip", "Return "
+                    + ret.returnNo(), null, receipt, screen.app().receiptPrinter(),
+                    screen.app().config().receiptWidth());
+            if (printed) {
+                showInfo("Sent the return slip for " + ret.returnNo() + " to the printer.");
+                checkPrintedLater(ret.returnNo());
+            }
+        } catch (RuntimeException e) {
+            System.err.println("[RECEIPT] " + e);
+            showError("The return slip could not be shown. Try again.");
+        }
     }
 
     /** The Reprint Receipt modal for one saved sale. */
@@ -561,6 +698,10 @@ public final class PosScreen {
     private void refresh(String selectProductId) {
         if (retrieved != null) {
             return;   // a retrieved sale is on screen; the open sale is shown again after F8
+        }
+        if (completed != null) {
+            showCompleted();   // the paid sale stays until New Transaction
+            return;
         }
         Row selected = table.getSelectionModel().getSelectedItem();
         String keep = selectProductId != null ? selectProductId
@@ -612,21 +753,35 @@ public final class PosScreen {
         }
         itemCount.setText(Quantity.format(pieces));
         lock(payButton, !canPay);
-        lock(newTransactionButton, sale.isEmpty());   // empty cart = already ready for a new sale
+        // Items in the cart: Reprint, Retrieve and New Transaction are dimmed (finish or cancel the sale
+        // first). Empty cart: Reprint and Retrieve work; New Transaction stays dimmed (already ready).
+        lock(newTransactionButton, true);
+        lock(reprintButton, !sale.isEmpty());
+        lock(retrieveButton, !sale.isEmpty());
+        // Empty cart: nothing to change or cancel, so Edit Qty, Edit Price, Remove Item and Cancel Transaction are dimmed.
+        lock(editQtyButton, sale.isEmpty());
+        lock(editPriceButton, sale.isEmpty());
+        lock(removeButton, sale.isEmpty());
+        lock(cancelButton, sale.isEmpty());
         payHint.setText(hint);
     }
 
+    /*
+     * Status bar messages, one look each (all bold, so none stands out by weight alone):
+     *   red   = it can't be done or it went wrong ("Nothing to remove", "Finish this sale first", save failed)
+     *   green = it was done ("Added ...", "Removed ...", "Sale saved", "Marked ... to void")
+     *   blue  = what is on screen / what to do next ("Showing sale ...", "Choose how to refund ...")
+     */
     private void showError(String text) {
         setMessage(text, "-fx-font-weight: bold; -fx-text-fill: " + RED + ";");
     }
 
     private void showInfo(String text) {
-        setMessage(text, "-fx-text-fill: " + GREEN + ";");
+        setMessage(text, "-fx-font-weight: bold; -fx-text-fill: " + GREEN + ";");
     }
 
-    /** For features that are not built yet. */
     private void showNotice(String text) {
-        setMessage(text, "-fx-text-fill: " + DARK + ";");
+        setMessage(text, "-fx-font-weight: bold; -fx-text-fill: " + BLUE + ";");
     }
 
     /** The message sits in the status bar; the full text is in a tooltip in case it is cut short. */
@@ -751,6 +906,10 @@ public final class PosScreen {
      * the audit log when the sale is completed (see SalesService.editPrice).
      */
     private void editPrice() {
+        if (rows.isEmpty()) {
+            showError("Nothing to edit price: the cart is empty.");
+            return;
+        }
         Row row = table.getSelectionModel().getSelectedItem();
         if (row == null || row.line() == null) {
             showError("Select a line first (Up / Down).");
@@ -784,71 +943,326 @@ public final class PosScreen {
         if (retrieved != null) {
             return;
         }
-        Optional<SaleRecord> sale;
+        Optional<ReprintDialog.Found> found;
         try {
-            sale = ReprintDialog.ask(screen.stage(), screen.app().saleHistory(), lastInvoice,
-                    "Retrieve Transaction", "Type the invoice number of the completed sale.", "Retrieve");
+            found = ReprintDialog.ask(screen.stage(), screen.app().saleHistory(), screen.app().returnHistory(),
+                    lastInvoice, "Retrieve Transaction",
+                    "Type or scan the invoice number, or the return number on a RETURN slip.", "Retrieve");
         } catch (RuntimeException e) {
             showError(UiErrors.message(e, "Sales could not be searched. Try again."));
             return;
         }
-        if (sale.isEmpty()) {
+        if (found.isEmpty()) {
             focusBarcode();
             return;
         }
-        showRetrieved(sale.get());
+        if (found.get().ret() != null) {   // a return number: just its summary, the sale is not pulled out
+            showReturnInfo(found.get().sale(), found.get().ret());
+            focusBarcode();
+            return;
+        }
+        showRetrieved(found.get().sale(), null);
     }
 
-    /** Shows a completed sale in the cart table and locks the screen (see {@link #retrieveTransaction}). */
-    private void showRetrieved(SaleRecord sale) {
+    /**
+     * A return number (e.g. T01-2026-000123-01) scanned or typed: the Return Details summary
+     * (refund method, items returned, totals); Reprint Slip there reprints its RETURN slip.
+     */
+    private void showReturnInfo(SaleRecord sale, ReturnRecord ret) {
+        boolean reprint;
+        try {
+            reprint = ReturnInfoDialog.show(screen.stage(), sale, ret, screen.app()::userName);
+        } catch (RuntimeException e) {
+            System.err.println("[POS] " + e);
+            showError("The return details could not be shown. Try again.");
+            return;
+        }
+        showNotice("Return " + ret.returnNo() + " of invoice " + sale.invoiceNo() + ": refunded "
+                + peso(ret.total()) + " by " + PaymentService.label(ret.refundMethod()) + ".");
+        if (reprint) {
+            showReturnReprint(sale, ret);
+        }
+    }
+
+    /**
+     * A return number (e.g. T01-2026-000123-01) scanned or typed in the barcode box: show that
+     * return's summary instead of adding an item.
+     *
+     * @return true if it was a return number (handled here, found or not)
+     */
+    private boolean retrieveReturnFromBarcode(String text) {
+        boolean dashed = ReturnRecord.isReturnNo(text);
+        // the RETURN slip's barcode holds the number without dashes (T01202600000101)
+        if (!dashed && !ReturnRecord.mayBeReturnBarcode(text)) {
+            return false;
+        }
+        ReprintDialog.Found found;
+        try {
+            found = ReprintDialog.returnAndSale(screen.app().saleHistory(), screen.app().returnHistory(),
+                    text.trim().toUpperCase(java.util.Locale.ROOT));
+        } catch (RuntimeException e) {
+            showError(UiErrors.message(e, "Sales could not be searched. Try again."));
+            return true;
+        }
+        if (found == null && !dashed) {
+            return false;   // not a return after all: treat it as a product barcode
+        }
+        if (found == null) {
+            showError("No void has the return number " + text.trim().toUpperCase(java.util.Locale.ROOT) + ".");
+            barcodeField.selectAll();
+            return true;
+        }
+        barcodeField.clear();
+        showReturnInfo(found.sale(), found.ret());
+        focusBarcode();
+        return true;
+    }
+
+    /**
+     * Shows a completed sale in the cart table and locks the screen (see {@link #retrieveTransaction}).
+     * {@code ret} non-null (a return number was scanned): that void's lines are selected, so F6
+     * reprints its RETURN slip.
+     */
+    private void showRetrieved(SaleRecord sale, ReturnRecord ret) {
+        List<ReturnRecord> voids;
+        try {
+            voids = screen.app().returnHistory().findBySaleId(sale.saleId());
+        } catch (RuntimeException e) {
+            showError(UiErrors.message(e, "The voids of this sale could not be read. Try again."));
+            focusBarcode();
+            return;
+        }
         retrieved = sale;   // lastInvoice is NOT changed: F6 / F7 keep offering the latest completed sale
+        retrievedReturns = voids;
+        pendingVoids.clear();
+        pendingPreview = null;
+        showRetrievedLines(0);
+        summaryTitle.setText("RETRIEVED SALE");
+        payHint.setStyle("-fx-font-size: 16px; -fx-font-weight: bold; -fx-text-fill: " + BLUE + ";");
+        applyMode();
+        table.requestFocus();
+        if (ret != null) {
+            selectReturn(ret.returnNo());
+            showNotice("Showing " + ret.returnNo() + " on sale " + sale.invoiceNo()
+                    + ". F6 reprints its return slip; New Transaction (F8) goes back.");
+        } else {
+            showNotice("Showing sale " + sale.invoiceNo() + ". Press New Transaction (F8) to go back.");
+        }
+    }
+
+    /** Selects the first voided line of {@code returnNo} and scrolls to it. */
+    private void selectReturn(String returnNo) {
+        for (Row r : rows) {
+            if (r.isVoid() && returnNo.equals(r.returnNo())) {
+                table.getSelectionModel().select(r);
+                table.scrollTo(r);
+                return;
+            }
+        }
+    }
+
+    /**
+     * Fills the cart table with the retrieved sale's lines, then its voided lines (minus amounts), and
+     * the summary with what is left after the voids. Selects row {@code select}.
+     */
+    private void showRetrievedLines(int select) {
+        SaleRecord sale = retrieved;
         rows.clear();
         BigDecimal pieces = BigDecimal.ZERO;
         for (SaleLineRecord line : sale.lines()) {
             rows.add(Row.of(line));
             pieces = pieces.add(line.quantity());
         }
-        itemCount.setText(Quantity.format(pieces));
-        subtotalValue.setText(peso(sale.subtotal()));
-        showVat(sale.vatableSales(), sale.vatAmount(), sale.vatExemptSales());
-        totalValue.setText(peso(sale.total()));
-        summaryTitle.setText("RETRIEVED SALE");
-        payHint.setText("Invoice " + sale.invoiceNo() + "  \u00B7  "
-                + RETRIEVED_TIME.format(shared.PhTime.of(sale.completedAt())));
-        payHint.setStyle("-fx-font-size: 16px; -fx-font-weight: bold; -fx-text-fill: " + BLUE + ";");
-        applyMode();
-        if (!rows.isEmpty()) {
-            table.getSelectionModel().select(0);
+        BigDecimal vatable = sale.vatableSales();
+        BigDecimal vat = sale.vatAmount();
+        BigDecimal exempt = sale.vatExemptSales();
+        // Marked (TO VOID) lines come right under the sold items, so the arrow keys reach every line that
+        // can be acted on; already-voided lines go last (highlightable, with Void Item dimmed on them).
+        BigDecimal toRefund = Money.ZERO;
+        if (pendingPreview != null) {   // marked, not refunded yet: shown as if refunded, in the totals too
+            for (ReturnLineRecord line : pendingPreview.lines()) {
+                rows.add(Row.voided(rows.size() + 1, line, null));
+                pieces = pieces.subtract(line.quantity());
+            }
+            toRefund = pendingPreview.total();
+            vatable = vatable.subtract(pendingPreview.vatableSales());
+            vat = vat.subtract(pendingPreview.vatAmount());
+            exempt = exempt.subtract(pendingPreview.vatExemptSales());
         }
-        table.requestFocus();
-        showNotice("Showing sale " + sale.invoiceNo() + ". Press New Transaction (F8) to go back.");
+        BigDecimal refunded = Money.ZERO;
+        for (ReturnRecord r : retrievedReturns) {
+            for (ReturnLineRecord line : r.lines()) {
+                rows.add(Row.voided(rows.size() + 1, line, r.returnNo()));
+                pieces = pieces.subtract(line.quantity());
+            }
+            refunded = refunded.add(r.total());
+            vatable = vatable.subtract(r.vatableSales());
+            vat = vat.subtract(r.vatAmount());
+            exempt = exempt.subtract(r.vatExemptSales());
+        }
+        itemCount.setText(Quantity.format(Quantity.normalize(pieces)));
+        subtotalValue.setText(peso(sale.subtotal().subtract(refunded).subtract(toRefund)));
+        showVat(vatable, vat, exempt);
+        totalValue.setText(peso(sale.total().subtract(refunded).subtract(toRefund)));
+        String when = RETRIEVED_TIME.format(shared.PhTime.of(sale.completedAt()));
+        // one fact per line, so nothing is cut short
+        payHint.setText("Invoice " + sale.invoiceNo() + "  \u00B7  " + when
+                + (retrievedReturns.isEmpty() ? "" : "\nRefunded " + peso(refunded)
+                + (fullyVoided() ? " (fully voided)" : ""))
+                + (pendingPreview == null ? "" : "\nTo refund " + peso(toRefund) + ": press REFUND (F5)."));
+        lock(payButton, pendingPreview == null);   // REFUND only once something is marked
+        int index = Math.min(Math.max(select, 0), rows.size() - 1);
+        while (index > 0 && isVoided(index)) {   // after a change, land on a line that can still be acted on
+            index--;
+        }
+        if (index >= 0) {
+            table.getSelectionModel().select(index);
+        } else {
+            table.getSelectionModel().clearSelection();
+        }
+        updateVoidButton();
+    }
+
+    /** True for a line that was already voided (refunded and saved), not one only marked TO VOID. */
+    private boolean isVoided(int index) {
+        return retrieved != null && index >= 0 && index < rows.size()
+                && rows.get(index).isVoid() && !rows.get(index).isPending();
+    }
+
+    /**
+     * While a sale is retrieved, any line can be highlighted. On an already-voided line the Void Item
+     * button is dimmed (nothing to void) and the status bar says it is voided; F6 reprints its slip.
+     */
+    private void onRetrievedSelection(int from, int to) {
+        if (retrieved == null) {
+            return;
+        }
+        if (isVoided(to)) {
+            Row row = rows.get(to);
+            showError(row.productName() + " is already voided (" + row.returnNo()
+                    + "). F6 reprints its return slip.");
+        }
+        updateVoidButton();
+    }
+
+    /**
+     * The red button: "Remove" on a TO VOID line (Del unmarks it), "Remove" but dimmed (not clickable) on an
+     * already-voided line, "Void Item" on a sold item; "Remove Item" in a normal sale.
+     */
+    private void updateVoidButton() {
+        if (removeButton == null) {
+            return;
+        }
+        if (retrieved == null) {
+            relabel(removeButton, "Remove Item", "Del", 22);
+            lock(removeButton, completed != null);   // the paid sale can't be changed
+            return;
+        }
+        Row row = table.getSelectionModel().getSelectedItem();
+        boolean voided = isVoided(table.getSelectionModel().getSelectedIndex());
+        // TO VOID line: "Remove" (unmarks it). Voided line: "Remove", dimmed (it can't be undone). Else "Void Item".
+        relabel(removeButton, row != null && row.isVoid() ? "Remove" : "Void Item", "Del", 22);
+        lock(removeButton, voided);
+    }
+
+    /**
+     * Works out {@link #pendingPreview} for {@link #pendingVoids} again (e.g. after a change, or after
+     * the sale's voids were read again). If the marks no longer fit (another terminal voided the same
+     * items), they are cleared with a message.
+     */
+    private void recomputePending() {
+        pendingPreview = null;
+        if (pendingVoids.isEmpty()) {
+            return;
+        }
+        ReturnService service = screen.app().returns().orElse(null);
+        if (service == null) {
+            pendingVoids.clear();
+            return;
+        }
+        try {
+            pendingPreview = service.preview(retrieved, retrievedReturns, pendingVoids, screen.user().getUserId());
+        } catch (ReturnException e) {
+            pendingVoids.clear();
+            showError(e.getMessage() + " The marked items were cleared.");
+        }
+    }
+
+    /** True when nothing is left on the retrieved sale to void. */
+    private boolean fullyVoided() {
+        return ReturnService.remaining(retrieved, retrievedReturns).values().stream()
+                .allMatch(q -> q.signum() <= 0);
     }
 
     /** F8 while a sale is retrieved: back to the open sale (as it was before F7). */
     private void leaveRetrieved() {
+        boolean hadMarks = !pendingVoids.isEmpty();
         retrieved = null;
+        retrievedReturns = List.of();
+        pendingVoids.clear();
+        pendingPreview = null;
+        if (hadMarks) {
+            System.out.println("[POS] left a retrieved sale with marked voids; nothing was refunded");
+        }
         summaryTitle.setText("ORDER SUMMARY");
         payHint.setStyle("-fx-font-size: 16px; -fx-text-fill: " + RED + ";");
         applyMode();
         refresh(null);
-        showNotice("Back to the current transaction.");
+        showInfo("Back to the current transaction.");
         focusBarcode();
     }
 
     /** Locks or unlocks the screen for a retrieved sale, and relabels Remove / Cancel as Void. */
     private void applyMode() {
-        boolean locked = retrieved != null;
+        boolean retrievedMode = retrieved != null;
+        boolean paidMode = !retrievedMode && completed != null;   // the paid sale waiting for New Transaction
+        boolean locked = retrievedMode || paidMode;
         lock(barcodeBox, locked);
         barcodeField.setEditable(!locked);
         for (Button b : lockedWhileRetrieved) {
-            lock(b, locked);
+            lock(b, locked);   // after a sale, only Reprint (F6) and New Transaction (F8) are on
         }
-        lock(payButton, locked);
+        // PAYMENT becomes REFUND (red) while a sale is retrieved; on only once items are marked to void
+        relabel(payButton, retrievedMode ? "REFUND" : "PAYMENT", "F5", 32);
+        PosStyle.button(payButton, retrievedMode ? PosStyle.Kind.DANGER : PosStyle.Kind.PRIMARY);
+        lock(payButton, retrievedMode ? pendingPreview == null : paidMode);   // otherwise refresh() sets it
         if (locked) {
-            lock(newTransactionButton, false);   // F8 is the way back from a retrieved sale
-        }   // when unlocking, refresh() sets it from the cart
-        relabel(removeButton, locked ? "Void Item" : "Remove Item", "Del", 22);
-        relabel(cancelButton, locked ? "Void Transaction" : "Cancel Transaction", "F9", 26);
+            lock(newTransactionButton, false);   // F8 is the way back / on to the next customer
+            lock(reprintButton, false);          // F6 reprints the retrieved / paid sale
+        }   // when unlocking, refresh() sets them from the cart
+        updateVoidButton();   // "Void Item" / "Remove" while retrieved, "Remove Item" otherwise
+        relabel(cancelButton, retrievedMode ? "Void Transaction" : "Cancel Transaction", "F9", 26);
+        lock(cancelButton, paidMode);   // nothing to cancel: the sale is saved
+    }
+
+    /**
+     * The paid sale, read only: its lines and totals, and in the payment part the change to hand
+     * back (or how it was paid) and its invoice number. Stays until New Transaction (F8).
+     */
+    private void showCompleted() {
+        SaleRecord sale = completed;
+        rows.clear();
+        BigDecimal pieces = BigDecimal.ZERO;
+        for (SaleLineRecord line : sale.lines()) {
+            rows.add(Row.of(line));
+            pieces = pieces.add(line.quantity());
+        }
+        itemCount.setText(Quantity.format(Quantity.normalize(pieces)));
+        subtotalValue.setText(peso(sale.subtotal()));
+        showVat(sale.vatableSales(), sale.vatAmount(), sale.vatExemptSales());
+        totalValue.setText(peso(sale.total()));
+        summaryTitle.setText("SALE COMPLETE");
+        PaymentRecord p = sale.payments().get(0);
+        String paid = p.method() == PaymentMethod.CASH
+                ? "CHANGE " + peso(p.change()) + "\nCash " + peso(p.amountTendered())
+                : "Paid by " + PaymentService.label(p.method()) + "\nRef. " + p.referenceNo();
+        payHint.setText(paid + "  \u00B7  Invoice " + sale.invoiceNo());
+        payHint.setStyle("-fx-font-size: 22px; -fx-font-weight: bold; -fx-text-fill: " + GREEN + ";");
+        lock(payButton, true);
+        lock(newTransactionButton, false);   // after a sale: only Reprint (F6) and New Transaction (F8)
+        lock(reprintButton, false);
+        lock(retrieveButton, true);
+        table.getSelectionModel().clearSelection();
     }
 
     /** Disables a control and dims it a little (not as faint as JavaFX's default), or the reverse. */
@@ -857,14 +1271,176 @@ public final class PosScreen {
         node.setOpacity(locked ? LOCKED_OPACITY : 1);
     }
 
-    /** Del while a sale is retrieved. TODO: void one line of a completed sale (decide who may do it). */
+    /**
+     * Del while a sale is retrieved: MARK some or all of the selected line to void (nothing is saved
+     * yet), so several items can be returned together. Del on a "(TO VOID)" line unmarks it. REFUND
+     * (F5) then asks how to refund and saves them all as one return. Any cashier on the POS may void.
+     */
     private void voidItem() {
-        showNotice("Void Item is not available yet.");
+        Row row = table.getSelectionModel().getSelectedItem();
+        if (row == null) {
+            showError("Select a line first (Up / Down).");
+            return;
+        }
+        int select = table.getSelectionModel().getSelectedIndex();
+        if (row.isPending()) {   // unmark
+            pendingVoids.remove(row.returned().saleLineNo());
+            recomputePending();
+            showRetrievedLines(Math.min(select, rows.size() - 1));
+            showInfo("Unmarked " + row.productName() + ".");
+            return;
+        }
+        if (row.isVoid()) {
+            showError("That line is already voided (" + row.returnNo() + "). Select a sold item.");
+            return;
+        }
+        if (screen.app().returns().isEmpty()) {
+            showError("Voids need Inventory to be connected.");
+            return;
+        }
+        SaleLineRecord line = row.saved();
+        BigDecimal left = ReturnService.remaining(retrieved, retrievedReturns)
+                .getOrDefault(line.lineNo(), BigDecimal.ZERO)
+                .subtract(pendingVoids.getOrDefault(line.lineNo(), BigDecimal.ZERO));
+        if (left.signum() <= 0) {
+            showError(line.productName() + (pendingVoids.containsKey(line.lineNo())
+                    ? " is already marked to void in full." : " was already voided."));
+            return;
+        }
+        Optional<BigDecimal> qty = VoidItemDialog.ask(screen.stage(), retrieved.invoiceNo(), line, left);
+        if (qty.isPresent()) {
+            pendingVoids.merge(line.lineNo(), qty.get(), BigDecimal::add);
+            recomputePending();
+            showRetrievedLines(select);
+            if (pendingPreview != null) {
+                showInfo("Marked " + Quantity.format(qty.get()) + " " + line.unit() + " of " + line.productName()
+                        + " to void. Mark more, or press REFUND (F5) to refund " + peso(pendingPreview.total()) + ".");
+            }
+        }
+        table.requestFocus();
     }
 
-    /** F9 while a sale is retrieved. TODO: void the whole completed sale (decide who may do it). */
+    /** F9 while a sale is retrieved: MARK everything still left on it to void (see {@link #voidItem}). */
     private void voidTransaction() {
-        showNotice("Void Transaction is not available yet.");
+        if (screen.app().returns().isEmpty()) {
+            showError("Voids need Inventory to be connected.");
+            return;
+        }
+        if (fullyVoided()) {
+            showError("Everything on sale " + retrieved.invoiceNo() + " has already been voided.");
+            return;
+        }
+        pendingVoids.clear();
+        ReturnService.remaining(retrieved, retrievedReturns).forEach((no, q) -> {
+            if (q.signum() > 0) {
+                pendingVoids.put(no, q);
+            }
+        });
+        recomputePending();
+        showRetrievedLines(retrieved.lines().size());   // the first marked line
+        if (pendingPreview != null) {
+            showInfo("Marked everything left on " + retrieved.invoiceNo() + " to void. Press REFUND (F5) to refund "
+                    + peso(pendingPreview.total()) + ", or Del on a line to unmark it.");
+        }
+        table.requestFocus();
+    }
+
+    /**
+     * REFUND (F5) while a sale is retrieved: opens the payment card in REFUND mode for the marked
+     * items, so the cashier picks how the money goes back (Cash, GCash, Maya or QRPh: may differ from
+     * how the sale was paid). Complete Refund saves them as ONE return (&lt;invoice&gt;-01, -02 ...),
+     * puts the stock back and hands over the RETURN slip; Esc keeps the marks and saves nothing.
+     */
+    private void refund() {
+        if (paymentCard != null) {
+            return;
+        }
+        ReturnService service = screen.app().returns().orElse(null);
+        recomputePending();
+        if (service == null || pendingPreview == null) {
+            showRetrievedLines(table.getSelectionModel().getSelectedIndex());
+            showError("Mark the items to return first: Void Item (Del) or Void Transaction (F9).");
+            return;
+        }
+        int items = pendingPreview.lines().size();
+        Map<Integer, BigDecimal> marked = new java.util.LinkedHashMap<>(pendingVoids);
+        String me = screen.user().getUserId();
+        paymentCard = PaymentOverlay.showRefund(content, payments, pendingPreview.total(),
+                items + (items == 1 ? " item" : " items") + "  ·  Invoice " + retrieved.invoiceNo(),
+                chosen -> {
+                    ReturnRecord done;
+                    try {
+                        done = service.voidLines(retrieved, marked, me, chosen);
+                    } catch (ReturnException e) {
+                        showError(e.getMessage());
+                        reloadRetrieved(0);
+                        return;
+                    } catch (RuntimeException e) {
+                        showError(UiErrors.message(e, "The refund could not be saved. Nothing was changed; try again."));
+                        return;
+                    }
+                    pendingVoids.clear();
+                    pendingPreview = null;
+                    afterVoid(done, retrieved.lines().size());
+                },
+                () -> {
+                    paymentCard = null;
+                    table.requestFocus();
+                });
+        showNotice("Choose how to refund " + peso(pendingPreview.total()) + ". Esc goes back (the marks stay).");
+    }
+
+    /** A void was saved: show it in the table, then hand over the RETURN slip. */
+    private void afterVoid(ReturnRecord done, int select) {
+        List<ReturnRecord> withNew = new java.util.ArrayList<>(retrievedReturns);
+        withNew.add(done);
+        retrievedReturns = withNew;   // shown even if reading them back fails
+        reloadRetrieved(select);
+        String how = PaymentService.label(done.refundMethod())
+                + (done.refundReference() == null ? "" : " Ref. " + done.refundReference());
+        String refund = "Refund " + peso(done.total()) + " (" + how + "). ";
+        showInfo("Saved " + done.returnNo() + ". " + refund);
+        Receipt slip;
+        try {
+            slip = screen.app().receipts().buildReturn(retrieved, done, false);
+        } catch (RuntimeException e) {
+            System.err.println("[RECEIPT] " + e);
+            showError(done.returnNo() + " is saved, but its return slip could not be made.");
+            return;
+        }
+        if (PosSettings.autoPrintReceipt()) {
+            try {
+                screen.app().receiptPrinter().printReceipt(slip);
+                showInfo("Saved " + done.returnNo() + ". " + refund + "Return slip sent to the printer.");
+                checkPrintedLater(done.returnNo());
+            } catch (ReceiptPrintException | RuntimeException e) {
+                System.err.println("[PRINT] " + e);
+                receiptNotPrinted(done.returnNo());
+            }
+            return;
+        }
+        try {
+            Label top = new Label("REFUND  " + peso(done.total()) + "  ·  " + how);
+            top.setStyle("-fx-font-size: 30px; -fx-font-weight: bold; -fx-text-fill: " + RED + ";");
+            if (ReceiptDialog.show(screen.stage(), "Void Complete", "Return " + done.returnNo(), top, slip,
+                    screen.app().receiptPrinter(), screen.app().config().receiptWidth())) {
+                checkPrintedLater(done.returnNo());
+            }
+        } catch (RuntimeException e) {
+            System.err.println("[RECEIPT] " + e);
+            showError(done.returnNo() + " is saved, but its return slip could not be shown.");
+        }
+    }
+
+    /** Reads the retrieved sale's voids again and redraws it (keeps the screen as it was if that fails). */
+    private void reloadRetrieved(int select) {
+        try {
+            retrievedReturns = screen.app().returnHistory().findBySaleId(retrieved.saleId());
+        } catch (RuntimeException e) {
+            System.err.println("[POS] could not reload voids: " + e);   // keep the ones already known
+        }
+        recomputePending();   // marks that no longer fit are cleared
+        showRetrievedLines(select);
     }
 
     /**
@@ -876,11 +1452,23 @@ public final class PosScreen {
             leaveRetrieved();
             return;
         }
-        if (newTransactionButton.isDisable()) {
-            showNotice("Already ready for a new sale. Scan an item to start.");
+        if (completed != null) {   // the paid sale leaves the screen: on to the next customer
+            completed = null;
+            summaryTitle.setText("ORDER SUMMARY");
+            payHint.setStyle("-fx-font-size: 16px; -fx-text-fill: " + RED + ";");
+            applyMode();
+            refresh(null);
+            showInfo("Ready for the next customer.");
+            focusBarcode();
             return;
         }
-        showNotice("New Transaction is not available yet.");
+        if (newTransactionButton.isDisable()) {
+            boolean empty = pos.currentSale().map(Sale::isEmpty).orElse(true);
+            showError(empty ? "Already ready for a new sale. Scan an item to start."
+                    : "Finish this sale with Payment (F5), or Cancel Transaction (F9).");
+            return;
+        }
+        showError("New Transaction is not available yet.");
     }
 
     /**
@@ -953,6 +1541,10 @@ public final class PosScreen {
                 handleRetrievedKey(e);   // only F8, F9, Delete, Esc and the arrow keys work
                 return;
             }
+            if (completed != null) {
+                handleCompletedKey(e);   // only F6, F7, F8, Esc and the arrow keys work
+                return;
+            }
             if (k == KeyCode.F1) {
                 addFromSearch();
             } else if (k == KeyCode.F2) {
@@ -964,9 +1556,17 @@ public final class PosScreen {
             } else if (k == KeyCode.F5) {
                 pay();
             } else if (k == KeyCode.F6) {
-                reprint();
+                if (reprintButton.isDisable()) {   // items in the cart
+                    showError("Finish this sale with Payment (F5), or Cancel Transaction (F9), before reprinting.");
+                } else {
+                    reprint();
+                }
             } else if (k == KeyCode.F7) {
-                retrieveTransaction();
+                if (retrieveButton.isDisable()) {   // items in the cart
+                    showError("Finish this sale with Payment (F5), or Cancel Transaction (F9), before retrieving.");
+                } else {
+                    retrieveTransaction();
+                }
             } else if (k == KeyCode.F8) {
                 newTransaction();
             } else if (k == KeyCode.F9) {
@@ -979,6 +1579,14 @@ public final class PosScreen {
                 if (table.getSelectionModel().isEmpty()) {
                     table.getSelectionModel().select(k == KeyCode.UP ? rows.size() - 1 : 0);
                 }
+            } else if (cartKeyFromBarcodeBox(k)) {
+                // Del / + / - right after a scan act on the highlighted line, like F3 does, without first
+                // clicking or arrowing into the cart (the cursor stays in the barcode box for the next scan)
+                switch (k) {
+                    case DELETE -> removeSelected();
+                    case ADD, PLUS -> stepQuantity(1);
+                    default -> stepQuantity(-1);   // SUBTRACT, MINUS
+                }
             } else {
                 return;
             }
@@ -986,9 +1594,46 @@ public final class PosScreen {
         });
     }
 
+    /**
+     * True for Del, + or - pressed in the barcode box while it is EMPTY and a cart line is highlighted:
+     * those keys then work on that line. With text in the box they keep editing the text as usual.
+     */
+    private boolean cartKeyFromBarcodeBox(KeyCode k) {
+        boolean cartKey = k == KeyCode.DELETE || k == KeyCode.ADD || k == KeyCode.PLUS
+                || k == KeyCode.SUBTRACT || k == KeyCode.MINUS;
+        String typed = barcodeField.getText();
+        boolean emptyCartDelete = k == KeyCode.DELETE && rows.isEmpty();   // -> "Nothing to remove"
+        return cartKey && barcodeField.isFocused() && (typed == null || typed.isEmpty())
+                && (table.getSelectionModel().getSelectedItem() != null || emptyCartDelete);
+    }
+
+    /** Keys while the paid sale waits for New Transaction: F6 its receipt again, F7 retrieve, F8 next customer, Esc home. */
+    private void handleCompletedKey(KeyEvent e) {
+        switch (e.getCode()) {
+            case F6 -> reprint();
+            case F7 -> showError("Press New Transaction (F8) first, then Retrieve Transaction (F7).");
+            case F8 -> newTransaction();
+            case ESCAPE -> screen.goHome();
+            case UP, DOWN, PAGE_UP, PAGE_DOWN, HOME, END, TAB -> {
+                if (!table.isFocused()) {
+                    table.requestFocus();
+                }
+                return;   // let the table move the selection
+            }
+            default -> {
+                if (e.getCode().isLetterKey() || e.getCode().isDigitKey() || e.getCode() == KeyCode.ENTER) {
+                    showError("Sale " + completed.invoiceNo() + " is done. Press New Transaction (F8) "
+                            + "to start the next sale.");   // e.g. the next customer's first scan
+                }
+            }
+        }
+        e.consume();
+    }
+
     /** Keys while a retrieved sale is shown: F6 reprint it, F8 back, F9 void transaction, Delete void item, Esc home. */
     private void handleRetrievedKey(KeyEvent e) {
         switch (e.getCode()) {
+            case F5 -> refund();
             case F6 -> reprint();
             case F8 -> newTransaction();
             case F9 -> voidTransaction();
@@ -1041,11 +1686,13 @@ public final class PosScreen {
         Node summary = buildSummary();
         VBox.setVgrow(summary, Priority.ALWAYS);
         Button reprint = keyButton("Reprint Receipt", "F6", PosStyle.Kind.SECONDARY, DARK, 26, this::reprint);
+        reprintButton = reprint;
         Button retrieve = keyButton("Retrieve Transaction", "F7", PosStyle.Kind.SECONDARY, DARK, 26, this::retrieveTransaction);
         Button newTransaction = keyButton("New Transaction", "F8", PosStyle.Kind.SECONDARY, DARK, 26, this::newTransaction);
         Button cancel = keyButton("Cancel Transaction", "F9", PosStyle.Kind.DANGER, "white", 26, this::cancelOrVoid);
         cancelButton = cancel;
         newTransactionButton = newTransaction;
+        retrieveButton = retrieve;
         lockedWhileRetrieved.add(retrieve);   // Reprint stays on: it reprints the retrieved sale
         for (Button b : List.of(reprint, retrieve, newTransaction, cancel)) {
             fixHeight(b, 70);
@@ -1076,7 +1723,10 @@ public final class PosScreen {
                 r -> r.priceType() == PriceType.WHOLESALE ? "WHOLESALE" : "RETAIL"));
         table.getColumns().add(column("Amount", 270, r -> Money.format(r.lineTotal()) + r.vatFlag()));
         // A line with a stock problem is tinted red; the sentence is in the summary card above Payment.
-        table.setRowFactory(t -> new PosStyle.CartRow<Row>(row -> row.problem() != null));
+        // Voided lines of a retrieved sale are tinted the same way.
+        table.setRowFactory(t -> new PosStyle.CartRow<Row>(row -> row.problem() != null || row.isVoid()));
+        table.getSelectionModel().selectedIndexProperty().addListener(
+                (obs, from, to) -> onRetrievedSelection(from.intValue(), to.intValue()));
         table.addEventFilter(KeyEvent.KEY_PRESSED, e -> {
             switch (e.getCode()) {
                 case ENTER -> { askQuantity(); e.consume(); }
@@ -1138,6 +1788,8 @@ public final class PosScreen {
         Button openItem = keyButton("Open Item", "F2", PosStyle.Kind.SECONDARY, DARK, 26, this::openItem);
         Button editQty = keyButton("Edit Qty", "F3", PosStyle.Kind.SECONDARY, DARK, 26, this::askQuantity);
         Button editPrice = keyButton("Edit Price", "F4", PosStyle.Kind.SECONDARY, DARK, 26, this::editPrice);
+        editQtyButton = editQty;
+        editPriceButton = editPrice;
         Button remove = keyButton("Remove Item", "Del", PosStyle.Kind.DANGER, "white", 22, this::removeOrVoid);
         removeButton = remove;
         lockedWhileRetrieved.addAll(List.of(scan, search, openItem, editQty, editPrice));
@@ -1177,6 +1829,11 @@ public final class PosScreen {
         total.setPadding(new Insets(22, 0, 0, 0));
 
         payHint.setWrapText(true);
+        payHint.setMaxWidth(Double.MAX_VALUE);   // full card width, so the text can be centred in it
+        payHint.setMinHeight(Region.USE_PREF_SIZE);   // grow to fit every line instead of ending in "..."
+        payHint.setTextOverrun(OverrunStyle.CLIP);
+        payHint.setAlignment(Pos.CENTER);
+        payHint.setTextAlignment(javafx.scene.text.TextAlignment.CENTER);
         payHint.setStyle("-fx-font-size: 16px; -fx-text-fill: " + RED + ";");
         payButton = keyButton("PAYMENT", "F5", PosStyle.Kind.PRIMARY, "white", 32, this::pay);
         payButton.setMaxWidth(Double.MAX_VALUE);

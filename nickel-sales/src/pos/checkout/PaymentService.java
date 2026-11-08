@@ -62,6 +62,34 @@ public class PaymentService {
         return new PaymentRecord(1, method, referenceNo.trim(), total, total, Money.ZERO);
     }
 
+    /**
+     * How a void's money goes back to the customer (the refund card): {@code amount} by
+     * {@code method}, which may differ from how the sale was paid. Cash: the cashier hands back
+     * exactly the amount (no change). GCash / Maya / QRPh: the reference number of the transfer
+     * to the customer is required. Returned as a PaymentRecord (amount tendered = applied, no change).
+     *
+     * @throws CheckoutException with a message for the cashier
+     */
+    public PaymentRecord recordRefund(BigDecimal amount, PaymentMethod method, String referenceNo)
+            throws CheckoutException {
+        Objects.requireNonNull(method, "method");
+        BigDecimal refund = Money.round(Objects.requireNonNull(amount, "amount"));
+        if (refund.signum() <= 0) {
+            throw new CheckoutException("There is nothing to refund.");
+        }
+        if (method == PaymentMethod.CASH) {
+            return new PaymentRecord(1, method, null, refund, refund, Money.ZERO);
+        }
+        if (referenceNo == null || referenceNo.isBlank()) {
+            throw new CheckoutException("Enter the " + label(method) + " reference number of the refund.");
+        }
+        if (!validateReference(method, referenceNo)) {
+            throw new CheckoutException("That " + label(method) + " reference number doesn't look right. "
+                    + "Use only letters, numbers, spaces and dashes (4 to 50 characters).");
+        }
+        return new PaymentRecord(1, method, referenceNo.trim(), refund, refund, Money.ZERO);
+    }
+
     /** Change for cash: tendered - total (never negative here; recordPayment checks first). */
     public BigDecimal computeChange(BigDecimal total, BigDecimal tendered) {
         return Money.round(tendered).subtract(Money.round(total));
