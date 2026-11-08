@@ -16,11 +16,14 @@ import pos.cart.SalesService;
 import pos.checkout.CheckoutService;
 import pos.checkout.PaymentService;
 import pos.contract.SaleExport;
+import pos.contract.ReturnHistory;
 import pos.contract.SaleHistory;
 import pos.receipt.PrinterPort;
 import pos.receipt.ReceiptBuilder;
 import pos.repository.InvoiceNumberGenerator;
+import pos.repository.MySqlReturnRepository;
 import pos.repository.MySqlSaleRepository;
+import pos.returns.ReturnService;
 import product.contract.ProductLookup;
 
 import java.util.Map;
@@ -53,6 +56,8 @@ public final class AppContext {
     private final UserAccountService accounts;
     private final UserAdminService admin;
     private final MySqlSaleRepository sales;
+    private final MySqlReturnRepository returnRepository;
+    private final ReturnService returns;           // null without stock (voids put items back into stock)
     private final PaymentService payments;
     private final ProductLookup products;          // null until Product & Inventory is connected
     private final SalesService salesService;       // null without products and stock
@@ -78,7 +83,10 @@ public final class AppContext {
         this.salesService = (products == null || stock == null) ? null
                 : new SalesService(products, new PricingService(), config.terminalId(),
                         new CheckoutService(sales, new InvoiceNumberGenerator(), stock, audit));
-        this.receipts = new ReceiptBuilder(config.store(), this::userName);
+        this.returnRepository = new MySqlReturnRepository();
+        this.returns = stock == null ? null
+                : new ReturnService(returnRepository, stock, audit, config.terminalId());
+        this.receipts = new ReceiptBuilder(config.store(), this::userName, returnRepository::findBySaleId);
         this.printer = new pos.receipt.EscPosReceiptPrinter(config.receiptWidth());
     }
 
@@ -132,6 +140,16 @@ public final class AppContext {
     /** Completed sales not yet synced (Sync). */
     public SaleExport saleExport() {
         return sales;
+    }
+
+    /** Voids / returns of completed sales, read-only (retrieved sale, invoice reprint, Reports). */
+    public ReturnHistory returnHistory() {
+        return returnRepository;
+    }
+
+    /** Void Item / Void Transaction; empty until Product &amp; Inventory (stock) is connected. */
+    public Optional<ReturnService> returns() {
+        return Optional.ofNullable(returns);
     }
 
     public PaymentService payments() {

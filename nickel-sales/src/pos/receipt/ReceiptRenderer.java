@@ -161,7 +161,7 @@ public final class ReceiptRenderer {
                     y += px(3);
                 }
                 case Receipt.FillIn f -> fillIn(f.label());
-                case Receipt.Barcode b -> barcode(b.value());
+                case Receipt.Barcode b -> barcode(b.value(), b.label());
             }
         }
 
@@ -248,11 +248,11 @@ public final class ReceiptRenderer {
             y += px(4);
         }
 
-        /** The bars, centred, and the number under them. */
-        void barcode(String value) {
+        /** The bars of {@code value}, centred, with {@code label} printed under them. */
+        void barcode(String value, String label) {
             y += px(6);
             boolean[] modules = Code128.modules(value);
-            int moduleDots = ReceiptBarcode.moduleDots(value, widthChars);
+            int moduleDots = ReceiptBarcode.moduleDots(value, widthChars);   // whole dots only: crisp gaps
             int barsWidth = modules.length * moduleDots;
             int x0 = (width - barsWidth) / 2;
             int height = px(62);
@@ -262,7 +262,7 @@ public final class ReceiptRenderer {
                 }
             }
             y += height + px(4);
-            text(value, small, (width - stringWidth(value, small)) / 2);
+            text(label, small, (width - stringWidth(label, small)) / 2);
         }
 
         /** Left text and a right-aligned value; the value drops to its own line when both don't fit. */

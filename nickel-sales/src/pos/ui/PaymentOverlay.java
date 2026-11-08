@@ -43,8 +43,18 @@ import java.util.function.Consumer;
  *
  * The card is part of the scaled screen (it is added to the POS screen's content), so it
  * is drawn in the same 1920 px design pixels as the mockup.
+ *
+ * REFUND mode ({@link #showRefund}, Void Item / Void Transaction): the same card titled
+ * REFUND METHOD, for choosing how the voided amount goes back, which may differ from how the
+ * sale was paid. Cash shows the amount to hand back (nothing to type); online needs the
+ * reference number of the transfer to the customer. Enter = Complete Refund.
  */
 final class PaymentOverlay {
+
+    /** Turns the card's choice into a payment (or refund); its message is shown if it fails. */
+    interface Recorder {
+        PaymentRecord record(PaymentMethod method, BigDecimal tendered, String referenceNo) throws CheckoutException;
+    }
 
     private static final double CARD_WIDTH = 986;
     private static final double CARD_HEIGHT = 708;
@@ -53,7 +63,9 @@ final class PaymentOverlay {
 
     private final StackPane host;
     private final PaymentService payments;
-    private final Sale sale;
+    private final Recorder recorder;
+    private final boolean refund;
+    private final String subtitle;   // refund mode: e.g. "Void Item · RET for T01-2026-000123"; may be null
     private final BigDecimal total;
     private final Consumer<PaymentRecord> onPaid;
     private final Runnable onClosed;
@@ -75,12 +87,14 @@ final class PaymentOverlay {
     private Button mayaButton;
     private Button qrphButton;
 
-    private PaymentOverlay(StackPane host, PaymentService payments, Sale sale,
-                           Consumer<PaymentRecord> onPaid, Runnable onClosed) {
+    private PaymentOverlay(StackPane host, PaymentService payments, BigDecimal total, boolean refund,
+                           String subtitle, Recorder recorder, Consumer<PaymentRecord> onPaid, Runnable onClosed) {
         this.host = host;
         this.payments = payments;
-        this.sale = sale;
-        this.total = sale.total();
+        this.total = total;
+        this.refund = refund;
+        this.subtitle = subtitle;
+        this.recorder = recorder;
         this.onPaid = onPaid;
         this.onClosed = onClosed;
     }
@@ -93,9 +107,26 @@ final class PaymentOverlay {
      */
     static PaymentOverlay show(StackPane host, PaymentService payments, Sale sale,
                                Consumer<PaymentRecord> onPaid, Runnable onClosed) {
-        PaymentOverlay overlay = new PaymentOverlay(host, payments, sale, onPaid, onClosed);
+        return open(new PaymentOverlay(host, payments, sale.total(), false, null,
+                (m, tendered, ref) -> payments.recordPayment(sale, m, tendered, ref), onPaid, onClosed));
+    }
+
+    /**
+     * Opens the card in REFUND mode for {@code amount} (see the class comment).
+     *
+     * @param subtitle   shown under the title, e.g. "Void Item · Invoice T01-2026-000123"
+     * @param onRefunded called with the chosen refund after the card has closed
+     * @param onClosed   called when the card has closed, completed or cancelled
+     */
+    static PaymentOverlay showRefund(StackPane host, PaymentService payments, BigDecimal amount, String subtitle,
+                                     Consumer<PaymentRecord> onRefunded, Runnable onClosed) {
+        return open(new PaymentOverlay(host, payments, amount, true, subtitle,
+                (m, tendered, ref) -> payments.recordRefund(amount, m, ref), onRefunded, onClosed));
+    }
+
+    private static PaymentOverlay open(PaymentOverlay overlay) {
         overlay.build();
-        host.getChildren().add(overlay.layer);
+        overlay.host.getChildren().add(overlay.layer);
         overlay.select(PaymentMethod.CASH);
         return overlay;
     }
@@ -103,9 +134,20 @@ final class PaymentOverlay {
     /* ------------------------------- layout ------------------------------- */
 
     private void build() {
-        Label title = text("PAYMENT METHOD", 40, true);
-        Label dueName = text("Total Due", 28, false);
+        Label titleText = text(refund ? "REFUND METHOD" : "PAYMENT METHOD", 40, true);
+        javafx.scene.Node title = titleText;
+        if (refund && subtitle != null) {   // e.g. "Void Item · Invoice T01-2026-000123" on the right
+            Label sub = new Label(subtitle);
+            sub.setStyle("-fx-font-size: 18px; -fx-text-fill: " + Theme.SECONDARY_TEXT + ";");
+            HBox titleRow = new HBox(titleText, grow(), sub);
+            titleRow.setAlignment(Pos.BASELINE_LEFT);
+            title = titleRow;
+        }
+        Label dueName = text(refund ? "Total Refund" : "Total Due", 28, false);
         Label dueValue = text(PosScreen.peso(total), 28, true);
+        if (refund) {
+            dueValue.setStyle(font(28, true) + " -fx-text-fill: " + PosScreen.RED + ";");
+        }
         HBox dueRow = new HBox(dueName, grow(), dueValue);
         dueRow.setAlignment(Pos.CENTER_LEFT);
 
@@ -132,7 +174,9 @@ final class PaymentOverlay {
         errorBox.setMaxHeight(65);
 
         Button cancel = action("Cancel", "ESC", PosStyle.Kind.SECONDARY, DARK, 150, this::cancel);
-        Button complete = action("Complete Transaction", "ENTER", PosStyle.Kind.PRIMARY, "white", 308, this::complete);
+        Button complete = refund
+                ? action("Complete Refund", "ENTER", PosStyle.Kind.DANGER, "white", 308, this::complete)
+                : action("Complete Transaction", "ENTER", PosStyle.Kind.PRIMARY, "white", 308, this::complete);
         HBox buttons = new HBox(40, cancel, complete);
         buttons.setAlignment(Pos.CENTER);
 
@@ -156,6 +200,18 @@ final class PaymentOverlay {
     }
 
     private void buildCashBox() {
+        if (refund) {
+            // nothing to type: the cashier hands back exactly the refund
+            Label label = text("Cash to Hand Back", 28, false);
+            cashField.setText(Money.format(total));
+            cashField.setEditable(false);
+            styleInput(cashField);
+            HBox field = inputBox(text(PosScreen.PESO, 26, true), cashField);
+            Label note = new Label("Give the customer this amount from the cash drawer.");
+            note.setStyle("-fx-font-size: 20px; -fx-text-fill: " + Theme.SECONDARY_TEXT + ";");
+            cashBox.getChildren().addAll(label, gap(18), field, gap(30), note);
+            return;
+        }
         Label label = text("Amount Tendered", 28, false);
         Label peso = text(PosScreen.PESO, 26, true);
         cashField.setPromptText("0.00");
@@ -174,7 +230,8 @@ final class PaymentOverlay {
 
     private void buildOnlineBox() {
         Label label = text("Reference Number", 28, false);
-        referenceField.setPromptText("Reference number from the customer's confirmation");
+        referenceField.setPromptText(refund ? "Reference number of the refund sent to the customer"
+                : "Reference number from the customer's confirmation");
         styleInput(referenceField);
         HBox field = inputBox(null, referenceField);
 
@@ -237,6 +294,10 @@ final class PaymentOverlay {
     }
 
     private void updateChange() {
+        if (refund) {
+            error.setText("");
+            return;   // no change in a refund
+        }
         BigDecimal tendered = parseMoney(cashField.getText());
         if (tendered == null) {
             changeName.setText("Change");
@@ -271,7 +332,7 @@ final class PaymentOverlay {
         } else if (k == KeyCode.F5) {
             select(PaymentMethod.QRPH);
         } else if (k == KeyCode.F8) {
-            if (method == PaymentMethod.CASH) {
+            if (method == PaymentMethod.CASH && !refund) {
                 cashField.setText(total.toPlainString());
                 cashField.positionCaret(cashField.getText().length());
             }
@@ -290,14 +351,14 @@ final class PaymentOverlay {
     private void complete() {
         try {
             BigDecimal tendered = null;
-            if (method == PaymentMethod.CASH) {
+            if (method == PaymentMethod.CASH && !refund) {
                 String text = cashField.getText() == null ? "" : cashField.getText().trim();
                 tendered = text.isEmpty() ? null : parseMoney(text);
                 if (!text.isEmpty() && tendered == null) {
                     throw new CheckoutException("Type the amount tendered as a number, e.g. 500 or 1000.50.");
                 }
             }
-            PaymentRecord payment = payments.recordPayment(sale, method, tendered, referenceField.getText());
+            PaymentRecord payment = recorder.record(method, tendered, referenceField.getText());
             close();
             onPaid.accept(payment);
         } catch (CheckoutException ex) {

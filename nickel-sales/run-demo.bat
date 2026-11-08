@@ -78,7 +78,7 @@ rem --- --scripted: every self-test, with the same JDK that compiled them --
 set "FAILED="
 set "LISTED=0"
 set "RAN=0"
-for %%C in ("auth.AuthDemo --scripted" auth.AuthzDemo auth.UserAdminDemo pos.PosContractCheck pos.CartCheck pos.CheckoutCheck pos.ReceiptCheck inventory.InventoryCheck app.AppCheck product.ProductCheck barcode.BarcodeCheck reports.ReportsCheck system.SystemLogCheck system.SystemAdminCheck) do (
+for %%C in ("auth.AuthDemo --scripted" auth.AuthzDemo auth.UserAdminDemo pos.PosContractCheck pos.CartCheck pos.CheckoutCheck pos.ReceiptCheck pos.ReturnCheck inventory.InventoryCheck app.AppCheck product.ProductCheck barcode.BarcodeCheck reports.ReportsCheck system.SystemLogCheck system.SystemAdminCheck) do (
     set /a LISTED+=1
     call :check %%~C
 )

@@ -158,6 +158,55 @@ CREATE TABLE IF NOT EXISTS `Payment` (
     FOREIGN KEY (SaleID) REFERENCES `Sale`(SaleID)
 );
 
+-- Voids / returns of a completed sale (POS: Void Item and Void Transaction on a retrieved sale).
+-- The Sale rows are never changed: each void is a Return with its ReturnLines, and the sale's
+-- invoice shows them below the sold items. ReturnNo = InvoiceNo + "-01", "-02" ... (e.g. T01-2026-000123-01)
+-- (one number per void of that sale). Amounts are positive (what was refunded); stock goes back.
+-- RETURN is a reserved word in MySQL: always write the table name as `Return`.
+CREATE TABLE IF NOT EXISTS `Return` (
+    ReturnID CHAR(36) PRIMARY KEY,               -- UUID, unique across all terminals
+    ReturnNo VARCHAR(40) NOT NULL UNIQUE,        -- e.g. T01-2026-000123-01
+    SaleID CHAR(36) NOT NULL,                    -- the sale voided from
+    InvoiceNo VARCHAR(20) NOT NULL,              -- copy of Sale.InvoiceNo
+    TerminalID VARCHAR(10) NOT NULL,             -- terminal the void was done on
+    CashierUserID VARCHAR(10) NOT NULL,          -- who did the void
+    ReturnedAt DATETIME(3) NOT NULL,             -- UTC
+    FullVoid BOOLEAN NOT NULL,                   -- TRUE = nothing is left on the sale after this return
+    RefundMethod VARCHAR(20) NOT NULL,           -- CASH / GCASH / MAYA / QRPH (chosen by the cashier; may differ from the sale's)
+    RefundReference VARCHAR(50) NULL,            -- GCash/Maya/QRPh reference of the refund transfer; NULL for cash
+    VatableSales DECIMAL(12,2) NOT NULL,
+    VatExemptSales DECIMAL(12,2) NOT NULL,
+    VatAmount DECIMAL(12,2) NOT NULL,
+    Total DECIMAL(12,2) NOT NULL,                -- refunded, VAT included
+    SyncedAt DATETIME(3) NULL,                   -- NULL = not yet sent by Sync
+    FOREIGN KEY (SaleID) REFERENCES `Sale`(SaleID),
+    FOREIGN KEY (CashierUserID) REFERENCES `Users`(UserID),
+    INDEX idx_return_sale (SaleID),
+    INDEX idx_return_returned (ReturnedAt)
+);
+
+CREATE TABLE IF NOT EXISTS `ReturnLine` (
+    ReturnID CHAR(36) NOT NULL,
+    LineNo INT NOT NULL,
+    SaleID CHAR(36) NOT NULL,                    -- the sale (transaction) the item was sold on
+    SaleLineNo INT NOT NULL,                     -- which line of that sale
+    ReturnNo VARCHAR(40) NOT NULL,               -- copy of Return.ReturnNo (the return reference)
+    ProductID VARCHAR(20) NOT NULL,              -- copied from the sale line
+    Barcode VARCHAR(50) NULL,
+    ProductName VARCHAR(100) NOT NULL,
+    Unit VARCHAR(10) NOT NULL,
+    Quantity DECIMAL(12,3) NOT NULL,             -- voided quantity (positive)
+    UnitPrice DECIMAL(12,2) NOT NULL,            -- VAT-inclusive, as sold
+    PriceType VARCHAR(10) NOT NULL,
+    Vatable BOOLEAN NOT NULL,
+    LineTotal DECIMAL(12,2) NOT NULL,            -- refunded for this line (positive)
+    PRIMARY KEY (ReturnID, LineNo),
+    FOREIGN KEY (ReturnID) REFERENCES `Return`(ReturnID),
+    FOREIGN KEY (SaleID, SaleLineNo) REFERENCES `SaleLine`(SaleID, LineNo),
+    INDEX idx_returnline_sale (SaleID, SaleLineNo),
+    INDEX idx_returnline_product (ProductID)
+);
+
 -- Next invoice number per terminal per year (year in Philippine time).
 CREATE TABLE IF NOT EXISTS `InvoiceSequence` (
     TerminalID VARCHAR(10) NOT NULL,
@@ -184,12 +233,12 @@ CREATE TABLE IF NOT EXISTS `Inventory` (
 CREATE TABLE IF NOT EXISTS `StockMovement` (
     MovementID BIGINT AUTO_INCREMENT PRIMARY KEY,
     ProductID VARCHAR(20) NOT NULL,
-    MovementType VARCHAR(12) NOT NULL,           -- STOCK_IN / STOCK_OUT / ADJUSTMENT / SALE
+    MovementType VARCHAR(12) NOT NULL,           -- STOCK_IN / STOCK_OUT / ADJUSTMENT / SALE / RETURN
     Quantity DECIMAL(12,3) NOT NULL,             -- SIGNED: +20 stock-in, -2 sale
     QuantityBefore DECIMAL(12,3) NOT NULL,
     QuantityAfter DECIMAL(12,3) NOT NULL,
     Reason VARCHAR(20) NULL,                     -- SALE / DAMAGE / TRANSFER / COUNT_CORRECTION / OTHER
-    ReferenceNo VARCHAR(50) NULL,                -- invoice number for a SALE
+    ReferenceNo VARCHAR(50) NULL,                -- invoice number for a SALE, return number for a RETURN
     Note VARCHAR(200) NULL,                      -- the stock-in "Reference / Note", adjustment note
     PerformedBy VARCHAR(10) NULL,                -- UserID; NULL for sales for now
     CreatedAt DATETIME(3) NOT NULL,
@@ -286,6 +335,12 @@ PREPARE upgrade FROM @ddl; EXECUTE upgrade; DEALLOCATE PREPARE upgrade;
 SET @missing = (SELECT COUNT(*) = 0 FROM information_schema.COLUMNS
     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'SaleLine' AND COLUMN_NAME = 'OriginalPrice');
 SET @ddl = IF(@missing, 'ALTER TABLE `SaleLine` ADD COLUMN OriginalPrice DECIMAL(12,2) NULL AFTER UnitPrice', 'DO 0');
+PREPARE upgrade FROM @ddl; EXECUTE upgrade; DEALLOCATE PREPARE upgrade;
+
+-- Return.RefundReference (POS: reference number of a GCash / Maya / QRPh refund)
+SET @missing = (SELECT COUNT(*) = 0 FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'Return' AND COLUMN_NAME = 'RefundReference');
+SET @ddl = IF(@missing, 'ALTER TABLE `Return` ADD COLUMN RefundReference VARCHAR(50) NULL AFTER RefundMethod', 'DO 0');
 PREPARE upgrade FROM @ddl; EXECUTE upgrade; DEALLOCATE PREPARE upgrade;
 
 -- Users.LastSignIn (Auth: time of the user's last successful sign in)

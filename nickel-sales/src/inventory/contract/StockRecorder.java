@@ -32,4 +32,18 @@ public interface StockRecorder {
      */
     void recordSale(String reference, List<StockLine> lines, Connection tx)
             throws InsufficientStockException, SQLException;
+
+    /**
+     * Puts voided / returned items back into stock (POS Void Item / Void Transaction), inside the
+     * void's own transaction {@code tx} (never commits, rolls back or closes it).
+     *
+     * @param reference the return number, e.g. "T01-2026-000123-01"
+     * @param lines     what goes back; the same product may appear more than once
+     * @throws SQLException database problem (the void is rolled back)
+     * @throws UnsupportedOperationException this recorder can't take stock back (the default, so
+     *         sale-only stand-ins in the checks can stay lambdas); the void is rolled back
+     */
+    default void recordReturn(String reference, List<StockLine> lines, Connection tx) throws SQLException {
+        throw new UnsupportedOperationException("This stock recorder can't put voided items back into stock.");
+    }
 }

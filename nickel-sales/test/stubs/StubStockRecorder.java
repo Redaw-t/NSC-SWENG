@@ -53,4 +53,16 @@ public class StubStockRecorder implements StockRecorder {
             }
         }
     }
+
+    @Override
+    public void recordReturn(String reference, List<StockLine> lines, Connection tx) throws SQLException {
+        for (StockLine line : lines) {
+            try (PreparedStatement add = tx.prepareStatement(
+                    "UPDATE Inventory SET QuantityOnHand = QuantityOnHand + ? WHERE ProductID = ?")) {
+                add.setBigDecimal(1, line.quantity());
+                add.setString(2, line.productId());
+                add.executeUpdate();
+            }
+        }
+    }
 }

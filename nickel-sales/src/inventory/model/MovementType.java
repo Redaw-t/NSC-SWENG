@@ -6,7 +6,9 @@ public enum MovementType {
     STOCK_OUT("Stock Out"),
     ADJUSTMENT("Adjustment"),
     /** Written automatically when POS completes a sale (never entered by hand). */
-    SALE("Sale");
+    SALE("Sale"),
+    /** Written automatically when POS voids items of a completed sale: they go back into stock. */
+    RETURN("Return");
 
     private final String label;
 

@@ -47,7 +47,7 @@ public record StockMovement(long movementId, String productId, MovementType type
         }
         boolean plus = quantity.signum() > 0;
         boolean signOk = switch (type) {
-            case STOCK_IN -> plus;
+            case STOCK_IN, RETURN -> plus;
             case STOCK_OUT, SALE -> !plus;
             case ADJUSTMENT -> true;
         };

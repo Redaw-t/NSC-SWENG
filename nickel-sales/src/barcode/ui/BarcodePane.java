@@ -74,7 +74,7 @@ public final class BarcodePane {
     public BarcodePane(BarcodeService service) {
         this.service = service;
 
-        table.getColumns().add(Tables.<BarcodeRow>textColumn("Product Code", 130, r -> r.product().productId()));
+        table.getColumns().add(Tables.<BarcodeRow>numberColumn(pager));   // No. 1, 2, 3 ... like Products
         table.getColumns().add(Tables.<BarcodeRow>textColumn("Product Name", 250, r -> r.product().name()));
         table.getColumns().add(Tables.<BarcodeRow>textColumn("Barcode", 180, r -> r.barcode() == null ? "-" : r.barcode()));
         table.getColumns().add(Tables.<BarcodeRow>nodeColumn("Barcode Status", 170, 150,

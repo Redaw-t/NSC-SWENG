@@ -184,5 +184,14 @@ public final class Main {
 
             target.recordSale(reference, lines, tx);
         }
+
+        @Override
+        public void recordReturn(String reference, List<StockLine> lines, Connection tx) throws SQLException {
+            StockRecorder target = delegate;
+            if (target == null) {
+                throw new IllegalStateException("InventoryService has not been connected yet.");
+            }
+            target.recordReturn(reference, lines, tx);
+        }
     }
 }

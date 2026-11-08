@@ -31,6 +31,13 @@ public final class PosTables {
             "Payment.SaleID", "Payment.PaymentNo", "Payment.Method", "Payment.ReferenceNo",
             "Payment.AmountTendered", "Payment.AmountApplied", "Payment.ChangeGiven",
             "InvoiceSequence.TerminalID", "InvoiceSequence.InvoiceYear", "InvoiceSequence.NextNumber",
+            "Return.ReturnID", "Return.ReturnNo", "Return.SaleID", "Return.InvoiceNo", "Return.TerminalID",
+            "Return.CashierUserID", "Return.ReturnedAt", "Return.FullVoid", "Return.RefundMethod", "Return.RefundReference",
+            "Return.VatableSales", "Return.VatExemptSales", "Return.VatAmount", "Return.Total",
+            "ReturnLine.ReturnID", "ReturnLine.LineNo", "ReturnLine.SaleID", "ReturnLine.SaleLineNo",
+            "ReturnLine.ReturnNo", "ReturnLine.ProductID", "ReturnLine.Barcode", "ReturnLine.ProductName",
+            "ReturnLine.Unit", "ReturnLine.Quantity", "ReturnLine.UnitPrice", "ReturnLine.PriceType",
+            "ReturnLine.Vatable", "ReturnLine.LineTotal",
     };
 
     private PosTables() { }
@@ -47,7 +54,8 @@ public final class PosTables {
              PreparedStatement ps = c.prepareStatement(
                      "SELECT TABLE_NAME, COLUMN_NAME FROM information_schema.COLUMNS "
                              + "WHERE TABLE_SCHEMA = DATABASE() "
-                             + "AND TABLE_NAME IN ('Sale', 'SaleLine', 'Payment', 'InvoiceSequence')");
+                             + "AND TABLE_NAME IN ('Sale', 'SaleLine', 'Payment', 'InvoiceSequence', "
+                             + "'Return', 'ReturnLine')");
              ResultSet rs = ps.executeQuery()) {
             while (rs.next()) {
                 present.add((rs.getString(1) + "." + rs.getString(2)).toLowerCase());

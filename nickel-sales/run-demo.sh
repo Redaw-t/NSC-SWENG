@@ -53,7 +53,7 @@ if [[ "${1:-}" == "--scripted" ]]; then
     FAILED=""
     for check in "auth.AuthDemo --scripted" auth.AuthzDemo \
                  auth.UserAdminDemo pos.PosContractCheck pos.CartCheck \
-                 pos.CheckoutCheck pos.ReceiptCheck inventory.InventoryCheck \
+                 pos.CheckoutCheck pos.ReceiptCheck pos.ReturnCheck inventory.InventoryCheck \
                  app.AppCheck product.ProductCheck barcode.BarcodeCheck reports.ReportsCheck system.SystemLogCheck system.SystemAdminCheck; do
         echo
         echo "----- ${check%% *}"
