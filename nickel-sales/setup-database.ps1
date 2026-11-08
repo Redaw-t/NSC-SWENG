@@ -5,6 +5,7 @@
 #    1. connects with NSC_DB_USER (default root) / NSC_DB_PASSWORD,
 #       asking for the password (hidden) if it is not set or is wrong,
 #    2. creates NickelSales_Database from the SQL script if it is missing,
+#       and nickelsales_appconfig from NickelSales-AppConfig.sql next to it,
 #    3. offers to save the password as NSC_DB_PASSWORD so the app can use it.
 #
 #  Exit code 0 = database ready, 1 = not ready (the reason is printed).
@@ -114,6 +115,21 @@ function Main {
             return 1
         }
         Write-Step "Database        : created NickelSales_Database with the demo users."
+    }
+
+    # --- 2b. the app configuration database (nickelsales_appconfig) ---------
+    # Kept apart from the store's records; the script only adds what is missing.
+    $configSql = Join-Path (Split-Path $SqlFile -Parent) 'NickelSales-AppConfig.sql'
+    if (Test-Path $configSql) {
+        $r = Invoke-MySql @() ([IO.File]::ReadAllText($configSql))
+        if ($r.Code -ne 0) {
+            Write-Step "App config      : could not set up nickelsales_appconfig:"
+            Write-Host $r.Text
+            return 1
+        }
+        Write-Step "App config      : nickelsales_appconfig is ready."
+    } else {
+        Write-Step "App config      : $configSql not found; skipped."
     }
 
     # --- 3. remember a password the user typed in -------------------------

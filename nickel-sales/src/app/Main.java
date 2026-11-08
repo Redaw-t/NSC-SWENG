@@ -60,11 +60,25 @@ public final class Main {
     private Main() {}
 
     public static void main(String[] args) {
-        AppConfig config = AppConfig.fromEnvironment();
+        AppConfig base = AppConfig.fromEnvironment();
+        // The terminal ID Installation Setup gave this computer wins over NSC_TERMINAL_ID.
+        AppConfig config = savedTerminalId().map(base::withTerminalId).orElse(base);
         AppContext app = wire(config);
 
         System.out.println("[APP] Nickel Sales Center, terminal " + config.terminalId());
-        NickelSalesApp.launch(app);
+        // After a first-time setup the app is rebuilt for the terminal ID it was given (e.g. T02).
+        NickelSalesApp.launch(app, id -> wire(base.withTerminalId(id)));
+    }
+
+    /** This computer's terminal ID from nickelsales_appconfig, if it has been set up and can be read. */
+    private static java.util.Optional<String> savedTerminalId() {
+        try {
+            return new app.install.PosTerminalRepository().thisTerminalId();
+        } catch (RuntimeException e) {
+            System.err.println("[APP] could not read nickelsales_appconfig (" + (e.getCause() == null ? e : e.getCause())
+                    + "); using NSC_TERMINAL_ID. Run setup.bat to create it.");
+            return java.util.Optional.empty();
+        }
     }
 
     static AppContext wire(AppConfig config) {

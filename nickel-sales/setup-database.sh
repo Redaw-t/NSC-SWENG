@@ -158,6 +158,22 @@ main() {
         step "Database        : created NickelSales_Database with the demo users."
     fi
 
+    # --- 2b. the app configuration database (nickelsales_appconfig) ---------
+    # Kept apart from the store's records; the script only adds what is missing.
+    local config_sql
+    config_sql="$(dirname "$SQL_FILE")/NickelSales-AppConfig.sql"
+    if [[ -f "$config_sql" ]]; then
+        run_mysql "" "$(cat "$config_sql")"
+        if (( R_CODE != 0 )); then
+            step "App config      : could not set up nickelsales_appconfig:"
+            echo "$R_TEXT"
+            return 1
+        fi
+        step "App config      : nickelsales_appconfig is ready."
+    else
+        step "App config      : $config_sql not found; skipped."
+    fi
+
     # --- 3. remember a password the user typed in -------------------------
     if [[ -n "$ASKED" && "$PW" != "${NSC_DB_PASSWORD:-}" ]]; then
         if ask_yes_no "Save this MySQL password for the app (adds NSC_DB_PASSWORD to your shell profile)?"; then

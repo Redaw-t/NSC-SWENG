@@ -1,0 +1,544 @@
+package app.install;
+
+import auth.ui.LoginScreen;
+import javafx.application.Platform;
+import javafx.geometry.Pos;
+import javafx.geometry.Rectangle2D;
+import javafx.scene.Node;
+import javafx.scene.Parent;
+import javafx.scene.control.Button;
+import javafx.scene.control.ComboBox;
+import javafx.scene.control.Label;
+import javafx.scene.control.TextField;
+import javafx.scene.image.Image;
+import javafx.scene.image.ImageView;
+import javafx.scene.layout.Region;
+import javafx.scene.layout.StackPane;
+import javafx.scene.layout.VBox;
+import javafx.scene.text.TextAlignment;
+import shared.ApiKey;
+import shared.Theme;
+import shared.UiErrors;
+import sync.api.ApiServer;
+import sync.api.MainPosClient;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.InetAddress;
+import java.util.Objects;
+import java.util.function.Consumer;
+
+/**
+ * INSTALLATION SETUP: shown instead of the login page until this computer is set up
+ * ({@link PosTerminalRepository#needsSetup()}). Same design as the login page: logo, big title, pill
+ * fields and blue pill buttons, drawn for 1920 x 1080 and scaled to the window. The steps:
+ *
+ * <ol>
+ *   <li><b>Main POS or Additional POS?</b> (a drop-down)</li>
+ *   <li><b>API key</b> ({@link ApiKey}): Main POS "Register API Key", Additional POS "Enter the API Key".
+ *       The key the developer provided; the terminals send it on every API call to trust each other.</li>
+ *   <li><b>Main POS</b>: this computer is T01; its IP address is saved on T01. Or <b>Additional POS</b>:
+ *       type the Main POS's IP address; the Main POS (its API) answers with this computer's terminal ID
+ *       (T02, T03 ...) and adds it to its own list; then T01's address and this computer's own row are
+ *       saved here.</li>
+ *   <li><b>Done</b>: shows which terminal this computer is, then goes on to the login page.</li>
+ * </ol>
+ */
+public final class InstallationSetupScreen {
+
+    // Same sizes and styles as auth.ui.LoginScreen, so the screens look alike.
+    private static final double DESIGN_WIDTH = 1920;
+    private static final double DESIGN_HEIGHT = 1080;
+    private static final double FIELD_WIDTH = 400;
+    private static final double FIELD_HEIGHT = 50;
+    private static final double BUTTON_HEIGHT = 46;
+    private static final double LOGO_WIDTH = 168;
+
+    private static final String FIELD_STYLE =
+            "-fx-background-color: " + Theme.SURFACE + "; -fx-background-radius: 25; "
+                    + "-fx-border-color: " + Theme.BORDER + "; -fx-border-width: 2; -fx-border-radius: 25; "
+                    + "-fx-padding: 0 22 0 22; -fx-font-size: 20px; "
+                    + "-fx-text-fill: " + Theme.PRIMARY_TEXT + "; -fx-prompt-text-fill: " + Theme.SECONDARY_TEXT + "; "
+                    + "-fx-focus-color: transparent; -fx-faint-focus-color: transparent;";
+    private static final String FIELD_FOCUSED_STYLE =
+            FIELD_STYLE.replace("-fx-border-color: " + Theme.BORDER, "-fx-border-color: " + Theme.PRIMARY_BLUE);
+    /** A read-only value (e.g. Terminal ID T01): the same pill on the app's grey. */
+    private static final String FIELD_READ_ONLY_STYLE =
+            FIELD_STYLE.replace("-fx-background-color: " + Theme.SURFACE, "-fx-background-color: " + Theme.BORDER)
+                    .replace("-fx-text-fill: " + Theme.PRIMARY_TEXT, "-fx-text-fill: " + Theme.SECONDARY_TEXT);
+
+    private static final String BUTTON_STYLE =
+            "-fx-background-color: " + Theme.PRIMARY_BLUE + "; -fx-background-radius: 23; "
+                    + "-fx-text-fill: white; -fx-font-size: 26px; -fx-font-weight: bold; -fx-cursor: hand;";
+    private static final String BUTTON_HOVER_STYLE = BUTTON_STYLE.replace(Theme.PRIMARY_BLUE, Theme.SECONDARY_BLUE);
+    private static final String MAIN_POS = "Main POS";
+    private static final String ADDITIONAL_POS = "Additional POS";
+
+    /**
+     * The Main / Additional drop-down: the same white pill as the fields, and a rounded list like the
+     * app's other drop-downs (white, light border, soft blue hover, chosen row tinted).
+     */
+    private static final String COMBO_CSS = "data:text/css;base64," + java.util.Base64.getEncoder().encodeToString(
+            String.join("\n",
+                    ".setup-combo { -fx-background-color: " + Theme.SURFACE + "; -fx-background-insets: 0; "
+                            + "-fx-background-radius: 25; -fx-border-color: " + Theme.BORDER + "; -fx-border-width: 2; "
+                            + "-fx-border-radius: 25; -fx-padding: 0 10 0 10; -fx-font-size: 20px; -fx-cursor: hand; }",
+                    ".setup-combo:focused, .setup-combo:showing { -fx-border-color: " + Theme.PRIMARY_BLUE + "; }",
+                    // the chosen value, centred (left padding = the arrow's width, so it sits in the middle of the pill)
+                    ".setup-combo > .list-cell { -fx-background-color: transparent; -fx-text-fill: " + Theme.PRIMARY_TEXT
+                            + "; -fx-alignment: center; -fx-padding: 0 0 0 30; }",
+                    ".setup-combo > .arrow-button { -fx-background-color: transparent; -fx-padding: 0 14 0 8; }",
+                    ".setup-combo > .arrow-button > .arrow { -fx-background-color: " + Theme.PRIMARY_TEXT + "; }",
+                    // the list: sizes in em, so they follow the font size set to match the page's scale
+                    ".combo-box-popup > .list-view { -fx-background-color: " + Theme.SURFACE + "; -fx-background-insets: 0; "
+                            + "-fx-background-radius: 0.6em; -fx-border-color: " + Theme.BORDER + "; -fx-border-radius: 0.6em; "
+                            + "-fx-padding: 0.3em; -fx-effect: null; }",
+                    ".combo-box-popup > .list-view .list-cell { -fx-background-color: transparent; "
+                            + "-fx-background-radius: 0.35em; -fx-padding: 0.5em 0 0.5em 0; -fx-alignment: center; "
+                            + "-fx-text-fill: " + Theme.PRIMARY_TEXT + "; }",
+                    ".combo-box-popup > .list-view .list-cell:hover { -fx-background-color: rgba(36, 87, 166, 0.08); }",
+                    ".combo-box-popup > .list-view .list-cell:selected { -fx-background-color: rgba(36, 87, 166, 0.14); "
+                            + "-fx-font-weight: bold; }")
+                    .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    private static final String BACK_STYLE =
+            "-fx-background-color: transparent; -fx-text-fill: " + Theme.PRIMARY_BLUE + "; -fx-font-size: 16px; "
+                    + "-fx-font-weight: bold; -fx-cursor: hand; -fx-padding: 4 10 4 10;";
+
+    private final PosTerminalRepository terminals;
+    private final Consumer<String> onDone;
+    private final StackPane view = new StackPane();
+    private final VBox step = new VBox();          // the part under the title that changes per step
+    private final Label errorLabel = new Label();
+
+    private boolean mainPos;                        // the choice made in step 1
+    private boolean roleChosen;                     // so Back shows the earlier choice again
+    private String apiKey;                          // set once step 2 accepts it
+
+    /**
+     * @param onDone called with this computer's terminal ID (T01, T02 ...) once it is set up;
+     *               normally: build the app for that terminal and show the login page
+     */
+    public InstallationSetupScreen(PosTerminalRepository terminals, Consumer<String> onDone) {
+        this.terminals = Objects.requireNonNull(terminals, "terminals");
+        this.onDone = Objects.requireNonNull(onDone, "onDone");
+        buildFrame();
+        showRoleStep();
+    }
+
+    public Parent getView() {
+        return view;
+    }
+
+    /* -------------------------------- frame -------------------------------- */
+
+    private void buildFrame() {
+        Label title = new Label("INSTALLATION SETUP");
+        title.setStyle("-fx-font-size: 64px; -fx-font-weight: bold; -fx-text-fill: " + Theme.PRIMARY_TEXT + ";");
+        Label subtitle = new Label("POS & Inventory Management System");
+        subtitle.setStyle("-fx-font-size: 28px; -fx-text-fill: " + Theme.PRIMARY_TEXT + ";");
+
+        errorLabel.setWrapText(true);
+        errorLabel.setMaxWidth(FIELD_WIDTH + 80);
+        errorLabel.setAlignment(Pos.CENTER);
+        errorLabel.setTextAlignment(TextAlignment.CENTER);
+        errorLabel.setStyle("-fx-text-fill: " + Theme.ERROR + "; -fx-font-size: 16px;");
+
+        step.setAlignment(Pos.TOP_CENTER);
+        VBox form = new VBox();
+        form.setAlignment(Pos.CENTER);
+        ImageView logo = loadLogo();
+        if (logo != null) {
+            form.getChildren().addAll(logo, gap(4));
+        }
+        form.getChildren().addAll(title, gap(5), subtitle, gap(58), step);
+
+        view.setStyle("-fx-background-color: " + Theme.APP_BACKGROUND + "; -fx-font-family: '" + Theme.FONT_FAMILY + "';");
+        view.setAlignment(Pos.CENTER);
+        view.getChildren().add(form);
+        scaleToWindow(form);
+    }
+
+    /** Replaces the step part with {@code nodes}, clears the error and focuses {@code focus}. */
+    private void showStep(Node focus, Node... nodes) {
+        hideError();
+        step.getChildren().setAll(nodes);
+        if (focus != null) {
+            Platform.runLater(focus::requestFocus);
+        }
+    }
+
+    /* ------------------------- 1. Main or Additional ------------------------- */
+
+    private void showRoleStep() {
+        ComboBox<String> role = new ComboBox<>();
+        role.getItems().setAll(MAIN_POS, ADDITIONAL_POS);
+        role.setPromptText("Select");
+        if (roleChosen) {
+            role.setValue(mainPos ? MAIN_POS : ADDITIONAL_POS);
+        }
+        // "Select" in grey like the fields' placeholders; the choice itself in normal dark text.
+        role.setButtonCell(new javafx.scene.control.ListCell<>() {
+            @Override
+            protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                boolean none = empty || item == null;
+                setText(none ? role.getPromptText() : item);
+                setStyle("-fx-text-fill: " + (none ? Theme.SECONDARY_TEXT : Theme.PRIMARY_TEXT) + ";");
+            }
+        });
+        role.getStyleClass().add("setup-combo");
+        // The page is drawn at 1920 px and scaled to the window, but the list opens in its own window,
+        // which is not: give it the drop-down's on-screen width and text scaled the same way.
+        role.setOnShowing(e -> fitListToBox(role));
+        role.getStylesheets().add(COMBO_CSS);
+        role.setPrefSize(FIELD_WIDTH, FIELD_HEIGHT);
+        role.setMinSize(FIELD_WIDTH, FIELD_HEIGHT);
+        role.setMaxSize(FIELD_WIDTH, FIELD_HEIGHT);
+
+        Button next = primary("CONTINUE");
+        next.setOnAction(e -> {
+            if (role.getValue() == null) {
+                showError("Choose Main POS or Additional POS.");
+                role.requestFocus();
+                return;
+            }
+            mainPos = MAIN_POS.equals(role.getValue());
+            roleChosen = true;
+            showApiKeyStep();
+        });
+        showStep(role, intro("Is this the Main POS or an Additional POS?"), gap(30), role, gap(12), errorLabel,
+                gap(29), next);
+    }
+
+    /** Makes the open list exactly as wide as the drop-down on screen, with text at the same scale. */
+    private static void fitListToBox(ComboBox<String> box) {
+        if (box.getSkin() instanceof javafx.scene.control.skin.ComboBoxListViewSkin<?> skin
+                && skin.getPopupContent() instanceof javafx.scene.control.ListView<?> list) {
+            javafx.geometry.Bounds onScreen = box.localToScreen(box.getBoundsInLocal());
+            if (onScreen == null) {
+                return;
+            }
+            double width = onScreen.getWidth();
+            double scale = width / FIELD_WIDTH;
+            list.setMinWidth(width);
+            list.setPrefWidth(width);
+            list.setMaxWidth(width);
+            list.setStyle("-fx-font-size: " + Math.round(20 * scale * 10) / 10.0 + "px;");
+        }
+    }
+
+    /* ------------------------------ 2. API key ------------------------------ */
+
+    /**
+     * Main POS: "Register API Key" (the key it will check on every call from the other terminals).
+     * Additional POS: "Enter the API Key" (sent to the Main POS, which must have the same one).
+     */
+    private void showApiKeyStep() {
+        TextField key = field("e.g. NSC-XXXXX-XXXXX-XXXXX-XXXXX");
+        if (apiKey != null) {
+            key.setText(apiKey);
+        }
+        Button next = primary("CONTINUE");
+        Runnable submit = () -> {
+            if (key.getText() == null || key.getText().isBlank()) {
+                showError("Enter the API key the developer provided.");
+                return;
+            }
+            if (!ApiKey.isValid(key.getText())) {
+                showError("That API key is not right. Check it with the developer and type it again.");
+                key.selectAll();
+                key.requestFocus();
+                return;
+            }
+            apiKey = ApiKey.normalize(key.getText());
+            if (mainPos) {
+                showMainStep();
+            } else {
+                showAdditionalStep();
+            }
+        };
+        next.setOnAction(e -> submit.run());
+        key.setOnAction(e -> submit.run());
+        Label heading = mainPos ? stepTitle("Register API Key") : stepTitle("Enter the API Key");
+        Label hint = mainPos ? note("Use the API key the developer provided. The other terminals must use the same key.")
+                : note("The same API key the Main POS was registered with.");
+        showStep(key, heading, gap(6), hint, gap(30), key, gap(12), errorLabel, gap(29), next,
+                gap(16), back(this::showRoleStep));
+    }
+
+    /* ------------------------------ 3a. Main POS ----------------------------- */
+
+    private void showMainStep() {
+        TextField terminal = readOnly(PosTerminalRepository.MAIN_ID);
+        TextField ip = field("IP Address, e.g. 192.168.1.20");
+        ip.setText(orEmpty(LocalAddress.detect()));
+        Button next = primary("CONTINUE");
+        Runnable submit = () -> {
+            String address = checkedIp(ip, "this computer's");
+            if (address == null) {
+                return;
+            }
+            next.setDisable(true);
+            try {
+                terminals.completeMainSetup(address, computerName(), apiKey);
+            } catch (RuntimeException e) {
+                System.err.println("[SETUP] " + e + (e.getCause() == null ? "" : " / " + e.getCause()));
+                showError(UiErrors.message(e, "The setup could not be saved. Check that MySQL is running and that "
+                        + "setup.bat has created nickelsales_appconfig, then try again."));
+                next.setDisable(false);
+                return;
+            }
+            System.out.println("[SETUP] this computer is the Main POS (T01) at " + address);
+            showDoneStep(PosTerminalRepository.MAIN_ID, "This computer is the Main POS. Other terminals connect "
+                    + "to it at " + address + ".");
+        };
+        next.setOnAction(e -> submit.run());
+        ip.setOnAction(e -> submit.run());
+        showStep(ip, intro("Set up this computer as the Main POS"), gap(30),
+                caption("Terminal ID"), gap(6), terminal, gap(22),
+                caption("This computer's IP Address"), gap(6), ip, gap(12), errorLabel, gap(29), next,
+                gap(16), back(this::showApiKeyStep));
+    }
+
+    /* --------------------------- 3b. Additional POS -------------------------- */
+
+    private void showAdditionalStep() {
+        TextField mainIp = field("Main POS IP Address, e.g. 192.168.1.20");
+        TextField myIp = field("IP Address, e.g. 192.168.1.21");
+        myIp.setText(orEmpty(LocalAddress.detect()));
+        Button next = primary("CONTINUE");
+        Button back = back(this::showApiKeyStep);
+        Runnable submit = () -> {
+            String main = checkedIp(mainIp, "the Main POS's");
+            if (main == null) {
+                return;
+            }
+            String mine = checkedIp(myIp, "this computer's");
+            if (mine == null) {
+                return;
+            }
+            if (main.equals(mine)) {
+                showError("The Main POS's IP address is this computer's own. Type the Main POS's address, "
+                        + "or go back and choose MAIN POS.");
+                return;
+            }
+            hideError();
+            next.setDisable(true);
+            back.setDisable(true);
+            next.setText("CONNECTING...");
+            String name = computerName();
+            Thread call = new Thread(() -> {
+                try {
+                    String id = new MainPosClient(main, ApiServer.port(), apiKey).requestTerminalId(mine, name);
+                    terminals.completeAdditionalSetup(main, id, mine, name, apiKey);
+                    System.out.println("[SETUP] the Main POS at " + main + " gave this computer terminal ID " + id);
+                    Platform.runLater(() -> showDoneStep(id, "This computer is an Additional POS of the Main POS at "
+                            + main + "."));
+                } catch (MainPosClient.MainPosException e) {
+                    Platform.runLater(() -> failed(e.getMessage(), next, back));
+                } catch (RuntimeException e) {
+                    System.err.println("[SETUP] " + e + (e.getCause() == null ? "" : " / " + e.getCause()));
+                    Platform.runLater(() -> failed(UiErrors.message(e, "The terminal ID was given, but it could not "
+                            + "be saved on this computer. Check that MySQL is running, then try again."), next, back));
+                }
+            }, "setup-register");
+            call.setDaemon(true);
+            call.start();
+        };
+        next.setOnAction(e -> submit.run());
+        mainIp.setOnAction(e -> submit.run());
+        myIp.setOnAction(e -> submit.run());
+        showStep(mainIp, intro("Connect this computer to the Main POS"), gap(30),
+                caption("Main POS IP Address"), gap(6), mainIp, gap(22),
+                caption("This computer's IP Address"), gap(6), myIp, gap(12), errorLabel, gap(29), next,
+                gap(16), back);
+    }
+
+    private void failed(String message, Button next, Button back) {
+        showError(message);
+        next.setText("CONTINUE");
+        next.setDisable(false);
+        back.setDisable(false);
+    }
+
+    /* -------------------------------- 4. Done -------------------------------- */
+
+    private void showDoneStep(String terminalId, String detail) {
+        Label id = new Label("Terminal " + terminalId);
+        id.setStyle("-fx-font-size: 40px; -fx-font-weight: bold; -fx-text-fill: " + Theme.PRIMARY_BLUE + ";");
+        Button next = primary("CONTINUE");
+        next.setOnAction(e -> onDone.accept(terminalId));
+        showStep(next, intro("Setup complete"), gap(18), id, gap(12), note(detail), gap(40), next);
+    }
+
+    /* ------------------------------- helpers -------------------------------- */
+
+    /** The IP address in {@code field} if it is valid; otherwise shows why and returns null. */
+    private String checkedIp(TextField field, String whose) {
+        String text = field.getText() == null ? "" : field.getText().trim();
+        if (text.isEmpty()) {
+            showError("Enter " + whose + " IP address.");
+            field.requestFocus();
+            return null;
+        }
+        if (!LocalAddress.isValid(text)) {
+            showError("That IP address doesn't look right. Use four numbers from 0 to 255, e.g. 192.168.1.20.");
+            field.requestFocus();
+            field.selectAll();
+            return null;
+        }
+        return text;
+    }
+
+    /** This computer's Windows name, so the Main POS recognises it if it asks again; null if unknown. */
+    private static String computerName() {
+        String name = System.getenv("COMPUTERNAME");
+        if (name != null && !name.isBlank()) {
+            return name.trim();
+        }
+        try {
+            return InetAddress.getLocalHost().getHostName();
+        } catch (IOException e) {
+            return null;
+        }
+    }
+
+    private static String orEmpty(String s) {
+        return s == null ? "" : s;
+    }
+
+    private static Label intro(String text) {
+        Label label = new Label(text);
+        label.setStyle("-fx-font-size: 18px; -fx-text-fill: " + Theme.PRIMARY_TEXT + ";");
+        return label;
+    }
+
+    /** A step's own heading, e.g. "Register API Key". */
+    private static Label stepTitle(String text) {
+        Label label = new Label(text);
+        label.setStyle("-fx-font-size: 24px; -fx-font-weight: bold; -fx-text-fill: " + Theme.PRIMARY_TEXT + ";");
+        return label;
+    }
+
+    /** A small grey line under a choice or a result. */
+    private static Label note(String text) {
+        Label label = new Label(text);
+        label.setWrapText(true);
+        label.setMaxWidth(FIELD_WIDTH + 80);
+        label.setAlignment(Pos.CENTER);
+        label.setTextAlignment(TextAlignment.CENTER);
+        label.setStyle("-fx-font-size: 15px; -fx-text-fill: " + Theme.SECONDARY_TEXT + ";");
+        return label;
+    }
+
+    /** A small grey name above a field, lined up with the text inside the pill. */
+    private static Label caption(String text) {
+        Label label = new Label(text);
+        label.setStyle("-fx-font-size: 16px; -fx-font-weight: bold; -fx-text-fill: " + Theme.SECONDARY_TEXT
+                + "; -fx-padding: 0 0 0 22;");
+        label.setMaxWidth(FIELD_WIDTH);
+        label.setPrefWidth(FIELD_WIDTH);
+        return label;
+    }
+
+    private static TextField field(String prompt) {
+        TextField field = new TextField();
+        field.setPromptText(prompt);
+        size(field);
+        field.setStyle(FIELD_STYLE);
+        field.focusedProperty().addListener((obs, was, now) -> field.setStyle(now ? FIELD_FOCUSED_STYLE : FIELD_STYLE));
+        return field;
+    }
+
+    private static TextField readOnly(String value) {
+        TextField field = new TextField(value);
+        field.setEditable(false);
+        field.setFocusTraversable(false);
+        size(field);
+        field.setStyle(FIELD_READ_ONLY_STYLE);
+        return field;
+    }
+
+    private static void size(TextField field) {
+        field.setPrefWidth(FIELD_WIDTH);
+        field.setMaxWidth(FIELD_WIDTH);
+        field.setMinHeight(FIELD_HEIGHT);
+        field.setPrefHeight(FIELD_HEIGHT);
+        field.setMaxHeight(FIELD_HEIGHT);
+    }
+
+    private static Button primary(String text) {
+        Button b = pill(text, BUTTON_STYLE, BUTTON_HOVER_STYLE);
+        b.setDefaultButton(true);
+        return b;
+    }
+
+    private static Button pill(String text, String style, String hover) {
+        Button b = new Button(text);
+        b.setPrefSize(FIELD_WIDTH, BUTTON_HEIGHT);
+        b.setMinSize(FIELD_WIDTH, BUTTON_HEIGHT);
+        b.setMaxSize(FIELD_WIDTH, BUTTON_HEIGHT);
+        b.setStyle(style);
+        b.hoverProperty().addListener((obs, was, now) -> b.setStyle(now ? hover : style));
+        return b;
+    }
+
+    private static Button back(Runnable action) {
+        Button b = new Button("‹  Back");
+        b.setStyle(BACK_STYLE);
+        b.setOnAction(e -> action.run());
+        return b;
+    }
+
+    /** Scales the 1920 x 1080 design to the window (never below half or above double size). */
+    private void scaleToWindow(Region content) {
+        Runnable apply = () -> {
+            double scale = Math.min(view.getWidth() / DESIGN_WIDTH, view.getHeight() / DESIGN_HEIGHT);
+            scale = Math.max(0.5, Math.min(2.0, scale));
+            content.setScaleX(scale);
+            content.setScaleY(scale);
+        };
+        view.widthProperty().addListener((obs, was, now) -> apply.run());
+        view.heightProperty().addListener((obs, was, now) -> apply.run());
+    }
+
+    /** The login page's logo, trimmed the same way; null if the file is not on the classpath. */
+    private static ImageView loadLogo() {
+        try (InputStream in = InstallationSetupScreen.class.getResourceAsStream(LoginScreen.LOGO_RESOURCE)) {
+            if (in == null) {
+                return null;
+            }
+            Image image = new Image(in);
+            ImageView logo = new ImageView(image);
+            if (image.getWidth() == 600 && image.getHeight() == 600) {
+                logo.setViewport(new Rectangle2D(126, 91, 351, 403));
+            }
+            logo.setFitWidth(LOGO_WIDTH);
+            logo.setPreserveRatio(true);
+            logo.setSmooth(true);
+            return logo;
+        } catch (IOException e) {
+            return null;
+        }
+    }
+
+    private void showError(String message) {
+        errorLabel.setText(message);
+        errorLabel.setVisible(true);
+        errorLabel.setManaged(true);
+    }
+
+    private void hideError() {
+        errorLabel.setText("");
+        errorLabel.setVisible(false);
+        errorLabel.setManaged(false);
+    }
+
+    private static Region gap(double height) {
+        Region spacer = new Region();
+        spacer.setMinHeight(height);
+        spacer.setPrefHeight(height);
+        spacer.setMaxHeight(height);
+        return spacer;
+    }
+}
