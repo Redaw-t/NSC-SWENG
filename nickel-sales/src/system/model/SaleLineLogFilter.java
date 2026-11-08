@@ -7,7 +7,8 @@ import java.time.LocalDate;
  *
  * @param from    first day, in Philippine time
  * @param to      last day (included), in Philippine time
- * @param type    {@link SaleLineLogEntry#OPEN_ITEM} or {@link SaleLineLogEntry#PRICE_EDIT}; null = both
+ * @param type    {@link SaleLineLogEntry#OPEN_ITEM}, {@link SaleLineLogEntry#PRICE_EDIT} (each with its
+ *                voids) or {@link SaleLineLogEntry#VOIDED} (only voids); null = all
  * @param keyword found in the invoice number, the item's name or its product ID
  */
 public record SaleLineLogFilter(LocalDate from, LocalDate to, String type, String keyword) {

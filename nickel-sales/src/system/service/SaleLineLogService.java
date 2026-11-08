@@ -61,12 +61,14 @@ public final class SaleLineLogService {
         for (SaleLineLogEntry e : rows) {
             String name = userName == null ? null : userName.apply(e.cashierUserId());
             lines.add(Arrays.asList(ActivityLogService.CSV_TIME.format(PhTime.of(e.completedAt())), e.invoiceNo(),
+                    e.returnNo() == null ? "" : e.returnNo(),
                     e.typeLabel(), e.productId(), e.productName(), Quantity.format(e.quantity()), e.unit(),
                     money(e.originalPrice()), money(e.unitPrice()), money(e.lineTotal()),
                     e.vatable() ? "VATable" : "VAT-exempt", e.cashierUserId(), name));
         }
-        Csv.write(file, List.of("Date / Time", "Invoice No.", "Type", "Product ID", "Item", "Quantity", "Unit",
-                "Original Price", "Price Charged", "Amount", "VAT", "Cashier ID", "Cashier"), lines);
+        // voids: Return No. filled, minus Quantity / Amount, Cashier = who voided it
+        Csv.write(file, List.of("Date / Time", "Invoice No.", "Return No.", "Type", "Product ID", "Item", "Quantity",
+                "Unit", "Original Price", "Price Charged", "Amount", "VAT", "Cashier ID", "Cashier"), lines);
         if (audit != null) {
             audit.log("LOGS_EXPORTED target=OpenItemsPriceEdits " + rows.size() + " rows", actor.getUserId());
         }

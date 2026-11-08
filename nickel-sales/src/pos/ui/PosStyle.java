@@ -81,6 +81,10 @@ final class PosStyle {
         Button b = new Button();
         b.setGraphic(graphic);
         b.setAccessibleText(name + " (" + key + ")");
+        // Never takes the keyboard focus: on Windows, Enter presses whichever button has the focus, which
+        // was the first one ("Keep Sale") instead of the [ENTER] one. Now Enter always presses the button
+        // marked [ENTER] (the default button) and Esc the one marked [ESC], as the labels say.
+        b.setFocusTraversable(false);
         button(b, kind);
         b.setMinWidth(160);
         b.setMinHeight(56);

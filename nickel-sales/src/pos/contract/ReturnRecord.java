@@ -58,9 +58,8 @@ public record ReturnRecord(
         Objects.requireNonNull(returnedAt, "returnedAt");
         Objects.requireNonNull(refundMethod, "refundMethod");
         refundReference = (refundReference == null || refundReference.isBlank()) ? null : refundReference.trim();
-        if (refundMethod.needsReference() && refundReference == null) {
-            throw new IllegalArgumentException("A " + refundMethod + " refund needs its reference number");
-        }
+        // A GCash / Maya / QRPh refund's reference is required by the refund card (PaymentService.recordRefund),
+        // not here: returns saved before the refund card existed have none, and must still load.
         if (!refundMethod.needsReference() && refundReference != null) {
             throw new IllegalArgumentException("A " + refundMethod + " refund has no reference number");
         }

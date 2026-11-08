@@ -119,13 +119,25 @@ public class MySqlReturnRepository implements ReturnHistory {
         }
     }
 
+    @Override
+    public List<ReturnRecord> findReturned(java.time.Instant from, java.time.Instant to) {
+        try (Connection c = Database.getConnection()) {
+            return load(c, "ReturnedAt >= ? AND ReturnedAt < ?",
+                    MySqlSaleRepository.toDb(from), MySqlSaleRepository.toDb(to));
+        } catch (SQLException e) {
+            throw new RuntimeException("Could not read the returns", e);
+        }
+    }
+
     /* -------------------------------------- loading -------------------------------------- */
 
-    private static List<ReturnRecord> load(Connection c, String where, String param) throws SQLException {
+    private static List<ReturnRecord> load(Connection c, String where, Object... params) throws SQLException {
         Map<String, Object[]> heads = new LinkedHashMap<>();
         try (PreparedStatement ps = c.prepareStatement(
                 "SELECT " + COLUMNS + " FROM `Return` WHERE " + where + " ORDER BY ReturnedAt, ReturnNo")) {
-            ps.setString(1, param);
+            for (int i = 0; i < params.length; i++) {
+                ps.setObject(i + 1, params[i]);
+            }
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
                     heads.put(rs.getString("ReturnID"), new Object[] {

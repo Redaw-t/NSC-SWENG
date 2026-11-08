@@ -16,4 +16,7 @@ public interface ReturnHistory {
 
     /** The return with this number, e.g. "T01-2026-000123-01", or as its barcode holds it ("T01202600012301"). */
     Optional<ReturnRecord> findByReturnNo(String returnNo);
+
+    /** Returns made with {@code from <= returnedAt < to}, oldest first (Reports' transaction history). */
+    List<ReturnRecord> findReturned(java.time.Instant from, java.time.Instant to);
 }

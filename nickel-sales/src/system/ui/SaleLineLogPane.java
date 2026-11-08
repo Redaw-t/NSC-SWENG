@@ -42,7 +42,10 @@ import java.util.function.Predicate;
  * the invoice, the cashier, and the price before and after. Filters by date, type and keyword; a View
  * button on every row; Export CSV; summary tiles.
  *
- * Read-only: the rows are POS's saved sale lines, read through {@link SaleLineLogService}. Price edits
+ * Voids of those lines (POS Void Item / Void Transaction) are listed too, as their own rows: type
+ * "... (Voided)", the return number, minus quantity and amount, when and by whom. Type "Voided" shows only them.
+ *
+ * Read-only: the rows are POS's saved sale and return lines, read through {@link SaleLineLogService}. Price edits
  * appear for sales saved since SaleLine.OriginalPrice was added; earlier edits are in Activity Logs
  * (PRICE_EDITED).
  */
@@ -75,6 +78,7 @@ final class SaleLineLogPane implements SystemPane {
     private final Label totalValue = new Label("0");
     private final Label openValue = new Label("0");
     private final Label editedValue = new Label("0");
+    private final Label voidedValue = new Label("0");
     private final Label amountValue = new Label("₱0.00");
     private final Label message = new Label();
     private final VBox view = new VBox(16);
@@ -89,7 +93,9 @@ final class SaleLineLogPane implements SystemPane {
 
         table.getColumns().add(Tables.<SaleLineLogEntry>textColumn("Date / Time", 120,
                 e -> ROW_TIME.format(PhTime.of(e.completedAt()))));
-        table.getColumns().add(Tables.<SaleLineLogEntry>textColumn("Invoice No.", 150, SaleLineLogEntry::invoiceNo));
+        // a void shows its return number (the invoice number + -01 ...)
+        table.getColumns().add(Tables.<SaleLineLogEntry>textColumn("Invoice / Return No.", 170,
+                SaleLineLogEntry::documentNo));
         table.getColumns().add(Tables.<SaleLineLogEntry>textColumn("Type", 130, SaleLineLogEntry::typeLabel));
         table.getColumns().add(Tables.<SaleLineLogEntry>nodeColumn("Item", 220, 140,
                 e -> SystemUi.wrappedCell(e.productName())));
@@ -108,7 +114,8 @@ final class SaleLineLogPane implements SystemPane {
 
         typeFilter.getItems().setAll(ALL_TYPES,
                 new TypeChoice(SaleLineLogEntry.OPEN_ITEM, "Open Item"),
-                new TypeChoice(SaleLineLogEntry.PRICE_EDIT, "Price Edit"));
+                new TypeChoice(SaleLineLogEntry.PRICE_EDIT, "Price Edit"),
+                new TypeChoice(SaleLineLogEntry.VOIDED, "Voided"));
         typeFilter.setValue(ALL_TYPES);
         typeFilter.setPrefWidth(170);
         search.setPrefWidth(280);
@@ -127,7 +134,8 @@ final class SaleLineLogPane implements SystemPane {
 
         view.getChildren().addAll(toolbar, table, message, SystemUi.footer(pager,
                 SystemUi.tile("Lines", totalValue), SystemUi.tile("Open Items", openValue),
-                SystemUi.tile("Price Edits", editedValue), SystemUi.tile("Amount", amountValue)));
+                SystemUi.tile("Price Edits", editedValue), SystemUi.tile("Voided", voidedValue),
+                SystemUi.tile("Amount", amountValue)));
         VBox.setVgrow(table, Priority.ALWAYS);
     }
 
@@ -176,8 +184,10 @@ final class SaleLineLogPane implements SystemPane {
             loadFailed(UiErrors.message(e, "The open item and price edit history could not be loaded. Try again."));
         }
         totalValue.setText(SystemUi.count(rows.size()));
-        openValue.setText(count(SaleLineLogEntry::openItem));
-        editedValue.setText(count(SaleLineLogEntry::priceEdited));
+        // Open Items / Price Edits count the lines sold; voids are counted on their own (Amount is net of them)
+        openValue.setText(count(e -> e.openItem() && !e.voided()));
+        editedValue.setText(count(e -> e.priceEdited() && !e.voided()));
+        voidedValue.setText(count(SaleLineLogEntry::voided));
         amountValue.setText("₱" + Money.format(rows.stream().map(SaleLineLogEntry::lineTotal)
                 .reduce(BigDecimal.ZERO, BigDecimal::add)));
         pager.reset();
@@ -203,8 +213,9 @@ final class SaleLineLogPane implements SystemPane {
 
     private void showDetails(SaleLineLogEntry e) {
         BigDecimal change = e.priceChange();
-        SystemUi.showDetails(screen.stage(), "Sale Line Details", List.of(
-                new String[] {"Date / Time", FULL_TIME.format(PhTime.of(e.completedAt()))},
+        SystemUi.showDetails(screen.stage(), e.voided() ? "Voided Line Details" : "Sale Line Details", List.of(
+                new String[] {e.voided() ? "Voided On" : "Date / Time", FULL_TIME.format(PhTime.of(e.completedAt()))},
+                new String[] {"Return No.", e.returnNo()},   // null rows are left out
                 new String[] {"Invoice No.", e.invoiceNo()},
                 new String[] {"Line No.", String.valueOf(e.lineNo())},
                 new String[] {"Type", e.typeLabel()},
@@ -216,7 +227,7 @@ final class SaleLineLogPane implements SystemPane {
                 new String[] {"Price Change", change == null ? null : signed(change)},
                 new String[] {"Amount", Money.format(e.lineTotal())},
                 new String[] {"VAT", e.vatable() ? "VATable" : "VAT-exempt"},
-                new String[] {"Cashier", names.name(e.cashierUserId())}));
+                new String[] {e.voided() ? "Voided By" : "Cashier", names.name(e.cashierUserId())}));
     }
 
     @Override

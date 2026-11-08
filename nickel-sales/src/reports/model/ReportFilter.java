@@ -59,8 +59,30 @@ public record ReportFilter(ReportPeriod period, String cashierId, String termina
 
     /** True if the sale's invoice number contains {@link #invoiceNo} (ignoring case), or no invoice number was given. */
     public boolean invoiceContains(SaleRecord sale) {
+        return numberContains(sale.invoiceNo());
+    }
+
+    /** True if {@code number} (an invoice or return number) contains {@link #invoiceNo}, or none was given. */
+    public boolean numberContains(String number) {
         return invoiceNo == null
-                || sale.invoiceNo().toUpperCase(Locale.ROOT).contains(invoiceNo.toUpperCase(Locale.ROOT));
+                || number.toUpperCase(Locale.ROOT).contains(invoiceNo.toUpperCase(Locale.ROOT));
+    }
+
+    /**
+     * {@link #matches(SaleRecord)} for a return row: the cashier and terminal are who / where it was
+     * voided, the method is how the refund went back.
+     */
+    public boolean matches(TransactionRow row) {
+        if (!row.isReturn()) {
+            return matches(row.sale());
+        }
+        if (cashierId != null && !cashierId.equalsIgnoreCase(row.cashierId())) {
+            return false;
+        }
+        if (terminalId != null && !terminalId.equalsIgnoreCase(row.terminalId())) {
+            return false;
+        }
+        return method == null || row.methods().contains(method);
     }
 
     private static String blankToNull(String s) {

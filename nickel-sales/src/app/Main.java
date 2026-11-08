@@ -115,7 +115,7 @@ public final class Main {
         // Transaction & Reports: read-only, over POS's SaleHistory.
         ReportsAccess reportsAccess = ReportsAccess.of(app.auth(), app.authz());
         app.register(TransactionHistoryService.class,
-                new TransactionHistoryService(app.saleHistory(), reportsAccess));
+                new TransactionHistoryService(app.saleHistory(), app.returnHistory(), reportsAccess));   // sales + returns
         app.register(SalesReportService.class, new SalesReportService(app.saleHistory(), reportsAccess));
         app.register(ProductPerformanceService.class,
                 new ProductPerformanceService(app.saleHistory(), reportsAccess));
