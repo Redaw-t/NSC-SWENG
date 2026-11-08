@@ -20,6 +20,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * Turns a paid sale into a saved, completed sale, as ONE database transaction:
@@ -33,6 +34,12 @@ import java.util.Objects;
  * stock change, and the invoice number is not used up. Only after the
  * commit is the sale logged (AuditLogger event SALE_COMPLETED, plus PRICE_EDITED
  * "invoice productId old>new" for each line whose price the cashier changed).
+ *
+ * A database error can also come AFTER the commit went through (the connection
+ * drops while committing). So after a database error the sale is looked up by its
+ * ID: found = it was saved after all and is returned as normal; not found = nothing
+ * was saved; the lookup fails too = SaleOutcomeUnknownException. A later attempt
+ * to finalize the same sale finds it with {@link #alreadySaved} and never saves it twice.
  *
  * Called by SalesService.finalizeSale; screens use that, not this.
  */
@@ -57,6 +64,7 @@ public class CheckoutService {
      * it COMPLETED once this returns.
      *
      * @throws InsufficientStockException stock ran short (nothing was saved)
+     * @throws SaleOutcomeUnknownException database problem, and it can't be told whether the sale was saved
      * @throws RuntimeException           database problem (nothing was saved; cause = SQLException)
      */
     public SaleRecord complete(Sale sale, PaymentRecord payment) throws InsufficientStockException {
@@ -84,9 +92,46 @@ public class CheckoutService {
                 return record;
             });
         } catch (SQLException e) {
-            throw new RuntimeException("Could not save the sale", e);
+            saved = savedDespite(sale, e);
         }
+        logCompleted(sale, saved);
+        return saved;
+    }
 
+    /**
+     * The saved copy of {@code sale} if an earlier {@link #complete} of it was saved although it
+     * reported a failure (see the class comment); it is then logged as completed. Empty if the
+     * sale is not saved.
+     *
+     * @throws RuntimeException the database can't be reached
+     */
+    public Optional<SaleRecord> alreadySaved(Sale sale) {
+        Optional<SaleRecord> found = sales.findById(sale.getSaleId());
+        found.ifPresent(saved -> {
+            System.err.println("[CHECKOUT] sale " + saved.invoiceNo() + " was already saved; not saving it again");
+            logCompleted(sale, saved);
+        });
+        return found;
+    }
+
+    /** After a database error while saving: the sale if it was saved anyway, else the error. */
+    private SaleRecord savedDespite(Sale sale, SQLException failure) {
+        Optional<SaleRecord> found;
+        try {
+            found = sales.findById(sale.getSaleId());
+        } catch (RuntimeException lookupFailure) {
+            failure.addSuppressed(lookupFailure);
+            throw new SaleOutcomeUnknownException(sale.getSaleId(), failure);
+        }
+        if (found.isEmpty()) {
+            throw new RuntimeException("Could not save the sale", failure);
+        }
+        System.err.println("[CHECKOUT] sale " + found.get().invoiceNo()
+                + " was saved although the database reported: " + failure);
+        return found.get();
+    }
+
+    private void logCompleted(Sale sale, SaleRecord saved) {
         try {
             audit.log("SALE_COMPLETED " + saved.invoiceNo(), saved.cashierUserId());
             // F4 Edit Price: who changed which price, on which invoice (the catalog price is untouched)
@@ -99,6 +144,5 @@ public class CheckoutService {
             // The sale is saved; a logging problem must not make it look failed.
             System.err.println("[AUDIT] could not log sale " + saved.invoiceNo() + ": " + logFailure);
         }
-        return saved;
     }
 }

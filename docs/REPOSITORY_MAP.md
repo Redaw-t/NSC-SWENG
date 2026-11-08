@@ -66,9 +66,11 @@ Tests and stubs may use anything in `src/`. Nothing in `src/` may use them.
 
 | Path | Purpose |
 |---|---|
-| `database/NickelSales-Database-Config.sql` | The one schema script (safe to re-run); `migrations/` and `seed/` are TODO placeholders |
+| `database/NickelSales-Database-Config.sql` | The one schema script (safe to re-run; no data). Demo users and test catalog: `NickelSales-Demo-Data.sql` (development only). `migrations/` and `seed/` are TODO placeholders |
 | `docs/` | This map; `development/` (architecture, template, naming, file index, change log, contributing); `archive/` (old Iteration 1 guide, out of date) |
 | `nickel-sales/setup.*`, `setup-database.*`, `run-demo.*` | Setup and run scripts (also `--console`, `--scripted`) |
+| `installer/` | Builds the Windows installer for stores (`build-installer.ps1`: jpackage app with its own Java, bundled MySQL, Inno Setup wizard `NickelSales.iss`). See `installer/README.md` |
+| `nickel-sales/src/install/` | `InstallTasks`: what the installer runs after copying files (MySQL service, database user, settings file, first admin) |
 | `nickel-sales/lib/` | Bundled jars; `lib/javafx/` is downloaded by setup and ignored by git |
 | `nickel-sales/.project`, `.classpath` | The Eclipse project (the only one; none at the root) |
 | `.idea/`, `NSC-SWENG-Session-UI.iml`, `.run/` | Shared IntelliJ setup and run configurations |

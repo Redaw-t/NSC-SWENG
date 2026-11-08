@@ -26,15 +26,25 @@ No Maven or Gradle is used.
 1. **Windows:** run `setup.bat` until it says *Everything is ready*. **macOS/Linux:**
    `chmod +x setup.sh setup-database.sh run-demo.sh` once, then `./setup.sh`.
 2. It creates `NickelSales_Database` from [`../database/NickelSales-Database-Config.sql`](../database/NickelSales-Database-Config.sql)
-   and offers to save your MySQL password as `NSC_DB_PASSWORD`.
+   (the schema), adds the demo users and test catalog from [`../database/NickelSales-Demo-Data.sql`](../database/NickelSales-Demo-Data.sql), and offers to save your MySQL password as `NSC_DB_PASSWORD`.
 3. IntelliJ: open the repository root (it has `NSC-SWENG-Session-UI.iml`), pick a JDK 17+, and use the
    shared run configurations **Nickel Sales (DevApp)** and **AuthDemo (console)**. Don't use the green
    arrow next to `main()`: it has no JavaFX options. Eclipse/VS Code: open the `nickel-sales/` folder
    (it has its own `.project` and `.classpath`).
 
-### Environment variables
+### Settings
 
-| Variable | Default |
+Every setting below can be an environment variable or a line in a **settings file**.
+- Development runs (`run-demo`, DevApp, IDE, self-tests) use **environment variables**, plus a
+  settings file only if `NSC_SETTINGS_FILE` names one. They never read the installer's file, so
+  installing the app on your PC doesn't change your development database.
+- The **installed app** reads the file the installer writes, `%ProgramData%\NickelSales\nickelsales.properties`
+  (macOS/Linux: `~/.nickelsales/nickelsales.properties`), and the file wins over environment variables.
+
+See [`config/nickelsales.properties.example`](config/nickelsales.properties.example) and
+`shared/Settings.java`. The app prints which settings it used when it starts.
+
+| Setting | Default |
 | -------- | ------- |
 | `NSC_DB_URL` | `jdbc:mysql://localhost:3306/NickelSales_Database?...` |
 | `NSC_DB_USER` | `root` |
@@ -42,7 +52,13 @@ No Maven or Gradle is used.
 | `NSC_IDLE_TIMEOUT_MINUTES` | `30` |
 | `NSC_TERMINAL_ID` | `T01` (invoice numbers; each terminal needs its own) |
 | `NSC_STORE_NAME` / `NSC_STORE_ADDRESS` / `NSC_STORE_PROPRIETOR` / `NSC_STORE_TIN` / `NSC_STORE_PHONE` | printed on receipts (address, proprietor and TIN default to the store's own) |
-| `NSC_RECEIPT_WIDTH` | `42` (80 mm paper; 32 for 58 mm) |
+| `NSC_RECEIPT_WIDTH` | `32` (58 mm paper; 42-48 for 80 mm) |
+| `NSC_PRINTER_NAME` | none: the printer chosen in Settings > Printers, else the Windows default |
+| `NSC_PEER_URL` | none: the other terminal's address, for System Status |
+| `NSC_LOG_DIR` | `logs` next to the settings file (`%ProgramData%\NickelSales\logs`), else `%LOCALAPPDATA%\NickelSales\logs`. Only the installed app (`app.Main`) writes a log file, one per day, kept 30 days |
+
+The version is `shared/AppVersion.java` (shown in the window title; the installer uses it).
+Raise it for every build given to a store. Building the Windows app: [`../installer/README.md`](../installer/README.md).
 
 Windows: `setx NSC_DB_PASSWORD "..."`, then open a **new** terminal (restart IntelliJ too).
 

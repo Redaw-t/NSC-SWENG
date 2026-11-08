@@ -1,0 +1,40 @@
+# =====================================================================
+#  Nickel Sales Center - settings for one computer
+#
+#  The app reads this file from (first one that applies):
+#    - the path in the NSC_SETTINGS_FILE environment variable
+#    - %ProgramData%\NickelSales\nickelsales.properties   (Windows)
+#    - ~/.nickelsales/nickelsales.properties               (macOS / Linux)
+#  An environment variable of the same name overrides a line here.
+#  Leave a line out (or comment it with #) to use the default.
+#
+#  The installer writes this file. It holds the database password, so it
+#  must be readable only by the POS's Windows users and administrators.
+#  Saved as UTF-8. Write a backslash as \\ .
+# =====================================================================
+
+# --- Database ------------------------------------------------------------
+# Default: the local MySQL server, database NickelSales_Database.
+#NSC_DB_URL=jdbc:mysql://localhost:3306/NickelSales_Database?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+# A MySQL account for the app only (not root), with rights on NickelSales_Database only.
+NSC_DB_USER=nickelsales
+NSC_DB_PASSWORD=change-me
+
+# --- This terminal -------------------------------------------------------
+# Goes into every invoice number: give each computer its own (T01, T02 ...).
+NSC_TERMINAL_ID=T01
+# Minutes without activity before the app logs out (1 or more).
+#NSC_IDLE_TIMEOUT_MINUTES=30
+# Address of the other terminal, for the System Status screen.
+#NSC_PEER_URL=
+
+# --- Receipts ------------------------------------------------------------
+#NSC_STORE_NAME=NICKEL SALES CENTER
+#NSC_STORE_ADDRESS=
+#NSC_STORE_PROPRIETOR=
+#NSC_STORE_TIN=
+#NSC_STORE_PHONE=
+# Characters per receipt line: 32 for 58 mm paper, 42-48 for 80 mm.
+#NSC_RECEIPT_WIDTH=32
+# Printer when none is chosen in the app's Settings > Printers (exact Windows name).
+#NSC_PRINTER_NAME=POS-58

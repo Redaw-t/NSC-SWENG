@@ -67,6 +67,30 @@ public class UserAdminService {
         return user;
     }
 
+    /**
+     * Creates the store's first administrator: an Active Admin with a generated id and login
+     * name (as {@link #createUser}). Needs no session, since nobody can log in before it exists,
+     * so it is refused once there is any active admin. Used by the installer (install.InstallTasks).
+     */
+    public User createFirstAdmin(String firstName, String lastName, String password) throws AccountException {
+        boolean adminExists = userRepository.findAll().stream()
+                .anyMatch(u -> u.isActive() && u.hasRole(UserRole.ADMIN));
+        if (adminExists) {
+            throw new AccountException("There is already an administrator. Add users from Manage users.");
+        }
+        validateProfile(firstName, lastName, EnumSet.of(UserRole.ADMIN));
+        if (!passwordPolicy.validate(password)) {
+            throw new AccountException(PassPolicy.REQUIREMENTS);
+        }
+
+        User user = new User(nextUserId(), generateLoginName(firstName, lastName),
+                BCrypt.hashpw(password, BCrypt.gensalt(10)),
+                firstName.trim(), lastName.trim(), EnumSet.of(UserRole.ADMIN), UserStatus.ACTIVE);
+        userRepository.save(user);
+        log("USER_CREATED", user, user);
+        return user;
+    }
+
     /** The login name never changes on edit, so a rename does not break anyone's login. */
     public void updateUser(String sessionId, String userId, String firstName, String lastName,
                            Set<UserRole> roles) throws AccountException {

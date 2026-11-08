@@ -16,7 +16,8 @@ import java.util.prefs.Preferences;
  * have its own printers and a restore never changes them.
  *
  * <p>Which printer is used, in order: the printer chosen in Settings; else the printer named in the
- * NSC_PRINTER_NAME environment variable; else the Windows default printer.
+ * NSC_PRINTER_NAME setting (settings file or environment variable, see {@link Settings}); else the
+ * Windows default printer.
  */
 public final class PrinterSettings {
 
@@ -85,7 +86,7 @@ public final class PrinterSettings {
             }
             return s;
         }
-        String wanted = System.getenv("NSC_PRINTER_NAME");
+        String wanted = Settings.get("NSC_PRINTER_NAME");
         if (wanted != null && !wanted.isBlank()) {
             PrintService s = byName(wanted.trim());
             if (s == null) {
@@ -135,7 +136,7 @@ public final class PrinterSettings {
         if (chosen(use) != null) {
             return "chosen in Settings";
         }
-        String wanted = System.getenv("NSC_PRINTER_NAME");
+        String wanted = Settings.get("NSC_PRINTER_NAME");
         return wanted != null && !wanted.isBlank() ? "from NSC_PRINTER_NAME" : "Windows default printer";
     }
 

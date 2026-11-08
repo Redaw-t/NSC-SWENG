@@ -6,6 +6,8 @@
 #    1. connects with NSC_DB_USER (default root) / NSC_DB_PASSWORD,
 #       asking for the password (hidden) if it is not set or is wrong,
 #    2. creates NickelSales_Database from the SQL script if it is missing,
+#       then adds the demo users and test catalog (NickelSales-Demo-Data.sql,
+#       next to it): this is a DEVELOPER setup, never a store's,
 #    3. offers to save the password as NSC_DB_PASSWORD so the app can use it.
 #
 #  Usage:  setup-database.sh <path-to-mysql> <path-to-sql-file>
@@ -86,6 +88,14 @@ save_password() {
     step "run-demo.sh will use it from now on."
 }
 
+# The schema, then the demo users and test catalog (developer databases only).
+setup_sql() {
+    cat "$SQL_FILE"
+    printf '
+'
+    cat "$(dirname "$SQL_FILE")/NickelSales-Demo-Data.sql"
+}
+
 main() {
     if [[ ! -f "$SQL_FILE" ]]; then
         step "Database        : SQL file not found: $SQL_FILE"
@@ -134,7 +144,7 @@ main() {
     if (( count > 0 )); then
         # Re-apply the script: it only creates what is missing (new tables from
         # other modules) and skips existing demo users, so existing data is kept.
-        run_mysql "" "$(cat "$SQL_FILE")"
+        run_mysql "" "$(setup_sql)"
         if (( R_CODE != 0 )); then
             step "Database        : could not bring NickelSales_Database up to date:"
             echo "$R_TEXT"
@@ -149,7 +159,7 @@ main() {
             step "Skipped. Run setup.sh again when you want to create it."
             return 1
         fi
-        run_mysql "" "$(cat "$SQL_FILE")"
+        run_mysql "" "$(setup_sql)"
         if (( R_CODE != 0 )); then
             step "Creating the database failed:"
             echo "$R_TEXT"

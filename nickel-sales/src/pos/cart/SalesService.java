@@ -301,10 +301,16 @@ public class SalesService {
      * used, and the sale stays OPEN exactly as it was, so the cashier can fix
      * the problem (e.g. lower a quantity) and press Pay again.
      *
+     * Safe to call again after a {@link pos.checkout.SaleOutcomeUnknownException}: if the
+     * earlier attempt did save the sale, that saved sale is returned (with its original
+     * payment) and nothing is saved twice.
+     *
      * @throws CartException              the sale is empty, or a line has a stock problem
      *                                    (message from {@link StockProblem#message()})
      * @throws CheckoutException          the payment no longer matches the total (take it again)
      * @throws InsufficientStockException stock ran short at the moment of saving
+     * @throws pos.checkout.SaleOutcomeUnknownException database problem, and it can't be told
+     *                                    whether the sale was saved (pay again; never cancel it)
      * @throws RuntimeException           database problem; show with shared.UiErrors
      */
     public SaleRecord finalizeSale(PaymentRecord payment)
@@ -314,6 +320,14 @@ public class SalesService {
             throw new IllegalStateException("This SalesService was made without checkout");
         }
         Objects.requireNonNull(payment, "payment");
+        // First, before the stock checks (that sale's own stock-out would fail them):
+        // an earlier attempt may have saved it although it reported a failure.
+        Optional<SaleRecord> earlier = checkout.alreadySaved(sale);
+        if (earlier.isPresent()) {
+            sale.complete();
+            current = null;
+            return earlier.get();
+        }
         if (sale.isEmpty()) {
             throw new CartException("Add an item before taking payment.");
         }

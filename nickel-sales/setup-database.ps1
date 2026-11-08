@@ -5,6 +5,8 @@
 #    1. connects with NSC_DB_USER (default root) / NSC_DB_PASSWORD,
 #       asking for the password (hidden) if it is not set or is wrong,
 #    2. creates NickelSales_Database from the SQL script if it is missing,
+#       then adds the demo users and test catalog (NickelSales-Demo-Data.sql,
+#       next to it): this is a DEVELOPER setup, never a store's,
 #    3. offers to save the password as NSC_DB_PASSWORD so the app can use it.
 #
 #  Exit code 0 = database ready, 1 = not ready (the reason is printed).
@@ -59,6 +61,12 @@ function Ask-YesNo([string]$question) {
 
 $OutputEncoding = New-Object Text.UTF8Encoding $false
 
+# The schema, then the demo users and test catalog (developer databases only).
+function Read-SetupSql {
+    $demo = Join-Path (Split-Path -Parent $SqlFile) 'NickelSales-Demo-Data.sql'
+    return [IO.File]::ReadAllText($SqlFile) + "`n" + [IO.File]::ReadAllText($demo)
+}
+
 function Main {
     if (-not $script:pw) { $script:pw = Read-Password; $script:askedForPassword = $true }
 
@@ -90,7 +98,7 @@ function Main {
     if ($count -gt 0) {
         # Re-apply the script: it only creates what is missing (new tables from
         # other modules) and skips existing demo users, so existing data is kept.
-        $sql = [IO.File]::ReadAllText($SqlFile)
+        $sql = Read-SetupSql
         $r = Invoke-MySql @() $sql
         if ($r.Code -ne 0) {
             Write-Step "Database        : could not bring NickelSales_Database up to date:"
@@ -106,7 +114,7 @@ function Main {
             Write-Step "Skipped. Run setup.bat again when you want to create it."
             return 1
         }
-        $sql = [IO.File]::ReadAllText($SqlFile)
+        $sql = Read-SetupSql
         $r = Invoke-MySql @() $sql
         if ($r.Code -ne 0) {
             Write-Step "Creating the database failed:"

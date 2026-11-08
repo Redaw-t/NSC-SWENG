@@ -44,6 +44,23 @@ public class UserAdminDemo {
             AuthDemo.check(auth.login("areyes", TEMP_PASSWORD).user().hasRole(UserRole.CASHIER), "login should work");
         });
 
+        AuthDemo.scenario("First admin (installer): refused while an active admin exists", () ->
+                expectRejected(() -> admin.createFirstAdmin("Nora", "Lim", TEMP_PASSWORD), "second first admin"));
+
+        AuthDemo.scenario("First admin (installer): on a new store, an Admin who can log in", () -> {
+            AuthDemo.StubUserRepository empty = new AuthDemo.StubUserRepository();
+            empty.users.clear();
+            AuthenticationService emptyAuth = new AuthenticationService(empty, new AuthDemo.StubSessionManager(), policy, null);
+            UserAdminService setup = new UserAdminService(emptyAuth, empty, new AuthorizationService(), policy, null);
+            expectRejected(() -> setup.createFirstAdmin("Nora", "Lim", "weak"), "weak password");
+            expectRejected(() -> setup.createFirstAdmin("", "Lim", TEMP_PASSWORD), "blank name");
+            User first = setup.createFirstAdmin(" Nora ", "Lim", TEMP_PASSWORD);
+            AuthDemo.check(first.getUserId().equals("NSC-00001"), "expected NSC-00001, got " + first.getUserId());
+            AuthDemo.check(first.getLoginName().equals("NLim"), "expected NLim, got " + first.getLoginName());
+            AuthDemo.check(emptyAuth.login("NLim", TEMP_PASSWORD).user().hasRole(UserRole.ADMIN), "admin login should work");
+            expectRejected(() -> setup.createFirstAdmin("Ben", "Cruz", TEMP_PASSWORD), "only once");
+        });
+
         AuthDemo.scenario("Create rejects bad input", () -> {
             expectRejected(() -> admin.createUser(adminSid, "", "Reyes", EnumSet.of(UserRole.CASHIER), TEMP_PASSWORD), "blank name");
             expectRejected(() -> admin.createUser(adminSid, "Ben", "Cruz", EnumSet.noneOf(UserRole.class), TEMP_PASSWORD), "no role");

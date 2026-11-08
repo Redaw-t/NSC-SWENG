@@ -1,3 +1,18 @@
+-- =====================================================================
+--  Nickel Sales Center - database SCHEMA (tables only, no data).
+--
+--  Safe to run any number of times: it only creates what is missing and
+--  upgrades databases made by an older version (see the end). The installer
+--  runs it on every install and update; developers get it from setup.bat.
+--
+--  Demo users and the test catalog are in NickelSales-Demo-Data.sql, for
+--  development databases only. A store's first admin account is created by
+--  the installer.
+--
+--  Every table is InnoDB: checkout saves a sale, its payment and the stock
+--  change in one transaction, and only InnoDB can roll that back.
+-- =====================================================================
+
 CREATE DATABASE IF NOT EXISTS `NickelSales_Database`;
 
 USE `NickelSales_Database`;
@@ -14,15 +29,7 @@ CREATE TABLE IF NOT EXISTS `Users` (
     LastSignIn TIMESTAMP NULL DEFAULT NULL, -- set on every successful login
     CreatedAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UpdatedAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-);
-
--- INSERT IGNORE: skips users that already exist, so this script can be re-run safely.
-INSERT IGNORE INTO `Users` (UserID, UserLoginName, UserPassword, UserName, UserLastname, UserRole, UserStatus) VALUES
-	("NSC-00001", "JCubillan", "$2a$10$TjKMuyc2JIk0Kx/PfVAjkeGLmg3O2twxiX.3iCLg1OqhS762FzYSW", "Jerick", "Cubillan", "A;C;I", "Active"),
-    ("NSC-00002", "JDelaCruz", "$2a$10$TjKMuyc2JIk0Kx/PfVAjkeGLmg3O2twxiX.3iCLg1OqhS762FzYSW", "Juan", "Dela Cruz", "C", "Active"),
-    ("NSC-00003", "MSantaAna", "$2a$10$TjKMuyc2JIk0Kx/PfVAjkeGLmg3O2twxiX.3iCLg1OqhS762FzYSW", "Maria", "Santa Ana", "I", "Active"),
-    ("NSC-00004", "RSantos", "$2a$10$TjKMuyc2JIk0Kx/PfVAjkeGLmg3O2twxiX.3iCLg1OqhS762FzYSW", "Rhian", "Santos", "C", "Inactive"),
-    ("NSC-00005", "KRodriguez", "$2a$10$TjKMuyc2JIk0Kx/PfVAjkeGLmg3O2twxiX.3iCLg1OqhS762FzYSW", "Kimberly", "Rodriguez", "C", "Locked");
+) ENGINE=InnoDB;
 
 -- ===================== PRODUCT CATALOG =====================
 -- Owned by Product. Money is DECIMAL(12,2), quantities DECIMAL(12,3).
@@ -36,7 +43,7 @@ CREATE TABLE IF NOT EXISTS `Category` (
     CreatedAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UpdatedAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY uq_category_name (CategoryName)   -- upper/lower case is ignored
-);
+) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS `Supplier` (
     SupplierID INT AUTO_INCREMENT PRIMARY KEY,
@@ -49,7 +56,7 @@ CREATE TABLE IF NOT EXISTS `Supplier` (
     CreatedAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UpdatedAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY uq_supplier_name (SupplierName)   -- upper/lower case is ignored
-);
+) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS `Product` (
     ProductID VARCHAR(20) PRIMARY KEY,           -- e.g. P-0001 (SaleLine.ProductID is a copy of it)
@@ -71,42 +78,7 @@ CREATE TABLE IF NOT EXISTS `Product` (
     CONSTRAINT fk_product_supplier FOREIGN KEY (SupplierID) REFERENCES `Supplier`(SupplierID),
     CONSTRAINT chk_product_prices CHECK (RetailPrice >= 0 AND (WholesalePrice IS NULL OR WholesalePrice >= 0)),
     CONSTRAINT chk_product_stock CHECK (StockOnHand >= 0)
-);
-
--- TEST CATALOG so POS has something to sell. The self-tests in test/ rely on exactly these nine
--- (test/stubs/TestCatalog resets them before each scenario), so run them on a development database.
--- INSERT IGNORE: skips what already exists, so this script can be re-run safely and never
--- overwrites a price or stock figure changed later. Delete or deactivate these in a real store.
-INSERT IGNORE INTO `Category` (CategoryName) VALUES
-    ('School/Office Supplies'), ('Modiste Items'), ('Groceries'); -- Remove Groceries before Production. Finalize the initial lists of categories with partner before production.
-
-INSERT IGNORE INTO `Supplier` (SupplierName, ContactPerson, Phone) VALUES
-    ('Sample Supplier', 'Test Contact', '0000-000-0001');
-
-INSERT IGNORE INTO `Product`
-    (ProductID, Barcode, ProductName, Unit, RetailPrice, WholesalePrice, Vatable, IsActive, CategoryID, SupplierID, StockOnHand)
-VALUES
-    ('P-0001', '4800000000019', 'Bond Paper A4 (ream)', 'ream', 250.00, 235.00, TRUE, TRUE,
-        (SELECT CategoryID FROM `Category` WHERE CategoryName = 'School/Office Supplies'),
-        (SELECT SupplierID FROM `Supplier` WHERE SupplierName = 'Sample Supplier'), 40),
-    ('P-0002', '4800000000026', 'Ballpen Black', 'pc', 12.00, 10.00, TRUE, TRUE,
-        (SELECT CategoryID FROM `Category` WHERE CategoryName = 'School/Office Supplies'),
-        (SELECT SupplierID FROM `Supplier` WHERE SupplierName = 'Sample Supplier'), 200),
-    ('P-0003', '4800000000033', 'Notebook 80 leaves', 'pc', 45.00, NULL, TRUE, TRUE,              -- no wholesale price
-        (SELECT CategoryID FROM `Category` WHERE CategoryName = 'School/Office Supplies'),
-        (SELECT SupplierID FROM `Supplier` WHERE SupplierName = 'Sample Supplier'), 60),
-    ('P-0004', '4800000000040', 'Rice (per kg)', 'kg', 52.50, 50.00, FALSE, TRUE,                 -- VAT-exempt, sold by weight
-        (SELECT CategoryID FROM `Category` WHERE CategoryName = 'Groceries'),
-        (SELECT SupplierID FROM `Supplier` WHERE SupplierName = 'Sample Supplier'), 100.500),
-    ('P-0005', '4800000000057', 'Masking Tape 1 inch', 'roll', 35.75, 32.00, TRUE, TRUE,          -- out of stock
-        (SELECT CategoryID FROM `Category` WHERE CategoryName = 'School/Office Supplies'),
-        (SELECT SupplierID FROM `Supplier` WHERE SupplierName = 'Sample Supplier'), 0),
-    ('P-0006', '4800000000064', 'Desk Calculator', 'pc', 499.00, NULL, TRUE, FALSE,               -- inactive (no longer sold)
-        (SELECT CategoryID FROM `Category` WHERE CategoryName = 'School/Office Supplies'),
-        (SELECT SupplierID FROM `Supplier` WHERE SupplierName = 'Sample Supplier'), 5),
-    ('P-0007', NULL, 'Glue Stick', 'pc', 18.00, 16.50, TRUE, TRUE,                                -- no barcode: found by search only
-        (SELECT CategoryID FROM `Category` WHERE CategoryName = 'School/Office Supplies'),
-        (SELECT SupplierID FROM `Supplier` WHERE SupplierName = 'Sample Supplier'), 30);
+) ENGINE=InnoDB;
 
 -- ================== TRANSACTION RECORDS ==================
 -- Owned by POS. Money is DECIMAL(12,2), quantities DECIMAL(12,3), times are UTC.
@@ -126,7 +98,7 @@ CREATE TABLE IF NOT EXISTS `Sale` (
     FOREIGN KEY (CashierUserID) REFERENCES `Users`(UserID),
     INDEX idx_sale_unsynced (SyncedAt, CompletedAt),
     INDEX idx_sale_completed (CompletedAt)       -- reports / history by date range
-);
+) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS `SaleLine` (
     SaleID CHAR(36) NOT NULL,
@@ -144,7 +116,7 @@ CREATE TABLE IF NOT EXISTS `SaleLine` (
     PRIMARY KEY (SaleID, LineNo),
     FOREIGN KEY (SaleID) REFERENCES `Sale`(SaleID),
     INDEX idx_saleline_product (ProductID)       -- product reports
-);
+) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS `Payment` (
     SaleID CHAR(36) NOT NULL,
@@ -156,7 +128,7 @@ CREATE TABLE IF NOT EXISTS `Payment` (
     ChangeGiven DECIMAL(12,2) NOT NULL,
     PRIMARY KEY (SaleID, PaymentNo),
     FOREIGN KEY (SaleID) REFERENCES `Sale`(SaleID)
-);
+) ENGINE=InnoDB;
 
 -- Voids / returns of a completed sale (POS: Void Item and Void Transaction on a retrieved sale).
 -- The Sale rows are never changed: each void is a Return with its ReturnLines, and the sale's
@@ -183,7 +155,7 @@ CREATE TABLE IF NOT EXISTS `Return` (
     FOREIGN KEY (CashierUserID) REFERENCES `Users`(UserID),
     INDEX idx_return_sale (SaleID),
     INDEX idx_return_returned (ReturnedAt)
-);
+) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS `ReturnLine` (
     ReturnID CHAR(36) NOT NULL,
@@ -205,7 +177,7 @@ CREATE TABLE IF NOT EXISTS `ReturnLine` (
     FOREIGN KEY (SaleID, SaleLineNo) REFERENCES `SaleLine`(SaleID, LineNo),
     INDEX idx_returnline_sale (SaleID, SaleLineNo),
     INDEX idx_returnline_product (ProductID)
-);
+) ENGINE=InnoDB;
 
 -- Next invoice number per terminal per year (year in Philippine time).
 CREATE TABLE IF NOT EXISTS `InvoiceSequence` (
@@ -213,7 +185,7 @@ CREATE TABLE IF NOT EXISTS `InvoiceSequence` (
     InvoiceYear SMALLINT NOT NULL,
     NextNumber INT NOT NULL,
     PRIMARY KEY (TerminalID, InvoiceYear)
-);
+) ENGINE=InnoDB;
 
 
 -- Quantities are DECIMAL(12,3), times are UTC DATETIME(3).
@@ -227,7 +199,7 @@ CREATE TABLE IF NOT EXISTS `Inventory` (
     UpdatedAt DATETIME(3) NOT NULL,
     CONSTRAINT chk_inventory_quantity CHECK (QuantityOnHand >= 0),   -- stock can never go negative
     CONSTRAINT chk_inventory_reorder CHECK (ReorderLevel >= 0)
-);
+) ENGINE=InnoDB;
 
 -- Every change to stock, newest last. Only ever added to, never edited or deleted.
 CREATE TABLE IF NOT EXISTS `StockMovement` (
@@ -244,7 +216,7 @@ CREATE TABLE IF NOT EXISTS `StockMovement` (
     CreatedAt DATETIME(3) NOT NULL,
     INDEX idx_movement_product (ProductID, CreatedAt),
     INDEX idx_movement_created (CreatedAt)       -- history list, newest first
-);
+) ENGINE=InnoDB;
 
 -- ================== AUDIT AND SYSTEM ==================
 -- Owned by System. Times are UTC DATETIME(3).
@@ -264,7 +236,7 @@ CREATE TABLE IF NOT EXISTS `ActivityLog` (
     INDEX idx_activity_created (CreatedAt),
     INDEX idx_activity_user (UserID, CreatedAt),
     INDEX idx_activity_module (Module, CreatedAt)
-);
+) ENGINE=InnoDB;
 
 -- One row per attempt to send a record to another terminal. Written by Sync (through
 -- system.contract.SyncLogWriter); only its status, retry count and error change afterwards.
@@ -281,7 +253,7 @@ CREATE TABLE IF NOT EXISTS `SyncLog` (
     ErrorMessage VARCHAR(255) NULL,
     INDEX idx_sync_status (Status, CreatedAt),
     INDEX idx_sync_created (CreatedAt)
-);
+) ENGINE=InnoDB;
 
 -- Every backup and restore made from the System screen, successful or not.
 CREATE TABLE IF NOT EXISTS `BackupRecord` (
@@ -296,17 +268,7 @@ CREATE TABLE IF NOT EXISTS `BackupRecord` (
     Message VARCHAR(255) NULL,
     UserID VARCHAR(10) NULL,
     INDEX idx_backup_created (CreatedAt)
-);
-
--- Starting stock for the test catalog (Inventory is the source of truth for stock).
-INSERT IGNORE INTO `Inventory` (ProductID, QuantityOnHand, ReorderLevel, UpdatedAt) VALUES
-    ('P-0001', 40, 0, UTC_TIMESTAMP(3)),
-    ('P-0002', 200, 0, UTC_TIMESTAMP(3)),
-    ('P-0003', 60, 0, UTC_TIMESTAMP(3)),
-    ('P-0004', 100.500, 0, UTC_TIMESTAMP(3)),
-    ('P-0005', 0, 0, UTC_TIMESTAMP(3)),
-    ('P-0006', 5, 0, UTC_TIMESTAMP(3)),
-    ('P-0007', 30, 0, UTC_TIMESTAMP(3));
+) ENGINE=InnoDB;
 
 -- ============ UPGRADES FOR DATABASES MADE BY AN OLDER SCRIPT ============
 -- CREATE TABLE IF NOT EXISTS never changes a table that is already there, so
@@ -347,4 +309,67 @@ PREPARE upgrade FROM @ddl; EXECUTE upgrade; DEALLOCATE PREPARE upgrade;
 SET @missing = (SELECT COUNT(*) = 0 FROM information_schema.COLUMNS
     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'Users' AND COLUMN_NAME = 'LastSignIn');
 SET @ddl = IF(@missing, 'ALTER TABLE `Users` ADD COLUMN LastSignIn TIMESTAMP NULL DEFAULT NULL AFTER UserStatus', 'DO 0');
+PREPARE upgrade FROM @ddl; EXECUTE upgrade; DEALLOCATE PREPARE upgrade;
+
+-- Every table InnoDB (older databases may have been made with another default engine,
+-- e.g. MyISAM, which ignores transactions: a failed checkout could then be half saved).
+SET @other = (SELECT COUNT(*) > 0 FROM information_schema.TABLES
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'Users' AND ENGINE <> 'InnoDB');
+SET @ddl = IF(@other, 'ALTER TABLE `Users` ENGINE=InnoDB', 'DO 0');
+PREPARE upgrade FROM @ddl; EXECUTE upgrade; DEALLOCATE PREPARE upgrade;
+SET @other = (SELECT COUNT(*) > 0 FROM information_schema.TABLES
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'Category' AND ENGINE <> 'InnoDB');
+SET @ddl = IF(@other, 'ALTER TABLE `Category` ENGINE=InnoDB', 'DO 0');
+PREPARE upgrade FROM @ddl; EXECUTE upgrade; DEALLOCATE PREPARE upgrade;
+SET @other = (SELECT COUNT(*) > 0 FROM information_schema.TABLES
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'Supplier' AND ENGINE <> 'InnoDB');
+SET @ddl = IF(@other, 'ALTER TABLE `Supplier` ENGINE=InnoDB', 'DO 0');
+PREPARE upgrade FROM @ddl; EXECUTE upgrade; DEALLOCATE PREPARE upgrade;
+SET @other = (SELECT COUNT(*) > 0 FROM information_schema.TABLES
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'Product' AND ENGINE <> 'InnoDB');
+SET @ddl = IF(@other, 'ALTER TABLE `Product` ENGINE=InnoDB', 'DO 0');
+PREPARE upgrade FROM @ddl; EXECUTE upgrade; DEALLOCATE PREPARE upgrade;
+SET @other = (SELECT COUNT(*) > 0 FROM information_schema.TABLES
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'Sale' AND ENGINE <> 'InnoDB');
+SET @ddl = IF(@other, 'ALTER TABLE `Sale` ENGINE=InnoDB', 'DO 0');
+PREPARE upgrade FROM @ddl; EXECUTE upgrade; DEALLOCATE PREPARE upgrade;
+SET @other = (SELECT COUNT(*) > 0 FROM information_schema.TABLES
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'SaleLine' AND ENGINE <> 'InnoDB');
+SET @ddl = IF(@other, 'ALTER TABLE `SaleLine` ENGINE=InnoDB', 'DO 0');
+PREPARE upgrade FROM @ddl; EXECUTE upgrade; DEALLOCATE PREPARE upgrade;
+SET @other = (SELECT COUNT(*) > 0 FROM information_schema.TABLES
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'Payment' AND ENGINE <> 'InnoDB');
+SET @ddl = IF(@other, 'ALTER TABLE `Payment` ENGINE=InnoDB', 'DO 0');
+PREPARE upgrade FROM @ddl; EXECUTE upgrade; DEALLOCATE PREPARE upgrade;
+SET @other = (SELECT COUNT(*) > 0 FROM information_schema.TABLES
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'Return' AND ENGINE <> 'InnoDB');
+SET @ddl = IF(@other, 'ALTER TABLE `Return` ENGINE=InnoDB', 'DO 0');
+PREPARE upgrade FROM @ddl; EXECUTE upgrade; DEALLOCATE PREPARE upgrade;
+SET @other = (SELECT COUNT(*) > 0 FROM information_schema.TABLES
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ReturnLine' AND ENGINE <> 'InnoDB');
+SET @ddl = IF(@other, 'ALTER TABLE `ReturnLine` ENGINE=InnoDB', 'DO 0');
+PREPARE upgrade FROM @ddl; EXECUTE upgrade; DEALLOCATE PREPARE upgrade;
+SET @other = (SELECT COUNT(*) > 0 FROM information_schema.TABLES
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'InvoiceSequence' AND ENGINE <> 'InnoDB');
+SET @ddl = IF(@other, 'ALTER TABLE `InvoiceSequence` ENGINE=InnoDB', 'DO 0');
+PREPARE upgrade FROM @ddl; EXECUTE upgrade; DEALLOCATE PREPARE upgrade;
+SET @other = (SELECT COUNT(*) > 0 FROM information_schema.TABLES
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'Inventory' AND ENGINE <> 'InnoDB');
+SET @ddl = IF(@other, 'ALTER TABLE `Inventory` ENGINE=InnoDB', 'DO 0');
+PREPARE upgrade FROM @ddl; EXECUTE upgrade; DEALLOCATE PREPARE upgrade;
+SET @other = (SELECT COUNT(*) > 0 FROM information_schema.TABLES
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'StockMovement' AND ENGINE <> 'InnoDB');
+SET @ddl = IF(@other, 'ALTER TABLE `StockMovement` ENGINE=InnoDB', 'DO 0');
+PREPARE upgrade FROM @ddl; EXECUTE upgrade; DEALLOCATE PREPARE upgrade;
+SET @other = (SELECT COUNT(*) > 0 FROM information_schema.TABLES
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ActivityLog' AND ENGINE <> 'InnoDB');
+SET @ddl = IF(@other, 'ALTER TABLE `ActivityLog` ENGINE=InnoDB', 'DO 0');
+PREPARE upgrade FROM @ddl; EXECUTE upgrade; DEALLOCATE PREPARE upgrade;
+SET @other = (SELECT COUNT(*) > 0 FROM information_schema.TABLES
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'SyncLog' AND ENGINE <> 'InnoDB');
+SET @ddl = IF(@other, 'ALTER TABLE `SyncLog` ENGINE=InnoDB', 'DO 0');
+PREPARE upgrade FROM @ddl; EXECUTE upgrade; DEALLOCATE PREPARE upgrade;
+SET @other = (SELECT COUNT(*) > 0 FROM information_schema.TABLES
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'BackupRecord' AND ENGINE <> 'InnoDB');
+SET @ddl = IF(@other, 'ALTER TABLE `BackupRecord` ENGINE=InnoDB', 'DO 0');
 PREPARE upgrade FROM @ddl; EXECUTE upgrade; DEALLOCATE PREPARE upgrade;
