@@ -49,7 +49,7 @@ public class ReturnCheck {
     static final StoreInfo STORE = new StoreInfo("Nickel Sales Center", "123 Rizal Ave., Manila",
             "000-123-456-000", "(02) 8123 4567");
     static final String TERMINAL = "T97";
-    static final String CASHIER = "NSC-00002";
+    static final String CASHIER = stubs.TestCatalog.TEST_CASHIER;   // the checks' own cashier (no seed users)
     static final pos.checkout.PaymentService PAY = new pos.checkout.PaymentService();
 
     public static void main(String[] args) {

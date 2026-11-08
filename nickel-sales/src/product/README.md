@@ -34,16 +34,12 @@ products by ID, name or barcode.
 
 ## Stock belongs to Inventory
 
-`Product.StockOnHand` is **read** here (it is part of `ProductInfo`) but **never written** by
-this module: new products start at 0, editing a product does not touch it, and there is no
-service method to change it. The Inventory module writes it, for example:
-
-    UPDATE Product SET StockOnHand = StockOnHand - ? WHERE ProductID = ?     -- sale stock-out
-    UPDATE Product SET StockOnHand = StockOnHand + ? WHERE ProductID = ?     -- stock in
-
-(see `test/stubs/StubStockRecorder` for a working `StockRecorder` that does the first one
-inside POS's transaction). If Inventory wants its own stock tables instead, only
-`MySqlProductRepository`'s SELECT needs to change; nothing outside this module notices.
+The `Product` table has **no stock column**. Stock lives only in Inventory's table
+(`Inventory.QuantityOnHand`, with every change in `StockMovement`). `ProductInfo.stockOnHand` is
+**read** from there (`MySqlProductRepository`'s SELECT joins `Inventory`; a product never stocked
+shows 0) but **never written** by this module: new products start at 0, editing a product does
+not touch stock, and there is no service method to change it. Only the Inventory module changes
+stock (Stock In / Out / Adjust, and POS sales and returns through `StockRecorder`).
 
 ## How it is wired
 

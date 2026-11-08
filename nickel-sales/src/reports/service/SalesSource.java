@@ -1,5 +1,8 @@
 package reports.service;
 
+import pos.contract.NetSale;
+import pos.contract.ReturnHistory;
+import pos.contract.ReturnRecord;
 import pos.contract.SaleHistory;
 import pos.contract.SaleRecord;
 import reports.model.ReportPeriod;
@@ -23,5 +26,24 @@ final class SalesSource {
         } catch (RuntimeException e) {
             throw new ReportException(NOT_LOADED, e);
         }
+    }
+
+    /**
+     * The period's sales, oldest first, each with its refunds taken off ({@link NetSale}): a refund
+     * lowers the sales of the day the SALE was made, whenever the refund was. {@code returns} null =
+     * no refunds are known (the sales as sold).
+     */
+    static List<NetSale> netIn(SaleHistory history, ReturnHistory returns, ReportPeriod period) throws ReportException {
+        List<SaleRecord> sales = completedIn(history, period);
+        if (returns == null || sales.isEmpty()) {
+            return NetSale.of(sales, List.of());
+        }
+        List<ReturnRecord> refunds;
+        try {
+            refunds = returns.findForSalesCompletedIn(period.start(), period.end());
+        } catch (RuntimeException e) {
+            throw new ReportException(NOT_LOADED, e);
+        }
+        return NetSale.of(sales, refunds);
     }
 }

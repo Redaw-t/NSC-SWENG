@@ -4,7 +4,7 @@ rem  Nickel Sales Center Application - run and scripted checks (Windows)
 rem
 rem    run-demo.bat              the app (DevApp): login, home screen, modules.
 rem                              Users and sales from the local MySQL database,
-rem                              TEST products until Product & Inventory is connected
+rem                              (first run: Installation Setup creates the admin account)
 rem    run-demo.bat --console    console demo with built-in stub users:
 rem                              scenarios, then an interactive login prompt
 rem    run-demo.bat --scripted   run ALL self-tests (before you push); exit code 1 if any fail
@@ -78,7 +78,7 @@ rem --- --scripted: every self-test, with the same JDK that compiled them --
 set "FAILED="
 set "LISTED=0"
 set "RAN=0"
-for %%C in ("auth.AuthDemo --scripted" auth.AuthzDemo auth.UserAdminDemo pos.PosContractCheck pos.CartCheck pos.CheckoutCheck pos.ReceiptCheck pos.ReturnCheck inventory.InventoryCheck app.AppCheck product.ProductCheck barcode.BarcodeCheck reports.ReportsCheck system.SystemLogCheck system.SystemAdminCheck) do (
+for %%C in ("auth.AuthDemo --scripted" auth.AuthzDemo auth.UserAdminDemo auth.FirstAdminCheck pos.PosContractCheck pos.CartCheck pos.CheckoutCheck pos.ReceiptCheck pos.ReturnCheck inventory.InventoryCheck app.AppCheck product.ProductCheck barcode.BarcodeCheck reports.ReportsCheck system.SystemLogCheck system.SystemAdminCheck sync.ApiCheck) do (
     set /a LISTED+=1
     call :check %%~C
 )

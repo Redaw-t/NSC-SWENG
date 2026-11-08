@@ -32,6 +32,7 @@ INSERT IGNORE INTO `PosTerminals` (TerminalID, IPAddress) VALUES ('T01', NULL);
 -- This installation's own settings, as name / value pairs:
 --   ThisTerminalID  which terminal THIS computer is (T01, T02 ...); used in invoice numbers
 --   ApiKey          the developer's API key, sent to the Main POS on every API call
+--   AutoPrintReceipt  POS Settings: 'true' = print receipts straight away (no preview); missing = off
 CREATE TABLE IF NOT EXISTS `AppSettings` (
     SettingKey VARCHAR(50) PRIMARY KEY,
     SettingValue VARCHAR(200) NULL,

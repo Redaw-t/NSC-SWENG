@@ -20,15 +20,15 @@ import java.util.Optional;
  * ProductRepository backed by the Product table (with the category and supplier
  * names joined in).
  *
- * Stock is read from the Inventory table, which is the source of truth for
- * stock quantities. Product.StockOnHand is no longer used for displaying stock.
+ * Stock is read from the Inventory table (Inventory.QuantityOnHand), the only place stock is kept:
+ * the Product table has no stock column. A product never stocked shows 0.
  */
 public class MySqlProductRepository implements ProductRepository {
 
     private static final String SELECT =
             "SELECT p.ProductID, p.Barcode, p.ProductName, p.Unit, p.RetailPrice, p.WholesalePrice, "
                     + "p.Vatable, p.IsActive, p.CategoryID, c.CategoryName, p.SupplierID, s.SupplierName, "
-                    + "COALESCE(i.QuantityOnHand, 0) AS StockOnHand "
+                    + "COALESCE(i.QuantityOnHand, 0) AS QuantityOnHand "
                     + "FROM Product p "
                     + "LEFT JOIN Category c ON c.CategoryID = p.CategoryID "
                     + "LEFT JOIN Supplier s ON s.SupplierID = p.SupplierID "
@@ -117,8 +117,8 @@ public class MySqlProductRepository implements ProductRepository {
     @Override
     public void insert(Product p) {
         String sql = "INSERT INTO Product (ProductID, Barcode, ProductName, Unit, RetailPrice, WholesalePrice, "
-                + "Vatable, IsActive, CategoryID, SupplierID, StockOnHand) "
-                + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                + "Vatable, IsActive, CategoryID, SupplierID) "
+                + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";   // no stock: a new product has none until Inventory adds it
 
         try (Connection c = Database.getConnection();
              PreparedStatement ps = c.prepareStatement(sql)) {
@@ -133,7 +133,6 @@ public class MySqlProductRepository implements ProductRepository {
             ps.setBoolean(8, p.active());
             setNullableInt(ps, 9, p.categoryId());
             setNullableInt(ps, 10, p.supplierId());
-            ps.setBigDecimal(11, p.stockOnHand());
 
             ps.executeUpdate();
 
@@ -243,7 +242,7 @@ public class MySqlProductRepository implements ProductRepository {
                 rs.getString("CategoryName"),
                 nullableInt(rs, "SupplierID"),
                 rs.getString("SupplierName"),
-                rs.getBigDecimal("StockOnHand"));
+                rs.getBigDecimal("QuantityOnHand"));
     }
 
     private static Integer nullableInt(ResultSet rs, String column) throws SQLException {

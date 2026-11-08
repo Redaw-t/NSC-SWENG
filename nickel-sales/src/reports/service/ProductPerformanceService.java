@@ -35,10 +35,17 @@ public final class ProductPerformanceService {
     private static final BigDecimal HUNDRED = new BigDecimal("100");
 
     private final SaleHistory history;
+    private final pos.contract.ReturnHistory returns;   // null = refunds not taken off
     private final ReportsAccess access;
 
     public ProductPerformanceService(SaleHistory history, ReportsAccess access) {
+        this(history, null, access);
+    }
+
+    /** Refunded quantities and amounts are taken off each product, on the day of the sale. */
+    public ProductPerformanceService(SaleHistory history, pos.contract.ReturnHistory returns, ReportsAccess access) {
         this.history = Objects.requireNonNull(history, "history");
+        this.returns = returns;
         this.access = Objects.requireNonNull(access, "access");
     }
 
@@ -56,20 +63,24 @@ public final class ProductPerformanceService {
         // are the ones on the product's most recent sale.
         Map<String, Totals> byProduct = new LinkedHashMap<>();
         BigDecimal allSales = Money.ZERO;
-        for (SaleRecord sale : SalesSource.completedIn(history, period)) {
-            for (SaleLineRecord line : sale.lines()) {
+        for (pos.contract.NetSale sale : SalesSource.netIn(history, returns, period)) {
+            for (pos.contract.NetSale.Line net : sale.lines()) {   // refunds taken off
+                SaleLineRecord line = net.sold();
                 Totals t = byProduct.computeIfAbsent(line.productId(), id -> new Totals());
                 t.name = line.productName();
                 t.unit = line.unit();
-                t.quantity = t.quantity.add(line.quantity());
-                t.amount = t.amount.add(line.lineTotal());
-                allSales = allSales.add(line.lineTotal());
+                t.quantity = t.quantity.add(net.quantity());
+                t.amount = t.amount.add(net.amount());
+                allSales = allSales.add(net.amount());
             }
         }
 
         List<ProductSales> rows = new ArrayList<>();
         for (Map.Entry<String, Totals> e : byProduct.entrySet()) {
             Totals t = e.getValue();
+            if (t.quantity.signum() == 0 && t.amount.signum() == 0) {
+                continue;   // everything sold of it was refunded: not a top product
+            }
             rows.add(new ProductSales(e.getKey(), t.name, t.unit, Quantity.normalize(t.quantity),
                     t.amount, share(t.amount, allSales)));
         }

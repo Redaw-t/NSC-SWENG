@@ -130,10 +130,10 @@ public final class Main {
         ReportsAccess reportsAccess = ReportsAccess.of(app.auth(), app.authz());
         app.register(TransactionHistoryService.class,
                 new TransactionHistoryService(app.saleHistory(), app.returnHistory(), reportsAccess));   // sales + returns
-        app.register(SalesReportService.class, new SalesReportService(app.saleHistory(), reportsAccess));
+        app.register(SalesReportService.class, new SalesReportService(app.saleHistory(), app.returnHistory(), reportsAccess));
         app.register(ProductPerformanceService.class,
-                new ProductPerformanceService(app.saleHistory(), reportsAccess));
-        app.register(CashierReportService.class, new CashierReportService(app.saleHistory(), reportsAccess));
+                new ProductPerformanceService(app.saleHistory(), app.returnHistory(), reportsAccess));
+        app.register(CashierReportService.class, new CashierReportService(app.saleHistory(), app.returnHistory(), reportsAccess));
         // Inventory report: Reports gets Inventory's read-only StockOverview contract, never InventoryService.
         StockOverview stockOverview = inventory;
         app.register(StockOverview.class, stockOverview);

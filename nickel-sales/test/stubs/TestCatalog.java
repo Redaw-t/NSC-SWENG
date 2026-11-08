@@ -17,10 +17,10 @@ import java.sql.SQLException;
  * TEST SUPPORT: the real product catalog (ProductService on MySQL) plus what the
  * self-tests need to use it as a fixture. Stock lives in the Inventory table.
  *
- * The checks that use it assume the nine seed products of
- * database/NickelSales-Database-Config.sql (P-0001 to P-0009). {@link #reset()}
- * puts exactly those nine back to their seed values (including stock) before every
- * scenario. Run the checks on a development database, not a live one.
+ * The SQL script seeds nothing, so the checks bring their own fixture: nine test products
+ * (P-0001 to P-0009) and a test cashier ({@link #TEST_CASHIER}). {@link #reset()} creates them, or
+ * puts them back to these values (including stock), before every scenario. Run the checks on a
+ * development database, never a live one: they add these rows.
  */
 public final class TestCatalog {
 
@@ -34,6 +34,13 @@ public final class TestCatalog {
             {"P-0007", null, "Glue Stick", "pc", "18.00", "16.50", true, true, "30"},
             {"P-0008", "6970340973798", "Osmanthus Oolong Tea", "box", "285.00", "255.00", true, true, "10"},
             {"P-0009", "4800067130063", "Cleene Ethyl Alcohol", "pc", "98.00", "76.00", true, true, "10"}};
+
+    /**
+     * The cashier the checks save sales and returns under. The database has no seed users any more, and
+     * Sale / Return need an existing Users row, so {@link #reset} adds this one: Inactive, with an
+     * unusable password (nobody can sign in as it), and a TST- ID that never takes a real NSC- number.
+     */
+    public static final String TEST_CASHIER = "TST-00002";
 
     /** The only extra product a check may add (see {@link #addTestProduct}); reset() removes it. */
     public static final String THROWAWAY_ID = "P-0099";
@@ -78,7 +85,7 @@ public final class TestCatalog {
     /** Puts the nine seed products (and their stock) back to their seed values and removes the throw-away product. */
     public static void reset() {
         String upsert = "INSERT INTO Product (ProductID, Barcode, ProductName, Unit, RetailPrice, WholesalePrice, "
-                + "Vatable, IsActive, StockOnHand) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0) "
+                + "Vatable, IsActive) VALUES (?, ?, ?, ?, ?, ?, ?, ?) "
                 + "ON DUPLICATE KEY UPDATE Barcode = VALUES(Barcode), ProductName = VALUES(ProductName), "
                 + "Unit = VALUES(Unit), RetailPrice = VALUES(RetailPrice), WholesalePrice = VALUES(WholesalePrice), "
                 + "Vatable = VALUES(Vatable), IsActive = VALUES(IsActive)";
@@ -108,6 +115,12 @@ public final class TestCatalog {
                 for (Object[] p : SEED) {
                     putStock(tx, (String) p[0], new BigDecimal((String) p[8]));
                 }
+                try (PreparedStatement user = tx.prepareStatement(
+                        "INSERT IGNORE INTO Users (UserID, UserLoginName, UserPassword, UserName, UserLastname, "
+                                + "UserRole, UserStatus) VALUES (?, 'test-cashier', '!', 'Test', 'Cashier', 'C', 'Inactive')")) {
+                    user.setString(1, TEST_CASHIER);
+                    user.executeUpdate();
+                }
                 return null;
             });
         } catch (SQLException e) {
@@ -132,7 +145,7 @@ public final class TestCatalog {
     public static void addTestProduct(String barcode, String name, String unit, String retail,
                                       String wholesale, boolean vatable, boolean active, String stock) {
         String sql = "INSERT INTO Product (ProductID, Barcode, ProductName, Unit, RetailPrice, WholesalePrice, "
-                + "Vatable, IsActive, StockOnHand) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)";
+                + "Vatable, IsActive) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
         try (Connection c = Database.getConnection(); PreparedStatement ps = c.prepareStatement(sql)) {
             ps.setString(1, THROWAWAY_ID);
             ps.setString(2, barcode);

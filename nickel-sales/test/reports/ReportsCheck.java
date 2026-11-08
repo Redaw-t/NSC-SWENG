@@ -282,6 +282,9 @@ public class ReportsCheck {
                 public List<pos.contract.ReturnRecord> findReturned(java.time.Instant from, java.time.Instant to) {
                     return !ret.returnedAt().isBefore(from) && ret.returnedAt().isBefore(to) ? List.of(ret) : List.of();
                 }
+                public List<pos.contract.ReturnRecord> findForSalesCompletedIn(java.time.Instant from, java.time.Instant to) {
+                    return !S4.completedAt().isBefore(from) && S4.completedAt().isBefore(to) ? List.of(ret) : List.of();
+                }
             };
             TransactionHistoryService withReturns = new TransactionHistoryService(HISTORY, returns, ACCESS);
             ReportPeriod day = ReportPeriod.day(NOV_4);
@@ -302,6 +305,55 @@ public class ReportsCheck {
             expectText(numbers(withReturns.find(ADMIN, new ReportFilter(day, null, null, null, "T01-2026-000003"))),
                     "T01-2026-000003-01,T01-2026-000003");
             expectTrue(withReturns.openReturn(ADMIN, "T01-2026-000003-01").isPresent(), "open the return");
+        });
+
+        check("Refunds come off the sales of the day of the SALE (sold Nov 4, refunded Nov 5)", () -> {
+            // S1 (Nov 4, NSC-00002, T01) had 1 Rice at 50.00 (VAT-exempt); it is refunded on Nov 5, 10:00 PH
+            pos.contract.ReturnRecord rice = new pos.contract.ReturnRecord("R9", "T01-2026-000001-01", "S1",
+                    "T01-2026-000001", "T01", "NSC-00002", java.time.Instant.parse("2026-11-05T02:00:00Z"), false,
+                    PaymentMethod.CASH, null,
+                    List.of(new pos.contract.ReturnLineRecord(1, 2, "P-2", null, "Rice", "pc", new BigDecimal("1"),
+                            new BigDecimal("50.00"), PriceType.RETAIL, false, new BigDecimal("50.00"))),
+                    new BigDecimal("0.00"), new BigDecimal("50.00"), new BigDecimal("0.00"), new BigDecimal("50.00"));
+            pos.contract.ReturnHistory returns = new pos.contract.ReturnHistory() {
+                public List<pos.contract.ReturnRecord> findBySaleId(String id) {
+                    return id.equals("S1") ? List.of(rice) : List.of();
+                }
+                public Optional<pos.contract.ReturnRecord> findByReturnNo(String no) {
+                    return Optional.empty();
+                }
+                public List<pos.contract.ReturnRecord> findReturned(Instant from, Instant to) {
+                    return !rice.returnedAt().isBefore(from) && rice.returnedAt().isBefore(to) ? List.of(rice) : List.of();
+                }
+                public List<pos.contract.ReturnRecord> findForSalesCompletedIn(Instant from, Instant to) {
+                    return !S1.completedAt().isBefore(from) && S1.completedAt().isBefore(to) ? List.of(rice) : List.of();
+                }
+            };
+            ReportPeriod nov4 = ReportPeriod.day(NOV_4);
+            ReportPeriod nov5 = ReportPeriod.day(NOV_4.plusDays(1));
+            SalesReportService sales = new SalesReportService(HISTORY, returns, ACCESS);
+            SalesSummary before = SALES.salesFor(ADMIN, nov4);
+            SalesSummary after = sales.salesFor(ADMIN, nov4);
+            expectMoney(after.totalIncome(), before.totalIncome().subtract(new BigDecimal("50.00")).toPlainString());
+            expectMoney(after.vatExemptSales(), before.vatExemptSales().subtract(new BigDecimal("50.00")).toPlainString());
+            expectMoney(after.retailAmount(), before.retailAmount().subtract(new BigDecimal("50.00")).toPlainString());
+            expectTrue(after.transactions() == before.transactions(), "the sale still counts as a transaction");
+            expectMoney(after.breakdown().get(0).total(), after.totalIncome().toPlainString());   // on Nov 4's row
+            // Nov 5 (the day of the refund) is NOT lowered
+            expectMoney(sales.salesFor(ADMIN, nov5).totalIncome(), SALES.salesFor(ADMIN, nov5).totalIncome().toPlainString());
+            // Top products: all the Rice sold on Nov 4 was refunded, so Rice drops out
+            List<ProductSales> top = new ProductPerformanceService(HISTORY, returns, ACCESS)
+                    .top(ADMIN, nov4, ProductRanking.BY_AMOUNT, 10);
+            expectTrue(top.stream().noneMatch(p -> p.productId().equals("P-2")), "fully refunded product left out");
+            // By cashier: NSC-00002's Nov 4 total is lower by the refund
+            BigDecimal was = CASHIERS.byCashier(ADMIN, nov4).stream().filter(g -> g.key().equals("NSC-00002"))
+                    .findFirst().orElseThrow().total();
+            BigDecimal now = new CashierReportService(HISTORY, returns, ACCESS).byCashier(ADMIN, nov4).stream()
+                    .filter(g -> g.key().equals("NSC-00002")).findFirst().orElseThrow().total();
+            expectMoney(now, was.subtract(new BigDecimal("50.00")).toPlainString());
+            // Transactions' Net Sales tile: Nov 4's sales minus their refund, though it was given on Nov 5
+            TransactionList list = new TransactionHistoryService(HISTORY, returns, ACCESS).find(ADMIN, ReportFilter.of(nov4));
+            expectMoney(list.netSales(), before.totalIncome().subtract(new BigDecimal("50.00")).toPlainString());
         });
 
         check("History: open one sale with its lines and payments", () -> {

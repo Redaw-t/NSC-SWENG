@@ -66,7 +66,7 @@ public class ProductCheck {
     static final String PAPER = "4800000000019";   // seed: Bond Paper A4, 250.00 / 235.00, stock 40
     static final String RICE = "4800000000040";    // seed: VAT-exempt, by kg
     static final String BALLPEN = "4800000000026"; // seed: 12.00 / 10.00
-    static final String CASHIER = "NSC-00002";
+    static final String CASHIER = stubs.TestCatalog.TEST_CASHIER;   // the checks' own cashier (no seed users)
 
     static final List<String> auditLog = Collections.synchronizedList(new ArrayList<>());
     static final AuditLogger audit = (event, userId) -> auditLog.add(event + " by " + userId);
@@ -176,7 +176,7 @@ public class ProductCheck {
                 yes(listNames(categories.listCategories(ADMIN, true)).contains("ZZ Test Games"), "still in the full list");
                 categories.setActive(ADMIN, toys.categoryId(), true);
                 yes(listNames(categories.listCategories(ADMIN, false)).contains("ZZ Test Games"), "active again");
-                yes(listNames(categories.listCategories(ADMIN, false)).contains("School/Office Supplies"), "seed categories exist");
+                // (the SQL script seeds no categories any more, so nothing else is expected in the list)
             });
 
             check("Suppliers: create with details, update, duplicate refused, deactivate", db, () -> {

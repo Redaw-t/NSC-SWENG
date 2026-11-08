@@ -24,7 +24,6 @@ public class UserAdminService {
 
     private static final String ID_PREFIX = "NSC-";
     private static final int MAX_NAME_LENGTH = 30;       // Users.UserName / UserLastname are VARCHAR(30)
-    private static final int MAX_LOGIN_NAME_LENGTH = 30; // Users.UserLoginName is VARCHAR(30)
 
     private final AuthenticationService auth;
     private final UserRepository userRepository;
@@ -184,20 +183,9 @@ public class UserAdminService {
         return String.format("%s%05d", ID_PREFIX, max + 1);
     }
 
+    /** First initial + last name (e.g. KChong, KChong2 if taken): the rule in {@link LoginNames}. */
     private String generateLoginName(String firstName, String lastName) throws AccountException {
-        String surname = lastName.replaceAll("[^\\p{L}\\p{N}]", "");
-        if (surname.isEmpty()) {
-            throw new AccountException("Last name must contain letters or numbers.");
-        }
-        String base = Character.toUpperCase(firstName.trim().charAt(0)) + surname;
-        // Leave room for a collision number such as the 2 in KChong2.
-        base = base.substring(0, Math.min(base.length(), MAX_LOGIN_NAME_LENGTH - 3));
-
-        String candidate = base;
-        for (int n = 2; loginNameTaken(candidate); n++) {
-            candidate = base + n;
-        }
-        return candidate;
+        return LoginNames.generate(firstName, lastName, this::loginNameTaken);
     }
 
     private boolean loginNameTaken(String loginName) {

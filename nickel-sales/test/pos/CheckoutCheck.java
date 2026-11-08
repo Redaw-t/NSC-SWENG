@@ -57,7 +57,7 @@ public class CheckoutCheck {
     static final String PAPER = "4800000000019";     // 250.00 / 235.00, stock 40
     static final String BALLPEN = "4800000000026";   //  12.00 /  10.00, stock 200
     static final String RICE = "4800000000040";      //  52.50 /  50.00, VAT-exempt, by kg
-    static final String CASHIER = "NSC-00002";       // demo cashier from the SQL script
+    static final String CASHIER = stubs.TestCatalog.TEST_CASHIER;   // the checks' own cashier (no seed users)
 
     static int passed = 0;
     static int failed = 0;

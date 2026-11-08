@@ -16,6 +16,10 @@ import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.scene.text.TextAlignment;
+import auth.account.AccountException;
+import auth.account.FirstAdminService;
+import auth.account.PassPolicy;
+import javafx.scene.control.PasswordField;
 import shared.ApiKey;
 import shared.Theme;
 import shared.UiErrors;
@@ -37,7 +41,11 @@ import java.util.function.Consumer;
  *   <li><b>Main POS or Additional POS?</b> (a drop-down)</li>
  *   <li><b>API key</b> ({@link ApiKey}): Main POS "Register API Key", Additional POS "Enter the API Key".
  *       The key the developer provided; the terminals send it on every API call to trust each other.</li>
- *   <li><b>Main POS</b>: this computer is T01; its IP address is saved on T01. Or <b>Additional POS</b>:
+ *   <li><b>Main POS</b>: this computer is T01; its IP address is detected (shown dimmed, not typed), then
+ *       <b>create the admin account</b>:
+ *       the store admin's first and last name, then (on the next screen) the username made from them, as
+ *       Add user does (e.g. JCubillan), and a password. The store's first user, NSC-00001, with every role.
+ *       Only then are the admin and T01's address saved. Or <b>Additional POS</b>:
  *       type the Main POS's IP address; the Main POS (its API) answers with this computer's terminal ID
  *       (T02, T03 ...) and adds it to its own list; then T01's address and this computer's own row are
  *       saved here.</li>
@@ -105,6 +113,7 @@ public final class InstallationSetupScreen {
                     + "-fx-font-weight: bold; -fx-cursor: hand; -fx-padding: 4 10 4 10;";
 
     private final PosTerminalRepository terminals;
+    private final FirstAdminService firstAdmin;     // Main POS: creates the admin account (NSC-00001)
     private final Consumer<String> onDone;
     private final StackPane view = new StackPane();
     private final VBox step = new VBox();          // the part under the title that changes per step
@@ -113,13 +122,18 @@ public final class InstallationSetupScreen {
     private boolean mainPos;                        // the choice made in step 1
     private boolean roleChosen;                     // so Back shows the earlier choice again
     private String apiKey;                          // set once step 2 accepts it
+    private String mainIp;                          // Main POS: set once step 3 accepts it
+    private String adminFirst;                      // Main POS: the store admin's names (kept for Back)
+    private String adminLast;
 
     /**
      * @param onDone called with this computer's terminal ID (T01, T02 ...) once it is set up;
      *               normally: build the app for that terminal and show the login page
      */
-    public InstallationSetupScreen(PosTerminalRepository terminals, Consumer<String> onDone) {
+    public InstallationSetupScreen(PosTerminalRepository terminals, FirstAdminService firstAdmin,
+                                   Consumer<String> onDone) {
         this.terminals = Objects.requireNonNull(terminals, "terminals");
+        this.firstAdmin = Objects.requireNonNull(firstAdmin, "firstAdmin");
         this.onDone = Objects.requireNonNull(onDone, "onDone");
         buildFrame();
         showRoleStep();
@@ -270,42 +284,114 @@ public final class InstallationSetupScreen {
 
     private void showMainStep() {
         TextField terminal = readOnly(PosTerminalRepository.MAIN_ID);
-        TextField ip = field("IP Address, e.g. 192.168.1.20");
-        ip.setText(orEmpty(LocalAddress.detect()));
+        TextField ip = thisComputersIp("IP Address, e.g. 192.168.1.20");   // detected: dimmed, not typed
         Button next = primary("CONTINUE");
         Runnable submit = () -> {
             String address = checkedIp(ip, "this computer's");
             if (address == null) {
                 return;
             }
-            next.setDisable(true);
-            try {
-                terminals.completeMainSetup(address, computerName(), apiKey);
-            } catch (RuntimeException e) {
-                System.err.println("[SETUP] " + e + (e.getCause() == null ? "" : " / " + e.getCause()));
-                showError(UiErrors.message(e, "The setup could not be saved. Check that MySQL is running and that "
-                        + "setup.bat has created nickelsales_appconfig, then try again."));
-                next.setDisable(false);
-                return;
-            }
-            System.out.println("[SETUP] this computer is the Main POS (T01) at " + address);
-            showDoneStep(PosTerminalRepository.MAIN_ID, "This computer is the Main POS. Other terminals connect "
-                    + "to it at " + address + ".");
+            mainIp = address;
+            showAdminStep();   // nothing is saved until the admin account is created
         };
         next.setOnAction(e -> submit.run());
         ip.setOnAction(e -> submit.run());
-        showStep(ip, intro("Set up this computer as the Main POS"), gap(30),
+        showStep(ip.isEditable() ? ip : next, intro("Set up this computer as the Main POS"), gap(30),
                 caption("Terminal ID"), gap(6), terminal, gap(22),
                 caption("This computer's IP Address"), gap(6), ip, gap(12), errorLabel, gap(29), next,
                 gap(16), back(this::showApiKeyStep));
+    }
+
+    /* ------------------------- 3a-2. Main POS: admin ------------------------- */
+
+    /**
+     * Main POS, admin account part 1: the store admin's first and last name. The username is made from
+     * them (as in Manage users > Add user) and shown on the next screen; nothing is saved yet.
+     */
+    private void showAdminStep() {
+        TextField first = field("First Name");
+        TextField last = field("Last Name");
+        first.setText(orEmpty(adminFirst));
+        last.setText(orEmpty(adminLast));
+        Button next = primary("CONTINUE");
+        Runnable submit = () -> {
+            String username;
+            try {
+                username = firstAdmin.usernameFor(first.getText(), last.getText());
+            } catch (AccountException e) {
+                showError(e.getMessage());
+                return;
+            } catch (RuntimeException e) {
+                System.err.println("[SETUP] " + e + (e.getCause() == null ? "" : " / " + e.getCause()));
+                showError(UiErrors.message(e, "The users could not be checked. Check that MySQL is running and "
+                        + "that setup.bat has created the databases, then try again."));
+                return;
+            }
+            adminFirst = first.getText().trim();
+            adminLast = last.getText().trim();
+            showAdminPasswordStep(username);
+        };
+        next.setOnAction(e -> submit.run());
+        first.setOnAction(e -> submit.run());
+        last.setOnAction(e -> submit.run());
+        showStep(first, stepTitle("Create Admin Account"), gap(6),
+                note("The store admin: the store's first account, with every "
+                        + "role. Use it to sign in and add the other users."), gap(30),
+                caption("First Name"), gap(6), first, gap(22), caption("Last Name"), gap(6), last, gap(12),
+                errorLabel, gap(29), next, gap(16), back(this::showMainStep));
+    }
+
+    /**
+     * Main POS, admin account part 2: the username made from the names (shown, not typed) and the
+     * password. Saves the admin, then this computer as T01 at {@link #mainIp}.
+     */
+    private void showAdminPasswordStep(String username) {
+        TextField login = readOnly(username);
+        PasswordField password = passwordField("Password");
+        PasswordField confirm = passwordField("Confirm Password");
+        Button next = primary("CREATE ACCOUNT");
+        Button back = back(this::showAdminStep);
+        Runnable submit = () -> {
+            next.setDisable(true);
+            back.setDisable(true);
+            String saved;
+            try {
+                saved = firstAdmin.create(adminFirst, adminLast, password.getText(), confirm.getText()).getLoginName();
+                terminals.completeMainSetup(mainIp, computerName(), apiKey);
+            } catch (AccountException e) {
+                showError(e.getMessage());
+                password.requestFocus();
+                next.setDisable(false);
+                back.setDisable(false);
+                return;
+            } catch (RuntimeException e) {
+                System.err.println("[SETUP] " + e + (e.getCause() == null ? "" : " / " + e.getCause()));
+                showError(UiErrors.message(e, "The setup could not be saved. Check that MySQL is running and that "
+                        + "setup.bat has created the databases, then try again."));
+                next.setDisable(false);
+                back.setDisable(false);
+                return;
+            }
+            System.out.println("[SETUP] this computer is the Main POS (T01) at " + mainIp + "; admin " + saved
+                    + " (" + FirstAdminService.ADMIN_ID + ")");
+            showDoneStep(PosTerminalRepository.MAIN_ID, "This computer is the Main POS. Other terminals connect "
+                    + "to it at " + mainIp + ". Sign in as " + saved + " with the password you chose.");
+        };
+        next.setOnAction(e -> submit.run());
+        password.setOnAction(e -> submit.run());
+        confirm.setOnAction(e -> submit.run());
+        showStep(password, stepTitle("Create Admin Account"), gap(6),
+                note(adminFirst + " " + adminLast + " signs in with this username. Choose the password."), gap(30),
+                caption("Username"), gap(6), login, gap(22),
+                caption("Password"), gap(6), password, gap(12), confirm, gap(8),
+                note(PassPolicy.REQUIREMENTS), gap(8), errorLabel, gap(20), next, gap(16), back);
     }
 
     /* --------------------------- 3b. Additional POS -------------------------- */
 
     private void showAdditionalStep() {
         TextField mainIp = field("Main POS IP Address, e.g. 192.168.1.20");
-        TextField myIp = field("IP Address, e.g. 192.168.1.21");
-        myIp.setText(orEmpty(LocalAddress.detect()));
+        TextField myIp = thisComputersIp("IP Address, e.g. 192.168.1.21");   // detected: dimmed, not typed
         Button next = primary("CONTINUE");
         Button back = back(this::showApiKeyStep);
         Runnable submit = () -> {
@@ -372,6 +458,18 @@ public final class InstallationSetupScreen {
     }
 
     /* ------------------------------- helpers -------------------------------- */
+
+    /**
+     * This computer's IP address: the detected one, dimmed and locked (nothing to type). Only if none
+     * can be detected (no network found) is it a normal field to type in, so setup is never stuck.
+     */
+    private static TextField thisComputersIp(String prompt) {
+        String detected = LocalAddress.detect();
+        if (detected == null) {
+            return field(prompt);
+        }
+        return readOnly(detected);
+    }
 
     /** The IP address in {@code field} if it is valid; otherwise shows why and returns null. */
     private String checkedIp(TextField field, String whose) {
@@ -443,6 +541,16 @@ public final class InstallationSetupScreen {
 
     private static TextField field(String prompt) {
         TextField field = new TextField();
+        field.setPromptText(prompt);
+        size(field);
+        field.setStyle(FIELD_STYLE);
+        field.focusedProperty().addListener((obs, was, now) -> field.setStyle(now ? FIELD_FOCUSED_STYLE : FIELD_STYLE));
+        return field;
+    }
+
+    /** A password field, the same pill as {@link #field}. */
+    private static PasswordField passwordField(String prompt) {
+        PasswordField field = new PasswordField();
         field.setPromptText(prompt);
         size(field);
         field.setStyle(FIELD_STYLE);

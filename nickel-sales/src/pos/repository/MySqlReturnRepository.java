@@ -129,6 +129,16 @@ public class MySqlReturnRepository implements ReturnHistory {
         }
     }
 
+    @Override
+    public List<ReturnRecord> findForSalesCompletedIn(java.time.Instant from, java.time.Instant to) {
+        try (Connection c = Database.getConnection()) {
+            return load(c, "SaleID IN (SELECT SaleID FROM Sale WHERE CompletedAt >= ? AND CompletedAt < ?)",
+                    MySqlSaleRepository.toDb(from), MySqlSaleRepository.toDb(to));
+        } catch (SQLException e) {
+            throw new RuntimeException("Could not read the refunds of these sales", e);
+        }
+    }
+
     /* -------------------------------------- loading -------------------------------------- */
 
     private static List<ReturnRecord> load(Connection c, String where, Object... params) throws SQLException {

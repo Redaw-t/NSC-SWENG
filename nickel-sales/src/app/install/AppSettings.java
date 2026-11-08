@@ -10,12 +10,14 @@ import java.util.Optional;
 
 /**
  * nickelsales_appconfig.AppSettings: this installation's own settings (which terminal it is, the API
- * key). Database problems come out as RuntimeException (cause: the SQLException).
+ * key, POS Settings' auto-print). Database problems come out as RuntimeException (cause: the SQLException).
  */
 public final class AppSettings {
 
     public static final String THIS_TERMINAL_ID = "ThisTerminalID";
     public static final String API_KEY = "ApiKey";
+    /** POS Settings: "true" = print the receipt straight after payment, no preview. */
+    public static final String AUTO_PRINT_RECEIPT = "AutoPrintReceipt";
 
     /** The setting's value, if it is set. */
     public Optional<String> get(String key) {
@@ -31,6 +33,19 @@ public final class AppSettings {
             }
         } catch (SQLException e) {
             throw new RuntimeException("Could not read the app setting " + key, e);
+        }
+    }
+
+    /**
+     * Saves one setting on its own (e.g. POS Settings' auto-print).
+     *
+     * @throws RuntimeException database problem (cause: the SQLException)
+     */
+    public void set(String key, String value) {
+        try (Connection c = AppConfigDatabase.getConnection()) {
+            put(c, key, value);
+        } catch (SQLException e) {
+            throw new RuntimeException("Could not save the app setting " + key, e);
         }
     }
 

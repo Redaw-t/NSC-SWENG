@@ -27,8 +27,9 @@ import java.util.Objects;
  * @param categoryName   display only (filled when read from the database); ignored when saving
  * @param supplierId     the product's supplier, or null
  * @param supplierName   display only (filled when read from the database); ignored when saving
- * @param stockOnHand    current stock. Read here, but written ONLY by the Inventory module
- *                       (stock in / sale stock-out); Product screens and services never change it.
+ * @param stockOnHand    current stock, read from the Inventory table (Inventory.QuantityOnHand) when the
+ *                       product is loaded; the Product table has no stock column. Display only: only the
+ *                       Inventory module changes stock (stock in / out, sales), never Product.
  */
 public record Product(
         String productId,

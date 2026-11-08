@@ -16,8 +16,8 @@ import java.util.Optional;
  * A value that must be unique (barcode, product ID) and already exists is
  * reported as {@link DuplicateValueException}.
  *
- * Stock is never written here: {@code stockOnHand} on a Product is read-only,
- * and {@link #insert} / {@link #update} leave the stock column alone.
+ * Stock is never written here: {@code stockOnHand} on a Product is read from the
+ * Inventory table, and the Product table has no stock column at all.
  */
 public interface ProductRepository {
 

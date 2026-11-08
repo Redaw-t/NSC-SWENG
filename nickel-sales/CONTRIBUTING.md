@@ -64,15 +64,16 @@ stand-in recorder, so you can sell real products today.
 `AuthDemo`, `AuthzDemo`, `UserAdminDemo`, `PosContractCheck`, `CartCheck`, `CheckoutCheck`,
 `ReceiptCheck`, `AppCheck`, `ProductCheck`. All must pass (`ALL CHECKS PASSED`).
 `PosContractCheck`, `CartCheck`, `CheckoutCheck`, `ReceiptCheck` and `ProductCheck` use MySQL (the real product catalog;
-`CartCheck` skips entirely without it, the others skip their database scenarios). They put the nine seed products
-P-0001 to P-0009 back to their seed values around every scenario, so run them on a development database. The database must be set up
+`CartCheck` skips entirely without it, the others skip their database scenarios). The SQL script seeds nothing, so
+they add their own fixture (nine test products P-0001 to P-0009 and an inactive test cashier `TST-00002`) and
+reset it around every scenario: run them on a development database, never a live one. The database must be set up
 **with the current schema**. If your database was created by an older script they fail with
 `Table ... doesn't exist` or `Sale.SaleID is missing`: run `setup.bat` again, or see below.
 Always use `run-demo.bat --scripted`; running `java ...` by hand can pick an older JDK.
 
-Demo accounts (password `Password123`): `JCubillan` (all roles), `JDelaCruz` (cashier),
-`MSantaAna` (inventory), `RSantos` (inactive), `KRodriguez` (locked). Log in with the login name,
-not the `NSC-0000x` ID.
+There are no demo accounts in the database: on first run, Installation Setup (Main POS) creates the
+admin account `NSC-00001` with the username and password you choose; add other users in Manage users.
+Log in with the login name, not the `NSC-0000x` ID. (`run-demo.bat --console` still has built-in stub users.)
 
 ## Changing the database
 

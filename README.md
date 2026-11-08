@@ -134,22 +134,23 @@ The app stores its users and sales in MySQL, so you need it running on your comp
 ## Step 4 — Run the app
 
 1. In the `nickel-sales` folder, double-click **`run-demo.bat`**.
-2. A black window shows `Compiling...`, then the **login screen** opens.
+2. A black window shows `Compiling...`, then the app opens.
    (The black window stays open behind it — that's normal; errors show up
    there. Close it after you close the app.)
-3. Log in with:
+3. **The first time**, the **Installation Setup** screens open instead of the
+   login screen. On the Main POS: choose **Main POS**, register the API key,
+   confirm this computer's IP address, then **create the admin account**:
+   type the store admin's first and last name, and the next screen shows
+   the username made from them (first initial + last name, e.g.
+   `JCubillan`, as Add user does) and asks for the password. That account
+   is the store's first user, `NSC-00001`, and has every role.
+4. Log in with that username and the password you chose. The database
+   starts empty (no demo users, products or categories): add users in
+   **Manage users**, and categories, suppliers and products in **Products**.
 
-   | Username | Password | You'll see |
-   | -------- | -------- | ---------- |
-   | `JCubillan` | `Password123` | Home screen with every button (this account has every role) |
-   | `JDelaCruz` | `Password123` | Home screen with **Point of Sale** |
-   | `MSantaAna` | `Password123` | Home screen with **Products**, **Inventory** and **Reports** |
-   | `RSantos` | `Password123` | "This account is inactive…" message |
-   | `KRodriguez` | `Password123` | "This account is locked…" message |
-
-   Usernames ignore upper/lower case (`jcubillan` works too); passwords
-   don't. Use the username, **not** the ID shown on the home screen
-   (`NSC-00001`) — the ID won't log you in.
+   Usernames ignore upper/lower case; passwords don't. Use the username,
+   **not** the ID shown on the home screen (`NSC-00001`) — the ID won't log
+   you in.
 
    Handy on the login screen: **SHOW** reveals what you typed in the
    password box, and a **"Caps Lock is on"** warning appears if Caps Lock is
@@ -213,7 +214,7 @@ their own copy. Users you add don't appear on anyone else's machine.
 
 ### Adding your own user
 
-**The easy way — in the app.** Log in as an admin (e.g. `JCubillan`), click
+**The easy way — in the app.** Log in as the admin you created in Installation Setup, click
 **Manage users → Add user**, fill in the name, tick the roles and set a
 temporary password (8–72 characters, with an uppercase letter and a
 number). The app creates the username for you (first initial + last name,
@@ -255,7 +256,7 @@ bcrypt hashes, so it's two steps:
 | "A database error occurred…" | The black window shows the real cause on a line starting with `[DATABASE]` — send that line to the team |
 | "No printer is set up on this computer" when printing a receipt | In the app, open Settings → Printer settings and choose your receipt printer (and barcode label printer). Or set a default printer in Windows Settings → Printers, or set the NSC_PRINTER_NAME environment variable to your receipt printer's exact Windows name (for example POS-58). It must be a thermal receipt printer; "Microsoft Print to PDF" will not print a readable receipt |
 | Receipt is cut off at the sides on a receipt printer | For 58 mm paper run `setx NSC_RECEIPT_WIDTH 32`, then open a new window |
-| "Invalid username or password." | Use the **username** (e.g. `JCubillan`), not the ID (`NSC-00001`), and check the password is `Password123` — passwords are case-sensitive (watch for the Caps Lock warning) |
+| "Invalid username or password." | Use the **username** chosen in Installation Setup (or in Manage users), not the ID (`NSC-00001`) — passwords are case-sensitive (watch for the Caps Lock warning) |
 | "Your session expired. Please log in again." | Nobody used the app for 30 minutes, so it logged out for safety. Just log in again |
 | `setup.bat` says MySQL is **NOT RUNNING** | Press Win+R, type `services.msc`, find the MySQL service, right-click → **Start** |
 | MySQL keeps rejecting your password | You may have forgotten it — see [Resetting the MySQL root password](https://dev.mysql.com/doc/refman/en/resetting-permissions.html), or uninstall MySQL, delete `C:\ProgramData\MySQL`, and reinstall (you only lose the demo data, which `setup.bat` recreates) |

@@ -269,7 +269,7 @@ nsc_setup_main() {
         info "works without a database."
     else
         info "Everything is ready. Run ./run-demo.sh to open the login screen."
-        info "Demo login: NSC-00001 / Password123"
+        info "First run: Installation Setup creates the admin account (NSC-00001)"
     fi
     echo
     return 0

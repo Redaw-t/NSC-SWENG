@@ -26,6 +26,9 @@ import java.util.Objects;
 /**
  * Sales summary for any period (daily, monthly, yearly, custom) through ONE method,
  * {@link #salesFor}. Read-only. Needs VIEW_SALES_REPORTS.
+ *
+ * <p>Refunds are taken off ({@link pos.contract.NetSale}): every amount is what was sold minus what
+ * was refunded of it, on the day of the SALE (a sale today refunded tomorrow lowers today's sales).
  */
 public final class SalesReportService {
 
@@ -36,10 +39,16 @@ public final class SalesReportService {
     private static final DateTimeFormatter MONTH_LABEL = DateTimeFormatter.ofPattern("MMM yyyy", Locale.US);
 
     private final SaleHistory history;
+    private final pos.contract.ReturnHistory returns;   // null = refunds not taken off
     private final ReportsAccess access;
 
     public SalesReportService(SaleHistory history, ReportsAccess access) {
+        this(history, null, access);
+    }
+
+    public SalesReportService(SaleHistory history, pos.contract.ReturnHistory returns, ReportsAccess access) {
         this.history = Objects.requireNonNull(history, "history");
+        this.returns = returns;
         this.access = Objects.requireNonNull(access, "access");
     }
 
@@ -47,7 +56,7 @@ public final class SalesReportService {
     public SalesSummary salesFor(String sessionId, ReportPeriod period) throws ReportException {
         access.require(sessionId, Permission.VIEW_SALES_REPORTS);
         Objects.requireNonNull(period, "period");
-        List<SaleRecord> sales = SalesSource.completedIn(history, period);
+        List<pos.contract.NetSale> sales = SalesSource.netIn(history, returns, period);
 
         boolean byMonth = period.kind() == ReportPeriod.Kind.YEAR
                 || ChronoUnit.DAYS.between(period.from(), period.to()) + 1 > MAX_DAILY_ROWS;
@@ -59,20 +68,20 @@ public final class SalesReportService {
         BigDecimal vat = Money.ZERO;
         BigDecimal retail = Money.ZERO;
         BigDecimal wholesale = Money.ZERO;
-        for (SaleRecord sale : sales) {
+        for (pos.contract.NetSale sale : sales) {   // refunds already taken off
             total = total.add(sale.total());
             vatable = vatable.add(sale.vatableSales());
             exempt = exempt.add(sale.vatExemptSales());
             vat = vat.add(sale.vatAmount());
-            for (SaleLineRecord line : sale.lines()) {
-                if (line.priceType() == PriceType.WHOLESALE) {
-                    wholesale = wholesale.add(line.lineTotal());
+            for (pos.contract.NetSale.Line line : sale.lines()) {
+                if (line.sold().priceType() == PriceType.WHOLESALE) {
+                    wholesale = wholesale.add(line.amount());
                 } else {
-                    retail = retail.add(line.lineTotal());
+                    retail = retail.add(line.amount());
                 }
             }
-            // The PH day of the sale, not the UTC day: 23:30 PH is still that day.
-            LocalDate day = PhTime.of(sale.completedAt()).toLocalDate();
+            // The PH day of the SALE, not the UTC day (23:30 PH is still that day), nor the refund's day.
+            LocalDate day = PhTime.of(sale.sale().completedAt()).toLocalDate();
             Bucket bucket = buckets.get(byMonth ? day.withDayOfMonth(1) : day);
             if (bucket != null) {   // always found for a sale inside the period
                 bucket.transactions++;

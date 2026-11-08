@@ -132,6 +132,11 @@ public final class AppContext {
         return admin;
     }
 
+    /** Installation Setup (Main POS): creates the first account, the administrator NSC-00001. */
+    public auth.account.FirstAdminService firstAdmin() {
+        return new auth.account.FirstAdminService(users, new PassPolicy(), audit);
+    }
+
     /** Completed sales, read-only (Reports, receipt reprint). */
     public SaleHistory saleHistory() {
         return sales;

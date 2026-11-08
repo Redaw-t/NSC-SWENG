@@ -9,7 +9,7 @@ import stubs.StubStockRecorder;
  *
  * Users, products, categories, suppliers and sales are all the real MySQL ones
  * (run the database setup first). A sale takes its quantities off the real
- * Product.StockOnHand, through {@link StubStockRecorder}.
+ * Inventory.QuantityOnHand, through {@link StubStockRecorder}.
  *
  * This is what double-clicking run-demo.bat starts. Retire it once Main gets
  * the real StockRecorder.
