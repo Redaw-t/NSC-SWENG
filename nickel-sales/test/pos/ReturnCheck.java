@@ -156,6 +156,10 @@ public class ReturnCheck {
             expectTrue(flat.contains("- 1 pc x 15.00 T01-2026-000001-01"), "first void line\n" + all);
             expectTrue(flat.contains("- 2 pc x 15.00 T01-2026-000001-02"), "second void line");
             expectTrue(text.stream().filter(l -> l.startsWith("Refund Method")).count() == 2, "two refunds");
+            int cash = text.indexOf(text.stream().filter(l -> l.startsWith("CASH ")).findFirst().orElseThrow());
+            int change = text.indexOf(text.stream().filter(l -> l.startsWith("CHANGE")).findFirst().orElseThrow());
+            int refund = text.indexOf(text.stream().filter(l -> l.startsWith("Refund Method")).findFirst().orElseThrow());
+            expectTrue(cash < change && change < refund, "CASH, then CHANGE, then the refunds\n" + all);
             expectTrue(text.stream().anyMatch(l -> l.startsWith("TOTAL") && l.endsWith("PHP 0.00")), "net total 0");
             expectTrue(text.stream().anyMatch(l -> l.startsWith("Item Count") && l.trim().endsWith(" 0")), "net count");
             expectTrue(text.stream().anyMatch(l -> l.startsWith("VATable (V)") && l.endsWith(" 0.00")), "net VATable");

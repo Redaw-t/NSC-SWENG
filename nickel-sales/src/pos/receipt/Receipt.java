@@ -195,21 +195,25 @@ public record Receipt(StoreInfo store, SaleRecord sale, String cashierName, bool
 
         out.add(new Left("Payment Method", Style.NORMAL));
         BigDecimal change = Money.ZERO;
+        boolean paidCash = false;   // only cash gives change: GCash / Maya / QRPh receipts have no CHANGE line
         for (PaymentRecord p : sale.payments()) {
+            paidCash |= p.method() == PaymentMethod.CASH;
             out.add(new Pair(label(p.method()), peso(p.amountTendered()), Style.NORMAL));
             if (p.method() != PaymentMethod.CASH && p.referenceNo() != null) {
                 out.add(new Pair("Ref. No.", p.referenceNo(), Style.SMALL));
             }
             change = change.add(p.change());
         }
-        for (Refund refund : returns) {   // every refund, under the payment
+        if (paidCash) {   // the change belongs to the payment: right under CASH, before any refund
+            out.add(new Gap());
+            out.add(new Pair("CHANGE", peso(change), Style.BOLD));
+        }
+        for (Refund refund : returns) {   // every refund, after the payment and its change
             out.add(new Gap());
             out.add(new Pair("Refund Method", refund.ret().returnNo(), Style.NORMAL));
             out.add(new Pair(label(refund.ret().refundMethod()), "- " + peso(refund.ret().total()), Style.NORMAL));
             refundReference(out, refund.ret());
         }
-        out.add(new Gap());
-        out.add(new Pair("CHANGE", peso(change), Style.BOLD));
         out.add(new Rule());
 
         vatBreakdown(out, vatable, vat, exempt);
