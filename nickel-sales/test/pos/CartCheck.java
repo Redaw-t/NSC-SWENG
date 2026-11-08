@@ -34,7 +34,7 @@ import java.util.List;
  *   java -cp "out;lib\jbcrypt-0.4.jar;lib\mysql-connector-j-9.4.0.jar" pos.CartCheck
  * (macOS/Linux: ':' instead of ';'). Exit code 1 on failure.
  *
- * Seed products (database/NickelSales-Database-Config.sql):
+ * Seed products (database/NickelSales-Demo-Data.sql):
  *   4800000000019 Bond Paper   250.00 / 235.00   stock 40
  *   4800000000026 Ballpen       12.00 /  10.00   stock 200
  *   4800000000033 Notebook      45.00 / (none)   stock 60

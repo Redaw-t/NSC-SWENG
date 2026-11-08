@@ -18,7 +18,7 @@ import java.sql.SQLException;
  * self-tests need to use it as a fixture. Stock lives in the Inventory table.
  *
  * The checks that use it assume the nine seed products of
- * database/NickelSales-Database-Config.sql (P-0001 to P-0009). {@link #reset()}
+ * database/NickelSales-Demo-Data.sql (P-0001 to P-0009). {@link #reset()}
  * puts exactly those nine back to their seed values (including stock) before every
  * scenario. Run the checks on a development database, not a live one.
  */

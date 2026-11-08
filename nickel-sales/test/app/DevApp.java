@@ -19,7 +19,7 @@ public final class DevApp {
     private DevApp() { }
 
     public static void main(String[] args) {
-        AppConfig config = AppConfig.fromEnvironment();
+        AppConfig config = AppConfig.fromSettings();
 
         AppContext app = Main.wire(config);
 

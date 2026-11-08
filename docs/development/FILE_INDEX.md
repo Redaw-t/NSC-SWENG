@@ -132,7 +132,7 @@ Paths are relative to `nickel-sales/src/` (sections 1 to 10), `nickel-sales/test
 
 | File / Class | Purpose | Module / Owner Area | Depends On / Used By | Modification Guidance |
 |---|---|---|---|---|
-| `shared/Database.java` | `getConnection()` (settings from `NSC_DB_*`) and `inTransaction(work)` (commit on success, roll back on any throw). | Shared infrastructure | Used by every `MySql...Repository` and `CheckoutService`. | **COORDINATE BEFORE CHANGING.** Iteration 2 repositories use it. |
+| `shared/Database.java` | `getConnection()` (settings `NSC_DB_*` via `shared/Settings.java`: environment variable, else the settings file) and `inTransaction(work)` (commit on success, roll back on any throw). | Shared infrastructure | Used by every `MySql...Repository` and `CheckoutService`. | **COORDINATE BEFORE CHANGING.** Iteration 2 repositories use it. |
 | `shared/Money.java`, `Quantity.java`, `PhTime.java` | Money (BigDecimal, 2 dp), quantities (3 dp), Philippine time rules. | Shared | Used by contracts, POS, product, inventory. | COORDINATE BEFORE CHANGING (changes alter every module's numbers). |
 | `shared/UiErrors.java` | Turns unexpected errors into messages a user can act on (database down, tables missing…). | Shared | Used by screens. | COORDINATE BEFORE CHANGING |
 

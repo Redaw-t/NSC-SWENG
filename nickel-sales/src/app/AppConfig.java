@@ -9,10 +9,11 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * Settings for this terminal, read once at start-up from environment
- * variables (like the NSC_DB_* database settings in shared.Database):
+ * Settings for this terminal, read once at start-up from the settings file the
+ * installer writes, or environment variables of the same names (see
+ * shared.Settings; the NSC_DB_* database settings are read the same way):
  *
- * | Variable                 | Meaning                                       | Default             |
+ * | Setting                  | Meaning                                      | Default             |
  * | NSC_TERMINAL_ID          | this terminal's code, used in invoice nos.     | T01                 |
  * | NSC_IDLE_TIMEOUT_MINUTES | minutes without activity before logout        | 30                  |
  * | NSC_STORE_NAME           | store name at the top of receipts             | NICKEL SALES CENTER |
@@ -20,15 +21,16 @@ import java.util.Objects;
  * | NSC_STORE_PROPRIETOR     | owner, printed "NAME - PROPRIETOR"            | the store's owner   |
  * | NSC_STORE_TIN            | VAT-REG TIN on receipts                       | the store's TIN     |
  * | NSC_STORE_PHONE          | phone on receipts (left off if not set)       |                     |
- * | NSC_RECEIPT_WIDTH        | characters per receipt line: 42 for 80 mm     | 42                  |
- * |                          | paper, 32 for 58 mm (32-48)                   |                     |
+ * | NSC_RECEIPT_WIDTH        | characters per receipt line: 32 for 58 mm     | 32                  |
+ * |                          | paper, 42-48 for 80 mm (32-48)                |                     |
  *
  * The address, proprietor and TIN default to Nickel Sales Center's own details
  * (pos.receipt.StoreInfo.NICKEL_*); set a variable to override it, or to a blank
  * value to leave that line off the receipt.
  *
  * Give each terminal its own ID (T01, T02, ...) so their invoice numbers
- * never clash. On Windows:  setx NSC_TERMINAL_ID T02  (then open a new window).
+ * never clash: NSC_TERMINAL_ID=T02 in the settings file, or on a developer's
+ * Windows PC  setx NSC_TERMINAL_ID T02  (then open a new window).
  *
  * @param terminalId   1-8 letters, digits or dashes
  * @param idleTimeout  at least 1 minute
@@ -57,13 +59,13 @@ public record AppConfig(String terminalId, Duration idleTimeout, StoreInfo store
         this(terminalId, idleTimeout, StoreInfo.named(StoreInfo.DEFAULT_NAME), Receipt.DEFAULT_WIDTH);
     }
 
-    /** From this computer's environment variables. */
-    public static AppConfig fromEnvironment() {
-        return from(System.getenv());
+    /** From this computer's settings file and environment variables (shared.Settings). */
+    public static AppConfig fromSettings() {
+        return from(shared.Settings.all());
     }
 
     /**
-     * From a map of settings (the environment, or a test's own map).
+     * From a map of settings (shared.Settings.all(), or a test's own map).
      * A bad idle timeout or receipt width falls back to the default with a
      * warning; a bad terminal ID stops the app, because it would make wrong
      * invoice numbers.

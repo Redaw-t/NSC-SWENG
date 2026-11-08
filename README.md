@@ -7,6 +7,10 @@ This page gets you from nothing to a working app. No prior Java
 experience needed. It takes about 20–30 minutes the first time, mostly
 waiting for installers.
 
+> **Installing it at the store?** You don't need any of this page. Give the store
+> `NickelSalesSetup-<version>.exe` (one file with the app, Java and MySQL inside) and run it on
+> their PC. How to build it and how it works: [installer/README.md](installer/README.md).
+>
 > **On a Mac or Linux?** Skip to [macOS / Linux](#macos--linux).
 > **Writing code for the project?** After this page, read
 > [docs/development/](docs/development/ARCHITECTURE.md) (architecture, module template, naming,
@@ -30,8 +34,11 @@ with a button for each part of the system your role may use:
   sells these real products.
 - **Reports** (admins: sales reports; admins and inventory staff: inventory report): transaction
   history, daily / monthly / yearly sales summary, top products, sales by cashier and terminal.
-- **Inventory**, **System & sync**: not built yet ("coming soon").
-  Until Inventory exists, stock is changed only by sales made through `run-demo`.
+- **Inventory** (admins and inventory staff): stock levels, stock-in and adjustments, and every
+  stock movement.
+- **System & sync** (admins): activity logs, inventory logs, sync logs, and open items and price
+  edits. **Settings** has the printers, and for admins System Status and Backup & Restore.
+  Syncing between registers isn't built yet.
 
 Everyone can change their own password and log out.
 
@@ -39,7 +46,7 @@ Everyone can change their own password and log out.
 
 | Thing | Do I install it myself? |
 | ----- | ----------------------- |
-| **Java JDK 17 or newer** | The setup script offers to install it for you |
+| **Java JDK 21 or newer** (the code uses Java 21 features; the setup script still prints "17+") | The setup script offers to install Temurin 21 for you |
 | **JavaFX** (the window/UI library) | No — downloaded automatically |
 | **MySQL Server** (the database) | **Yes** — step 2 below |
 | **MySQL Workbench** (to look at the database) | Optional, but recommended |
@@ -116,7 +123,7 @@ The app stores its users and sales in MySQL, so you need it running on your comp
    | -------- | ---------- |
    | *Install Eclipse Temurin JDK 21 now using winget? (Y/N)* | Press **Y**. When it finishes, **close the window and run `setup.bat` again** |
    | *MySQL password for user 'root':* | Type the password from step 2 and press Enter. Nothing appears while you type — that's normal |
-   | *Create it now from database\NickelSales-Database-Config.sql? (Y/N)* | **Y** — this creates the database and the demo users |
+   | *Create it now from database\NickelSales-Database-Config.sql? (Y/N)* | **Y** — this creates the database, then adds the demo users and test products from `database\NickelSales-Demo-Data.sql` |
    | *Save this MySQL password for the app…? (Y/N)* | **Y** — otherwise the app can't log in to MySQL |
 
 5. Keep running `setup.bat` until the last lines say:
@@ -187,11 +194,15 @@ screen and receipt show how much of it is VAT (VATable sales = price / 1.12).
 The receipt (logo, store details, items, totals, VAT breakdown, invoice barcode)
 is drawn as one picture, so the preview and the printout are identical. It prints
 on the receipt printer chosen in Settings > Printers. The store details default to
-Nickel Sales Center's own; to change them (Windows, then open a new window):
+Nickel Sales Center's own; to change them, put them in the settings file (see
+[nickel-sales/CONTRIBUTING.md](nickel-sales/CONTRIBUTING.md#settings)), or on Windows (then open a new window):
 `setx NSC_STORE_ADDRESS "123 Rizal Ave., Manila"`, and likewise
 `NSC_STORE_PROPRIETOR`, `NSC_STORE_TIN`, `NSC_STORE_PHONE`, `NSC_STORE_NAME`.
 Paper width: `setx NSC_RECEIPT_WIDTH 32` for 58 mm (the default), 48 for 80 mm.
-Products live in MySQL (`Product`, `Category`, `Supplier`). The database script adds nine test
+On a store PC (the installed app) these settings are in
+`C:\ProgramData\NickelSales\nickelsales.properties` instead, written by the installer; see
+[installer/README.md](installer/README.md).
+Products live in MySQL (`Product`, `Category`, `Supplier`). The demo data script adds test
 products (barcodes `4800000000019`, `4800000000026`, `4800000000040`, ...). If your database was
 created before the Products module, run `setup.bat` again to add the product tables.
 
@@ -263,6 +274,10 @@ bcrypt hashes, so it's two steps:
 | JDK installed but `setup.bat` still says MISSING | Close the window and run `setup.bat` again — new installs aren't visible to already-open windows |
 | `Module javafx.controls not found` | The JavaFX download failed. Check your internet and run `setup.bat` again |
 
+These are for development runs (`run-demo`). For the **installed** app at a store (logs, the
+`NickelSalesDB` service, restoring a backup), see
+[installer/README.md → Helping a store](installer/README.md#5-helping-a-store-when-something-goes-wrong).
+
 Still stuck? Copy the full text from the black window and send it to the
 team.
 
@@ -297,16 +312,23 @@ What's where:
 NSC-SWENG/
   README.md          this guide
   docs/              REPOSITORY_MAP.md, development/ (architecture, templates, rules), archive/
-  database/          the MySQL script (setup runs it for you)
+  database/          NickelSales-Database-Config.sql (the schema; setup and the installer run it)
+                     NickelSales-Demo-Data.sql (demo users + test products; development only)
+  installer/         builds the Windows installer for stores (see installer/README.md)
   nickel-sales/      the Java app
     src/             production code, one folder per module:
       app/             the app itself (login -> home screen -> modules); Main is the entry point
-      shared/          money, quantities, time, database - used by everyone
+      shared/          money, quantities, time, database, settings, log file, version - used by everyone
       auth/            login, users, permissions
       pos/             POS & sales
-      product/         Product Management (contracts now, rest TODO)
-      inventory/       Inventory Management (contracts now, rest TODO)
-      barcode/ sync/ reports/ system/   placeholders (README only)
+      product/         Product Management
+      inventory/       Inventory Management
+      barcode/         barcodes and labels
+      reports/         Transaction & Reports
+      system/          Audit & System (logs, backups, status)
+      dashboard/       the home screen
+      install/         what the installer runs after copying files (MySQL, settings, first admin)
+      sync/            placeholder (README only)
     test/            self-tests, stand-ins (stubs/) and the dev launcher (app/DevApp)
     run-demo.bat     build and run (run-demo.bat --scripted = all self-tests)
 ```
@@ -317,5 +339,8 @@ NSC-SWENG/
   says which folder may depend on which.
 - **[nickel-sales/CONTRIBUTING.md](nickel-sales/CONTRIBUTING.md)** — IntelliJ/Eclipse setup,
   environment variables, how to run the self-tests before you push, and troubleshooting.
-- Never put a real password in the code — the repo is public. The app
-  reads it from the `NSC_DB_PASSWORD` environment variable.
+- **[installer/README.md](installer/README.md)** — how the store installer is built, what it does on
+  the store PC, how to release a new version, and what to check when a store has a problem.
+- Never put a real password in the code — the repo is public. In development the app reads it
+  from the `NSC_DB_PASSWORD` environment variable; on a store PC, from the settings file the
+  installer writes.

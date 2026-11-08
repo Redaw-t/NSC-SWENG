@@ -15,7 +15,7 @@ import java.io.ByteArrayOutputStream;
  * test print: no page, no margins, no extra paper.
  *
  * Uses the receipt printer chosen in Settings > Printers; if none is chosen, the printer named in
- * the environment variable NSC_PRINTER_NAME (e.g. POS-58), else the Windows default printer.
+ * the NSC_PRINTER_NAME setting (e.g. POS-58), else the Windows default printer.
  *
  * The whole receipt (logo, text, barcode) is drawn by {@link ReceiptRenderer} and sent as a picture
  * (GS v 0, in strips so small printers can keep up), never with the printer's own fonts. So it

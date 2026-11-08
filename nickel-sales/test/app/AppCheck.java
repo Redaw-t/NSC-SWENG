@@ -67,6 +67,63 @@ public class AppCheck {
             expectTrue(AppConfig.from(Map.of("NSC_RECEIPT_WIDTH", "80")).receiptWidth() == 32, "out of range -> 32");
         });
 
+        check("Settings file: NSC_NAME=value lines, UTF-8, values trimmed; missing file is empty", () -> {
+            java.nio.file.Path file = java.nio.file.Files.createTempFile("nsc-settings", ".properties");
+            try {
+                java.nio.file.Files.writeString(file, "# comment\nNSC_TERMINAL_ID = T03 \n"
+                        + "NSC_STORE_ADDRESS=Peñafrancia St.\nNSC_STORE_TIN=\n", java.nio.charset.StandardCharsets.UTF_8);
+                Map<String, String> read = shared.Settings.readFile(file);
+                expectText(read.get("NSC_TERMINAL_ID"), "T03");
+                expectText(read.get("NSC_STORE_ADDRESS"), "Peñafrancia St.");
+                AppConfig config = AppConfig.from(read);
+                expectText(config.terminalId(), "T03");
+                expectText(config.store().tin(), "");                                       // blank = left off
+                expectTrue(shared.Settings.readFile(file.resolveSibling("nsc-no-such-file")).isEmpty(), "missing");
+            } finally {
+                java.nio.file.Files.deleteIfExists(file);
+            }
+        });
+
+        check("Settings precedence: developers' env vars win; the installed app's file wins, env fills the rest", () -> {
+            Map<String, String> file = Map.of("NSC_DB_USER", "nickelsales", "NSC_DB_PASSWORD", "fromInstaller");
+            Map<String, String> env = Map.of("NSC_DB_PASSWORD", "devPassword", "NSC_PRINTER_NAME", "POS-58");
+            Map<String, String> dev = shared.Settings.merge(file, env, false);
+            expectText(dev.get("NSC_DB_PASSWORD"), "devPassword");
+            Map<String, String> installed = shared.Settings.merge(file, env, true);
+            expectText(installed.get("NSC_DB_PASSWORD"), "fromInstaller");
+            expectText(installed.get("NSC_DB_USER"), "nickelsales");
+            expectText(installed.get("NSC_PRINTER_NAME"), "POS-58");
+        });
+
+        check("Log file: console gets output unchanged, the file gets whole lines with the time", () -> {
+            java.io.ByteArrayOutputStream console = new java.io.ByteArrayOutputStream();
+            java.io.ByteArrayOutputStream file = new java.io.ByteArrayOutputStream();
+            java.io.PrintStream out = shared.LogFile.tee(new java.io.PrintStream(console, true,
+                    java.nio.charset.StandardCharsets.UTF_8), file, new Object());
+            out.print("[POS] sale ");
+            out.println("₱12.50 saved");
+            out.print("half a line");
+            String fileText = file.toString(java.nio.charset.StandardCharsets.UTF_8);
+            expectText(console.toString(java.nio.charset.StandardCharsets.UTF_8),
+                    "[POS] sale ₱12.50 saved" + System.lineSeparator() + "half a line");
+            expectTrue(fileText.matches("\\d\\d:\\d\\d:\\d\\d\\.\\d{3} \\[POS] sale ₱12\\.50 saved\\R"),
+                    "one timed line, the unfinished one not yet: " + fileText);
+        });
+
+        check("One copy at a time: a second claim on the same lock file is refused", () -> {
+            java.nio.file.Path lockFile = java.nio.file.Files.createTempFile("nsc-single", ".lock");
+            expectTrue(SingleInstance.claim(lockFile), "first copy runs");
+            // the lock is held by this JVM; another JVM is what a second double-click starts
+            Process second = new ProcessBuilder(
+                    java.nio.file.Path.of(System.getProperty("java.home"), "bin", "java").toString(),
+                    "-cp", System.getProperty("java.class.path"), "app.AppCheck$TryClaim", lockFile.toString())
+                    .inheritIO().start();
+            expectTrue(second.waitFor() == 3, "second copy must be refused");
+        });
+
+        check("Version: MAJOR.MINOR.PATCH, as Windows installers need", () ->
+                expectTrue(shared.AppVersion.VERSION.matches("\\d+\\.\\d+\\.\\d+"), shared.AppVersion.VERSION));
+
         check("Every module has a unique title, a description and a permission", () -> {
             List<AppModule> all = Modules.all();
             Set<String> titles = new HashSet<>();
@@ -145,6 +202,13 @@ public class AppCheck {
         List<String> shown = Modules.visibleFor(user, authz, Modules.all()).stream().map(AppModule::title).toList();
         if (!shown.equals(List.of(titles))) {
             throw new AssertionError("expected " + List.of(titles) + " but was " + shown);
+        }
+    }
+
+    /** A second copy of the app, for the one-copy check: exit 3 = refused, 0 = got the lock. */
+    public static final class TryClaim {
+        public static void main(String[] args) {
+            System.exit(SingleInstance.claim(java.nio.file.Path.of(args[0])) ? 0 : 3);
         }
     }
 
