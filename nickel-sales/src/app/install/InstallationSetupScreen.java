@@ -155,7 +155,10 @@ public final class InstallationSetupScreen {
         subtitle.setStyle("-fx-font-size: 28px; -fx-text-fill: " + Theme.PRIMARY_TEXT + ";");
 
         errorLabel.setWrapText(true);
+        // a fixed width and "as tall as it needs", so a long message wraps onto more lines instead of ending in "..."
+        errorLabel.setPrefWidth(FIELD_WIDTH + 80);
         errorLabel.setMaxWidth(FIELD_WIDTH + 80);
+        errorLabel.setMinHeight(Region.USE_PREF_SIZE);
         errorLabel.setAlignment(Pos.CENTER);
         errorLabel.setTextAlignment(TextAlignment.CENTER);
         errorLabel.setStyle("-fx-text-fill: " + Theme.ERROR + "; -fx-font-size: 16px;");
@@ -602,7 +605,9 @@ public final class InstallationSetupScreen {
     private static Label note(String text) {
         Label label = new Label(text);
         label.setWrapText(true);
+        label.setPrefWidth(FIELD_WIDTH + 80);          // wraps onto more lines rather than being cut short
         label.setMaxWidth(FIELD_WIDTH + 80);
+        label.setMinHeight(Region.USE_PREF_SIZE);
         label.setAlignment(Pos.CENTER);
         label.setTextAlignment(TextAlignment.CENTER);
         label.setStyle("-fx-font-size: 15px; -fx-text-fill: " + Theme.SECONDARY_TEXT + ";");
