@@ -113,6 +113,9 @@ public final class InventoryScreen {
     private final Label lowValue = new Label("0");
     private final Label outValue = new Label("0");
     private final Label message = new Label();
+    private Button stockInButton;
+    private Button stockOutButton;
+    private Button adjustButton;
 
     public InventoryScreen(ScreenContext screen, InventoryService inventory) {
         this.screen = screen;
@@ -280,16 +283,16 @@ public final class InventoryScreen {
             }
         });
 
-        Button stockIn = toolbarButton("+ Stock In", StockActionDialog.Mode.STOCK_IN);
-        Styles.primaryButton(stockIn);
-        Button stockOut = toolbarButton("- Stock Out", StockActionDialog.Mode.STOCK_OUT);
-        toolbarStyle(stockOut, Theme.ACCENT_RED, "white");
-        Button adjust = toolbarButton("Adjust Stock", StockActionDialog.Mode.ADJUST);
-        toolbarStyle(adjust, Theme.BORDER, Theme.PRIMARY_TEXT);
+        stockInButton = toolbarButton("+ Stock In", StockActionDialog.Mode.STOCK_IN);
+        Styles.primaryButton(stockInButton);
+        stockOutButton = toolbarButton("- Stock Out", StockActionDialog.Mode.STOCK_OUT);
+        toolbarStyle(stockOutButton, Theme.ACCENT_RED, "white");
+        adjustButton = toolbarButton("Adjust Stock", StockActionDialog.Mode.ADJUST);
+        toolbarStyle(adjustButton, Theme.BORDER, Theme.PRIMARY_TEXT);
 
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
-        HBox toolbar = new HBox(12, search, statusFilter, categoryFilter, spacer, stockIn, stockOut, adjust);
+        HBox toolbar = new HBox(12, search, statusFilter, categoryFilter, spacer, stockInButton, stockOutButton, adjustButton);
         toolbar.setAlignment(Pos.CENTER_LEFT);
 
         // --- tables ---
@@ -340,7 +343,7 @@ public final class InventoryScreen {
                 m -> Quantity.format(m.quantityBefore())));
         historyTable.getColumns().add(Tables.<StockMovement>textColumn("After", 70,
                 m -> Quantity.format(m.quantityAfter())));
-        historyTable.getColumns().add(Tables.<StockMovement>textColumn("Reference", 170, InventoryScreen::referenceText));
+        historyTable.getColumns().add(Tables.<StockMovement>textColumn("Reason / Reference", 170, InventoryScreen::referenceText));
         historyTable.getColumns().add(Tables.<StockMovement>textColumn("Performed By", 130,
                 m -> m.performedBy() == null ? "POS sale" : userNames.getOrDefault(m.performedBy(), m.performedBy())));
         historyTable.setPlaceholder(new Label("No stock movements yet."));
@@ -409,6 +412,12 @@ public final class InventoryScreen {
         stockTable.setVisible(stock);
         historyTable.setVisible(!stock);
         statusFilter.setDisable(!stock);
+
+        for (Button b : List.of(stockInButton, stockOutButton, adjustButton)) {
+            b.setVisible(stock);
+            b.setManaged(stock);   // no empty gap left behind
+        }
+
         pagerSlot.getChildren().setAll(stock ? stockPager.getView() : historyPager.getView());
     }
 
@@ -537,7 +546,7 @@ public final class InventoryScreen {
     }
 
     private static String reorderText(StockRow r) {
-        return r.reorderLevel().signum() == 0 ? "Not set" : Quantity.format(r.reorderLevel());
+        return Quantity.format(r.reorderLevel());
     }
 
     private static String date(Instant at) {

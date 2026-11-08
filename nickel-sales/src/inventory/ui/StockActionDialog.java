@@ -73,7 +73,7 @@ final class StockActionDialog {
         qty.setPromptText(switch (mode) {
             case STOCK_IN, STOCK_OUT -> "e.g. 6 or 1.5";
             case ADJUST -> "Counted quantity";
-            case REORDER -> "0 = not set";
+            case REORDER -> "e.g. 10";
         });
 
         Runnable showChosen = () -> {
@@ -204,7 +204,7 @@ final class StockActionDialog {
             case STOCK_IN -> "Adds stock received from a supplier.";
             case STOCK_OUT -> "Removes stock that left without a sale (damaged, expired, returned...).";
             case ADJUST -> "Sets the stock to what was actually counted.";
-            case REORDER -> "The product shows as Low Stock at or below this level.";
+            case REORDER -> "The product shows as Low Stock at or below this level. 0 means no alert.";
         };
         modal.card().getChildren().addAll(Modal.title(title), Modal.subtitle(subtitle), grid, error,
                 Modal.buttons(cancel, save));
