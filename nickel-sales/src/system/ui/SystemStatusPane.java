@@ -40,7 +40,7 @@ final class SystemStatusPane implements SystemPane {
     private final ScreenContext screen;
     private final SystemStatusService status;
 
-    private final Button refresh = SystemUi.applyButton("Refresh");
+    private final Button refresh = new Button("↻  Refresh");   // as on the dashboard
     private final Label checked = new Label();
     private final GridPane cards = new GridPane();
     private final Label terminalValue = new Label();
@@ -54,6 +54,7 @@ final class SystemStatusPane implements SystemPane {
         this.screen = screen;
         this.status = status;
 
+        shared.Styles.rowButton(refresh, shared.Theme.BORDER, shared.Theme.PRIMARY_TEXT);
         refresh.setOnAction(e -> load());
         Styles.muted(checked);
         Region spacer = new Region();

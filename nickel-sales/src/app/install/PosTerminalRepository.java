@@ -90,7 +90,7 @@ public class PosTerminalRepository implements TerminalRegistrar {
      */
     public void completeAdditionalSetup(String mainIp, String terminalId, String ipAddress, String computerName,
                                         String apiKey) {
-        completeAdditionalSetup(mainIp, terminalId, ipAddress, computerName, apiKey, 0);
+        completeAdditionalSetup(mainIp, null, terminalId, ipAddress, computerName, apiKey, 0);
     }
 
     /**
@@ -98,10 +98,10 @@ public class PosTerminalRepository implements TerminalRegistrar {
      * list of changes (where its copy of the data ends), and its sync queue is emptied, so nothing done
      * on this computer before it joined the store (e.g. trying the app out) is ever sent.
      */
-    public void completeAdditionalSetup(String mainIp, String terminalId, String ipAddress, String computerName,
-                                        String apiKey, long syncSeq) {
+    public void completeAdditionalSetup(String mainIp, String mainComputerName, String terminalId, String ipAddress,
+                                        String computerName, String apiKey, long syncSeq) {
         inTransaction(c -> {
-            upsertTerminal(c, MAIN_ID, mainIp, null);
+            upsertTerminal(c, MAIN_ID, mainIp, mainComputerName);   // the Main POS's name too, as it keeps ours
             upsertTerminal(c, terminalId, ipAddress, computerName);
             AppSettings.put(c, AppSettings.THIS_TERMINAL_ID, terminalId);
             AppSettings.put(c, AppSettings.API_KEY, apiKey);
@@ -114,6 +114,32 @@ public class PosTerminalRepository implements TerminalRegistrar {
                 }
             }
             return null;
+        });
+    }
+
+    /**
+     * Saves a terminal's computer name if it changed (an Additional POS learns the Main POS's from its
+     * every-second check). Does nothing for a blank name or a terminal not in the list.
+     *
+     * @return true if it changed
+     */
+    public boolean updateComputerName(String terminalId, String computerName) {
+        if (computerName == null || computerName.isBlank()) {
+            return false;
+        }
+        String name = computerName.trim();
+        return inTransaction(c -> {
+            try (PreparedStatement ps = c.prepareStatement("UPDATE PosTerminals SET ComputerName = ? "
+                    + "WHERE TerminalID = ? AND (ComputerName IS NULL OR ComputerName <> ?)")) {
+                ps.setString(1, name);
+                ps.setString(2, terminalId);
+                ps.setString(3, name);
+                boolean changed = ps.executeUpdate() > 0;
+                if (changed) {
+                    System.out.println("[TERMINALS] " + terminalId + " is the computer " + name);
+                }
+                return changed;
+            }
         });
     }
 

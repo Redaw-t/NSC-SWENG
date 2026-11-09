@@ -18,7 +18,7 @@ import java.util.Objects;
  * <ul>
  *   <li>{@link #registerAtInstallation}: Installation Setup on the Main POS, right after the first admin
  *       is created; the row is performed by that admin (NSC-00001).</li>
- *   <li>{@link #change}: Settings &gt; Store Details, Admin only (MANAGE_SYSTEM, checked here).</li>
+ *   <li>{@link #change}: Settings &gt; General &gt; System Configuration &gt; Store Details, Admin only (MANAGE_SYSTEM, checked here).</li>
  *   <li>{@link #current}: what receipts and labels print; read each time, so a change shows on the next
  *       receipt without restarting.</li>
  * </ul>
@@ -92,7 +92,7 @@ public final class StoreDetailsService {
     }
 
     /**
-     * Settings &gt; Store Details: saves new details as a new row, performed by the signed-in admin.
+     * Settings &gt; General &gt; System Configuration &gt; Store Details: saves new details as a new row, performed by the signed-in admin.
      *
      * @throws SystemException not an admin, a detail is wrong, nothing changed, or it could not be saved;
      *                         the message can be shown as is

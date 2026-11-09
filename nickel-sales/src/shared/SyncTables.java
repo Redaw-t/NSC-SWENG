@@ -9,7 +9,9 @@ import java.util.Set;
 /**
  * Which store tables are synced between the POS terminals, and how. The one list both sides use:
  * {@link SyncOutbox} (what a change records) and sync.ChangeApplier (what another terminal may write).
- * A table that is not here is never synced (InvoiceSequence, BackupRecord, SyncLog: each PC's own).
+ * A table that is not here is never synced (BackupRecord, SyncLog: each PC's own). InvoiceSequence's rows
+ * are not sent either, but every PC raises each register's counter from the sales it receives
+ * (shared.InvoiceCounters), so every PC knows where every register's invoice numbers are.
  *
  * Two kinds of table:
  * - {@link Op#INSERT}: rows are only ever added, never changed (sales, returns, stock movements,

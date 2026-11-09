@@ -19,13 +19,14 @@ import java.util.regex.Pattern;
  * The Main POS's API, for the other terminals on the store network (HTTP + JSON, JDK only).
  *
  * | Method | Path                     | Key? | Does                                                  |
- * | GET    | /api/ping                | no   | {"status":"ok","terminalId":"T01"}: the Main POS is up |
+ * | GET    | /api/ping                | no   | {"status":"ok","terminalId":"T01","computerName":"MAIN-PC"} |
  * | POST   | /api/terminals/register  | yes  | body {"ipAddress":"192.168.1.21","computerName":"..."} |
  * |        |                          |      | reply {"terminalId":"T02"}                            |
  * | GET    | /api/sync/snapshot       | yes  | the whole store database (gzip of DatabaseDump text), |
  * |        |                          |      | for a new Additional POS's first sync                 |
  * | POST   | /api/sync/push           | yes  | an Additional POS's queued changes (see SyncHub)      |
- * | GET    | /api/sync/pull?after=N   | yes  | every terminal's changes after place N, in order      |
+ * | GET    | /api/sync/pull?after=N   | yes  | every terminal's changes after place N, in order;     |
+ * |        |   [&wait=ms]             |      | with wait, held until something new arrives           |
  * | GET    | /api/sync/next-id?kind=K | yes  | a new product / user / category / supplier ID         |
  *
  * Calls that need the key must send the developer's key in the X-API-Key header ({@link ApiKey});
@@ -43,6 +44,8 @@ public final class ApiServer {
     private static final int MAX_SYNC_BODY = 32 * 1024 * 1024;
     /** The most changes one pull returns. */
     private static final int MAX_PULL = 500;
+    /** The longest a "wait for news" pull is held open. */
+    private static final long MAX_WAIT_MILLIS = 25_000;
     private static final Pattern TERMINAL = Pattern.compile("^T\\d{2,3}$");
     /** Header of the copy for a new Additional POS: where in the sync list the copy starts. */
     public static final String SYNC_SEQ_HEADER = "X-Sync-Seq";
@@ -94,14 +97,17 @@ public final class ApiServer {
                                   SyncHub hub) throws IOException {
         Objects.requireNonNull(registrar, "registrar");
         HttpServer server = HttpServer.create(new InetSocketAddress(port), 0);
-        ExecutorService threads = Executors.newFixedThreadPool(4, r -> {
+        // As many threads as calls: every Additional POS keeps one "wait for news" call open, and its
+        // pings and sends must not queue behind those.
+        ExecutorService threads = Executors.newCachedThreadPool(r -> {
             Thread t = new Thread(r, "api-server");
             t.setDaemon(true);   // never keeps the app from closing
             return t;
         });
         server.setExecutor(threads);
         server.createContext("/api/ping", ex -> handle(ex, "GET", false,
-                () -> reply(ex, 200, Json.object("status", "ok", "terminalId", terminalId))));
+                () -> reply(ex, 200, Json.object("status", "ok", "terminalId", terminalId,
+                        "computerName", shared.ComputerName.get()))));
         server.createContext("/api/terminals/register", ex -> handle(ex, "POST", true, () -> {
             Map<String, String> body = Json.fields(readBody(ex));
             String ip = body.getOrDefault("ipAddress", "").trim();
@@ -185,9 +191,13 @@ public final class ApiServer {
             Map<String, String> query = query(ex);
             long after = number(query.get("after"), 0);
             int limit = (int) Math.max(0, Math.min(MAX_PULL, number(query.get("limit"), MAX_PULL)));
+            long wait = Math.max(0, Math.min(MAX_WAIT_MILLIS, number(query.get("wait"), 0)));
             SyncHub.Page page;
             try {
-                page = hub.pull(after, limit);
+                page = hub.pull(after, limit, wait);   // with a wait: answered as soon as something new arrives
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IOException("Stopped while waiting for changes", e);
             } catch (Exception e) {
                 throw new IOException("Could not read the list of changes", e);
             }

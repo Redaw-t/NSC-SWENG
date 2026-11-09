@@ -181,7 +181,9 @@ CREATE TABLE IF NOT EXISTS `ReturnLine` (
     INDEX idx_returnline_product (ProductID)
 ) ENGINE=InnoDB;
 
--- Next invoice number per terminal per year (year in Philippine time).
+-- Next invoice number per terminal per year (year in Philippine time). Every PC keeps EVERY register's
+-- row: a register's own sales move it, and the other registers' sales move theirs when sync brings them
+-- (never lowered). So a register set up again from the Main POS's copy continues where it left off.
 CREATE TABLE IF NOT EXISTS `InvoiceSequence` (
     TerminalID VARCHAR(10) NOT NULL,
     InvoiceYear SMALLINT NOT NULL,
@@ -283,7 +285,7 @@ CREATE TABLE IF NOT EXISTS `BackupRecord` (
 -- The store details printed at the top of every receipt, as a log: a change never edits or deletes
 -- a row, it adds a new one, and the NEWEST row (latest PerformedAt) is the one in use. The first
 -- row is made in Installation Setup on the Main POS, performed by the first admin (NSC-00001); later
--- ones only by an admin, in Settings > Store Details. No rows yet = Nickel Sales Center's own details.
+-- ones only by an admin, in Settings > General > System Configuration > Store Details. No rows yet = Nickel Sales Center's own details.
 -- In the store database, so an Additional POS gets it with the rest of the store's data.
 CREATE TABLE IF NOT EXISTS `StoreDetails` (
     StoreDetailsID BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -366,6 +368,18 @@ SET @missing = (SELECT COUNT(*) = 0 FROM information_schema.COLUMNS
     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'StoreDetails' AND COLUMN_NAME = 'GlobalID');
 SET @ddl = IF(@missing, 'ALTER TABLE `StoreDetails` ADD COLUMN GlobalID CHAR(36) NULL AFTER StoreDetailsID, ADD UNIQUE KEY uq_storedetails_global (GlobalID)', 'DO 0');
 PREPARE upgrade FROM @ddl; EXECUTE upgrade; DEALLOCATE PREPARE upgrade;
+
+-- InvoiceSequence: every register's counter at least past its highest invoice here (databases from before
+-- every PC kept every register's counter; see shared.InvoiceCounters). Only ever raises a counter.
+INSERT INTO `InvoiceSequence` (TerminalID, InvoiceYear, NextNumber)
+SELECT * FROM (
+    SELECT SUBSTRING_INDEX(InvoiceNo, '-', 1) AS Terminal,
+           CAST(SUBSTRING_INDEX(SUBSTRING_INDEX(InvoiceNo, '-', 2), '-', -1) AS UNSIGNED) AS InvYear,
+           MAX(CAST(SUBSTRING_INDEX(InvoiceNo, '-', -1) AS UNSIGNED)) + 1 AS NextNo
+    FROM `Sale` WHERE InvoiceNo REGEXP '^[A-Za-z0-9]+-[0-9]{4}-[0-9]+$'
+    GROUP BY Terminal, InvYear
+) AS used
+ON DUPLICATE KEY UPDATE NextNumber = GREATEST(`InvoiceSequence`.NextNumber, used.NextNo);
 
 -- Inventory.chk_inventory_quantity removed: with several terminals stock can go below zero (see Inventory)
 SET @present = (SELECT COUNT(*) > 0 FROM information_schema.TABLE_CONSTRAINTS

@@ -71,8 +71,15 @@ final class TopProductsPane implements ReportsPane {
         size.setValue(size.getItems().get(1));
         size.setPrefWidth(110);
 
-        Button apply = ReportsUi.applyButton(this::load);
-        FlowPane toolbar = new FlowPane(12, 12, period.getView(), ranking, size, apply);
+        shared.LiveFilters filters = new shared.LiveFilters(this::load);   // no Apply: it updates as you choose
+        period.watch(filters);
+        filters.watch(ranking, size);
+        Button reset = filters.resetButton(() -> {
+            period.reset();
+            ranking.setValue(ProductRanking.BY_QUANTITY);
+            size.setValue(size.getItems().get(1));
+        });
+        FlowPane toolbar = new FlowPane(12, 12, period.getView(), ranking, size, reset, filters.refreshIcon());
         toolbar.setAlignment(Pos.CENTER_LEFT);
 
         Label note = new Label("Sales amounts include VAT. Share = the product's amount out of all products sold "

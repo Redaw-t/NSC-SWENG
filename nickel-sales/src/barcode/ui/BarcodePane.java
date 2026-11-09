@@ -71,12 +71,25 @@ public final class BarcodePane {
     private List<BarcodeRow> loaded = List.of();     // everything from the Product module
     private List<BarcodeRow> filtered = List.of();   // loaded, narrowed by search and status
 
+    /** The Barcode cell: the barcode, or a faint "No Barcode", the same as Product > Products' Code column. */
+    private static Node barcodeCell(BarcodeRow r) {
+        if (r.barcode() == null || r.barcode().isBlank()) {
+            Label none = new Label("No Barcode");
+            Styles.muted(none);
+            none.setOpacity(0.5);
+            return none;
+        }
+        Label code = new Label(r.barcode());
+        code.setStyle("-fx-text-fill: " + Theme.PRIMARY_TEXT + ";");
+        return code;
+    }
+
     public BarcodePane(BarcodeService service) {
         this.service = service;
 
         table.getColumns().add(Tables.<BarcodeRow>numberColumn(pager));   // No. 1, 2, 3 ... like Products
         table.getColumns().add(Tables.<BarcodeRow>textColumn("Product Name", 250, r -> r.product().name()));
-        table.getColumns().add(Tables.<BarcodeRow>textColumn("Barcode", 180, r -> r.barcode() == null ? "-" : r.barcode()));
+        table.getColumns().add(Tables.<BarcodeRow>nodeColumn("Barcode", 180, 150, BarcodePane::barcodeCell));
         table.getColumns().add(Tables.<BarcodeRow>nodeColumn("Barcode Status", 170, 150,
                 r -> BarcodeUi.pill(r.status(), r.problem())));
         table.getColumns().add(Tables.<BarcodeRow>textColumn("Last Updated", 120,
@@ -99,7 +112,12 @@ public final class BarcodePane {
         Styles.primaryButton(assign);
         assign.setOnAction(e -> openAssign(null));
 
-        HBox toolbar = new HBox(12, search, statusFilter, assign);
+        shared.LiveFilters filters = new shared.LiveFilters(this::reload);
+        Button reset = filters.resetButton(() -> {   // back to how the tab opened
+            search.clear();
+            statusFilter.setValue(StatusFilter.ALL);
+        });
+        HBox toolbar = new HBox(12, search, statusFilter, reset, filters.refreshIcon(), assign);
         toolbar.setAlignment(Pos.CENTER_LEFT);
 
         message.setWrapText(true);

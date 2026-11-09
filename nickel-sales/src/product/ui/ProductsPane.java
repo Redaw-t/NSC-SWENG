@@ -141,7 +141,15 @@ final class ProductsPane {
         Button add = ProductUi.primaryButton("+ Add Product");
         add.setOnAction(e -> addProduct());
 
-        HBox toolbar = new HBox(12, search, categoryFilter, statusFilter, supplierFilter, add);
+        shared.LiveFilters filters = new shared.LiveFilters(() -> reload(false));
+        Button reset = filters.resetButton(() -> {   // back to how the tab opened
+            search.clear();
+            categoryFilter.setValue(ALL_CATEGORIES);
+            statusFilter.setValue(StatusFilter.ALL);
+            supplierFilter.setValue(ALL_SUPPLIERS);
+        });
+        HBox toolbar = new HBox(12, search, categoryFilter, statusFilter, supplierFilter, reset,
+                filters.refreshIcon(), add);
         toolbar.setAlignment(Pos.CENTER_LEFT);
 
         message.setWrapText(true);

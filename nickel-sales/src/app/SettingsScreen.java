@@ -25,8 +25,9 @@ import java.util.List;
  * The Settings screen (sidebar, bottom entry), with a tab strip like the Products screen:
  * - General (everyone): Account (change password) and Printers (receipt and barcode label printer
  *   for this computer, see {@link PrinterSettingsDialog}).
- * - Store Details (receipt header, with its change log), System Status and Backup &amp; Restore: Admin
- *   only (MANAGE_SYSTEM), from {@link SystemSettingsTabs}.
+ * - General also has System Configuration (Admin): Store Details and Change Main POS IP Address, as
+ *   pop-ups ({@link SystemConfigModal}).
+ * - System Status and Backup &amp; Restore: Admin only (MANAGE_SYSTEM), from {@link SystemSettingsTabs}.
  * (Activity, inventory and sync logs stay on the Audit Logs screen.)
  * The app's version ({@link shared.AppVersion}) is shown at the bottom right ("App Version: 0.1.0").
  */
@@ -109,8 +110,22 @@ public final class SettingsScreen {
                 card("Account", "Change the password you use to log in.", changePassword, null),
                 card("Printers", "The printers this computer uses for receipts and barcode labels.",
                         printerSettings, printerRows));
-        // Additional POS, Admin only: the Main POS's address it syncs with (found by itself; this is the fallback).
-        MainPosAddressCard.create(screen).ifPresent(list.getChildren()::add);
+        // Admin only: Store Details and the Main POS's address, as pop-ups.
+        if (SystemConfigModal.allowed(screen)) {
+            Button configure = new Button("Open");
+            Styles.primaryButton(configure);
+            configure.setOnAction(e -> SystemConfigModal.show(screen));
+            list.getChildren().add(card("System Configuration",
+                    "Store details on receipts, and this register's connection to the Main POS.", configure, null));
+            screen.app().find(system.service.LogCleanupService.class).ifPresent(cleanup -> {
+                Button clearLogs = new Button("Clear Logs");
+                Styles.primaryButton(clearLogs);
+                clearLogs.setOnAction(e -> system.ui.ClearLogsModal.show(screen, cleanup, screen.stage()));
+                list.getChildren().add(card("Clear Logs",
+                        "Delete old activity, sync and backup history entries on this register. Sales, stock and "
+                                + "settings are never touched.", clearLogs, null));
+            });
+        }
         list.setMaxWidth(820);
         list.setAlignment(Pos.TOP_LEFT);
         return list;

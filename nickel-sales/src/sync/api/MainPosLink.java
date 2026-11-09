@@ -15,6 +15,18 @@ public interface MainPosLink {
     /** The Main POS's list of changes after place {@code after}, at most {@code limit}. */
     SyncHub.Page pull(long after, int limit) throws MainPosClient.MainPosException;
 
+    /** As {@link #pull(long, int)}, letting the Main POS hold the call up to {@code waitMillis} until something new arrives. */
+    default SyncHub.Page pull(long after, int limit, long waitMillis) throws MainPosClient.MainPosException {
+        return pull(after, limit);
+    }
+
+    /**
+     * Returns if the Main POS answers right now (quickly); throws if not.
+     *
+     * @return the Main POS's computer name, or null if it didn't say
+     */
+    String ping() throws MainPosClient.MainPosException;
+
     /** The Main POS's address (shown in the status). */
     String mainIp();
 }

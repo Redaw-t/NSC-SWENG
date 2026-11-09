@@ -94,7 +94,7 @@ Setup** screen asks those the first time it starts
 (`NSC-00001`), then **Store Register** asks for the store details printed on receipts and saves
 them in the `StoreDetails` log as performed by that admin. On an Additional POS it asks for the
 Main POS's address, gets its terminal ID from it, and copies the store's data, store details
-included. Later changes are made by an admin in **Settings > Store Details**. The
+included. Later changes are made by an admin in **Settings > General > System Configuration > Store Details**. The
 Finish page tells the store to start the app to do this. Every PC, Main or Additional, gets the
 same installer.
 
@@ -120,8 +120,8 @@ the app's own code (password hashing, login names, backups).
    `NickelSales_Database` and `nickelsales_appconfig` only. The app signs in to MySQL with this
    user, never with root;
 6. opens **Windows Firewall** for the other registers, local network only: TCP 8765 (the Main POS's
-   API, which every register syncs through) and UDP 8766 (so a register can find the Main POS). The
-   uninstaller removes both rules;
+   API, which every register syncs through). Every PC gets it, since setup doesn't know yet which one
+   will be the Main POS. The uninstaller removes it;
 7. writes the **settings file** (database URL, user and password).
 
 Everything it does is logged to `install.log` (see [section 5](#5-helping-a-store-when-something-goes-wrong)).
@@ -135,6 +135,7 @@ Everything it does is logged to `install.log` (see [section 5](#5-helping-a-stor
 | `C:\ProgramData\NickelSales\mysql\` | The database files (`data\`), `my.ini`, `root.cnf` (root password), `mysqld.err` (MySQL's log) | **Administrators only** |
 | `C:\ProgramData\NickelSales\logs\` | `nickelsales-YYYY-MM-DD.log` (the app, kept 30 days), `install.log` (setup) | Everyone can write |
 | `C:\ProgramData\NickelSales\backups\` | Backups made before each update (newest 5 kept) | Read: the PC's users |
+| `C:\ProgramData\NickelSales\backups\auto\` | The app's **hourly automatic backup**, `nsc-autobackup-MMddyyHHmmss.sql.gz`: only the newest is kept (each one replaces the last). Shown in Backup & Restore as "Auto Backup" | Change: the PC's users (the app writes it) |
 | Windows service `NickelSalesDB` | MySQL, started automatically with Windows | |
 | Start menu | "Nickel Sales Center"; a "Nickel Sales Center support" folder with the log files, the update backups, and the app with a console | |
 
@@ -321,6 +322,7 @@ remove the rebuild, but that isn't done.
 | The app says it can't connect to the database | Check the service: Win+R → `services.msc` → **NickelSalesDB** should be *Running*. Then read today's `nickelsales-*.log` |
 | You want to see what the app is doing | Start menu → *Nickel Sales Center support* → *Nickel Sales Center (with console)*. It's the same app with a window showing its messages live. Closing that window closes the app |
 | An update went wrong | Sign in as an admin → **Settings → Backup & Restore → Restore from Backup**, and pick the file in `C:\ProgramData\NickelSales\backups\` |
+| Data lost or damaged since the last manual backup | The same, with the hourly automatic backup in `C:\ProgramData\NickelSales\backups\auto\` (at most an hour old). Type the path in the file window: `ProgramData` is hidden |
 | You need to look inside the database | As an administrator, `"C:\Program Files\Nickel Sales Center\mysql\bin\mysql.exe" --defaults-file=C:\ProgramData\NickelSales\mysql\root.cnf NickelSales_Database` |
 | Port 3307 is taken | Find the program with `netstat -ano \| findstr :3307` and close or remove it, then run setup again |
 | The store forgot the admin password | Another admin can reset it in **Manage users**. If there's no other admin, contact the team |
@@ -381,7 +383,7 @@ admin and the terminal ID come from the app's Installation Setup (`app/install/`
 | 1 | Packaged app with its own Java, version number, log file | ✅ Done |
 | 2 | Installer: wizard, MySQL service, `nickelsales` user, settings file, shortcuts, uninstall | ✅ Done, tested on a dev PC (before the in-app setup took over the first admin) |
 | 3 | Safe updates: backup first, no downgrades, port check, app must be closed | ✅ Done, tested on a dev PC |
-| 4 | **Additional registers**: pairing and the first copy of data in the app's Installation Setup; then every register's changes sync through the Main POS ([`sync/`](../nickel-sales/src/sync/README.md)); firewall rules for TCP 8765 and UDP 8766 (MySQL itself is never opened to the network) | Sync tested with two databases on one PC (`sync.SyncCheck`); not yet with two installed PCs |
+| 4 | **Additional registers**: pairing and the first copy of data in the app's Installation Setup; then every register's changes sync through the Main POS ([`sync/`](../nickel-sales/src/sync/README.md)); a firewall rule for TCP 8765 (MySQL itself is never opened to the network) | Sync tested with two databases on one PC (`sync.SyncCheck`); not yet with two installed PCs |
 | 5 | Polish: clean-VM testing (Windows 10 and 11), wizard branding, code signing | To do |
 
 Known limitation: printer and POS settings are saved per **Windows user**. If cashiers sign in

@@ -76,7 +76,8 @@ public final class ActivityDescription {
             Map.entry("SYNC_RETRY_REQUESTED", "Sync retry requested."),
             Map.entry("STORE_DETAILS_REGISTERED", "Store details registered in Installation Setup."),
             Map.entry("STORE_DETAILS_CHANGED", "Store details on receipts changed."),
-            Map.entry("MAIN_POS_ADDRESS_CHANGED", "Main POS address changed in Settings."));
+            Map.entry("MAIN_POS_ADDRESS_CHANGED", "Main POS address changed in Settings."),
+            Map.entry("LOGS_CLEARED", "Old log entries cleared in Settings."));
 
     /** How the sentences built in {@link #describe} start, so a search for those words finds them. */
     private static final Map<String, String> OPENINGS = Map.of(

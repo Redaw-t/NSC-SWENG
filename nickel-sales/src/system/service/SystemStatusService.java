@@ -145,7 +145,7 @@ public final class SystemStatusService {
                         "No backup has been made. Create one in Settings > Backup & Restore.");
             }
             long days = Duration.between(latest.get().createdAt(), clock.instant()).toDays();
-            String when = days == 0 ? "Today" : days == 1 ? "1 day ago" : days + " days ago";
+            String when = shared.PhTime.relative(latest.get().createdAt(), clock.instant());   // "Today, 3:23 PM" ...
             return days >= BACKUP_WARNING_DAYS
                     ? new StatusItem("Last Backup", Level.WARNING, when,
                             "The latest backup is over a week old. Create a new one.")
@@ -191,12 +191,13 @@ public final class SystemStatusService {
             if (left <= 0) {
                 long over = log.countOlderThan(now.minus(Duration.ofDays(RETENTION_DAYS)));
                 return new StatusItem("Log Retention", Level.WARNING, over + " past " + RETENTION_DAYS + " days",
-                        "These log entries have passed the retention period. Create a backup to keep a copy.");
+                        "These log entries have passed the retention period. Clear them in Settings > General > "
+                                + "Clear Logs (Older than " + RETENTION_DAYS + " days): a CSV copy is saved first.");
             }
             if (left <= RETENTION_WARNING_DAYS) {
                 return new StatusItem("Log Retention", Level.WARNING, left + (left == 1 ? " day left" : " days left"),
-                        "The oldest logs reach the " + RETENTION_DAYS + "-day retention period soon. "
-                                + "Create a backup to keep a copy.");
+                        "The oldest logs reach the " + RETENTION_DAYS + "-day retention period soon. Then clear "
+                                + "them in Settings > General > Clear Logs.");
             }
             return new StatusItem("Log Retention", Level.OK, age + (age == 1 ? " day old" : " days old"),
                     "Age of the oldest log entry. Logs are kept for " + RETENTION_DAYS + " days.");

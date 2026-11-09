@@ -8,18 +8,21 @@ import java.util.Objects;
  * One backup or restore that was made (or tried).
  *
  * @param backupId   database ID; 0 until saved
- * @param kind       {@link #BACKUP}, {@link #SAFETY} (taken automatically before a restore) or {@link #RESTORE}
+ * @param kind       {@link #BACKUP}, {@link #AUTO} (the hourly automatic backup), {@link #SAFETY} (taken
+ *                   automatically before a restore) or {@link #RESTORE}
  * @param fileName   the backup file
  * @param folderPath the folder it is in
  * @param sizeBytes  the file's size; null if there is no file
  * @param result     {@link #SUCCESS} or {@link #FAILED}
  * @param message    what went wrong; null if nothing did
- * @param userId     who did it
+ * @param userId     who did it; null for an automatic backup
  */
 public record BackupRecord(long backupId, Instant createdAt, String terminalId, String kind, String fileName,
                            String folderPath, Long sizeBytes, String result, String message, String userId) {
 
     public static final String BACKUP = "BACKUP";
+    /** Made by the app on its own every hour (system.service.AutoBackup); no user. */
+    public static final String AUTO = "AUTO";
     public static final String SAFETY = "SAFETY";
     public static final String RESTORE = "RESTORE";
     public static final String SUCCESS = "SUCCESS";
@@ -42,6 +45,7 @@ public record BackupRecord(long backupId, Instant createdAt, String terminalId, 
     public String kindLabel() {
         return switch (kind) {
             case BACKUP -> "Backup";
+            case AUTO -> "Auto Backup";
             case SAFETY -> "Safety backup";
             case RESTORE -> "Restore";
             default -> kind;

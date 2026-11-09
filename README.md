@@ -37,8 +37,10 @@ with a button for each part of the system your role may use:
 - **Inventory** (admins and inventory staff): stock levels, stock-in and adjustments, and every
   stock movement.
 - **System & sync** (admins): activity logs, inventory logs, sync logs, and open items and price
-  edits. **Settings** has the printers, and for admins System Status and Backup & Restore.
-- **Several registers:** every register keeps selling on its own and syncs every few seconds
+  edits. **Settings** has the printers, and for admins System Status and Backup & Restore. The app also
+  backs the database up on its own **every hour** (only the newest copy is kept, in a hidden system
+  folder), and every one shows in Backup & Restore as "Auto Backup".
+- **Several registers:** every register keeps selling on its own and syncs at once
   through the Main POS: sales, stock, products, users, logs. See
   [nickel-sales/src/sync/README.md](nickel-sales/src/sync/README.md).
 
@@ -204,7 +206,7 @@ phone) are kept in the store database, in the `StoreDetails` log: every change a
 a row with who performed it, and the newest row is the one printed. The first row
 is made by Installation Setup on the Main POS (**Store Register**, right after the
 admin account, performed by `NSC-00001`); after that only an admin can change them,
-in **Settings > Store Details**, which also shows the change log. Until a row exists
+in **Settings > General > System Configuration > Store Details**, which also shows the change log. Until a row exists
 (an older database, or a developer PC that never ran setup), receipts use the
 `NSC_STORE_*` settings if set, else Nickel Sales Center's own details.
 Products live in MySQL (`Product`, `Category`, `Supplier`). The demo data script adds test

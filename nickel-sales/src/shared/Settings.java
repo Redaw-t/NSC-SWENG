@@ -55,6 +55,11 @@ public final class Settings {
         installedApp = true;
     }
 
+    /** True when this is the installed app (app.Main), not a development run or a self-test. */
+    public static boolean isInstalledApp() {
+        return installedApp;
+    }
+
     /** The settings file in use, or null when none is (a development run without NSC_SETTINGS_FILE). */
     static Path fileInUse() {
         String named = System.getenv(FILE_VARIABLE);

@@ -50,4 +50,22 @@ public final class PhTime {
     public static String format(Instant instant) {
         return DATE_TIME.format(of(instant));
     }
+
+    private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("h:mm a", Locale.US);
+
+    /**
+     * When something happened, as people say it (PH time): "Today, 3:23 PM", "Yesterday, 3:23 PM", else
+     * "Oct 24, 2026 3:23 PM".
+     */
+    public static String relative(Instant at, Instant now) {
+        LocalDate day = of(at).toLocalDate();
+        LocalDate today = of(now).toLocalDate();
+        if (day.equals(today)) {
+            return "Today, " + TIME.format(of(at));
+        }
+        if (day.equals(today.minusDays(1))) {
+            return "Yesterday, " + TIME.format(of(at));
+        }
+        return format(at);
+    }
 }

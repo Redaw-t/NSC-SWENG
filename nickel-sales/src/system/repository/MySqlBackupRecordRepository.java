@@ -61,10 +61,12 @@ public class MySqlBackupRecordRepository implements BackupRecordRepository {
 
     @Override
     public Optional<BackupRecord> latestBackup() {
-        String sql = SELECT + " WHERE Kind = ? AND Result = ? ORDER BY BackupID DESC LIMIT 1";
+        // A manual or an automatic backup: either is a backup of the data (System Status: Last Backup).
+        String sql = SELECT + " WHERE Kind IN (?, ?) AND Result = ? ORDER BY BackupID DESC LIMIT 1";
         try (Connection c = Database.getConnection(); PreparedStatement ps = c.prepareStatement(sql)) {
             ps.setString(1, BackupRecord.BACKUP);
-            ps.setString(2, BackupRecord.SUCCESS);
+            ps.setString(2, BackupRecord.AUTO);
+            ps.setString(3, BackupRecord.SUCCESS);
             try (ResultSet rs = ps.executeQuery()) {
                 return rs.next() ? Optional.of(read(rs)) : Optional.empty();
             }

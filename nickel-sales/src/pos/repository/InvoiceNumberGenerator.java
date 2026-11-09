@@ -19,6 +19,9 @@ import java.util.regex.Pattern;
  * row locked, so:
  * - if the sale fails and is rolled back, the number is not used up (no gaps);
  * - two sales on the same terminal can never get the same number.
+ * It also never repeats a number already in the database, even if the counter went back
+ * (see shared.InvoiceCounters: every PC also keeps every other register's counter, from the sales sync
+ * brings it, so a PC set up again continues where it left off).
  */
 public class InvoiceNumberGenerator {
 
@@ -52,10 +55,14 @@ public class InvoiceNumberGenerator {
                 number = rs.getInt(1);
             }
         }
+        // Never a number already used: if this counter went back (the PC was set up again from the Main
+        // POS's copy, or a backup was restored), go past the highest of this register's invoices here.
+        number = (int) Math.max(number, shared.InvoiceCounters.highestUsed(tx, terminalId, year) + 1);
         try (PreparedStatement next = tx.prepareStatement(
-                "UPDATE InvoiceSequence SET NextNumber = NextNumber + 1 WHERE TerminalID = ? AND InvoiceYear = ?")) {
-            next.setString(1, terminalId);
-            next.setInt(2, year);
+                "UPDATE InvoiceSequence SET NextNumber = ? WHERE TerminalID = ? AND InvoiceYear = ?")) {
+            next.setInt(1, number + 1);
+            next.setString(2, terminalId);
+            next.setInt(3, year);
             next.executeUpdate();
         }
         return format(terminalId, year, number);

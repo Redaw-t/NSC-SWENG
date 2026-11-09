@@ -8,8 +8,6 @@ import auth.ui.LogoutAction;
 import javafx.application.Platform;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
-import javafx.scene.control.Alert;
-import javafx.scene.layout.Region;
 import javafx.stage.Stage;
 import javafx.stage.Window;
 import javafx.stage.WindowEvent;
@@ -147,13 +145,9 @@ public class DashboardRouter {
             show(screen);
         } catch (RuntimeException e) {
             System.out.println("[APP] could not open " + module.title() + ": " + e);
-            Alert error = new Alert(Alert.AlertType.ERROR,
-                    UiErrors.message(e, module.title() + " could not be opened. Try again, "
-                            + "or contact the system administrator."));
-            error.setTitle(module.title());
-            error.setHeaderText(null);
-            error.initOwner(stage);
-            error.show();
+            String text = UiErrors.message(e, module.title() + " could not be opened. Try again, "
+                    + "or contact the system administrator.");
+            Platform.runLater(() -> shared.Modal.notice(stage, module.title() + " could not be opened", text));
         }
     }
 
@@ -216,15 +210,9 @@ public class DashboardRouter {
             if (currentSessionId != null) {
                 return;   // someone already logged in again
             }
-            Alert expired = new Alert(Alert.AlertType.INFORMATION, SESSION_EXPIRED_MESSAGE);
-            expired.setTitle("Session expired");
-            expired.setHeaderText(null);
-            expired.initOwner(stage);
-            // Let the box grow to fit its text (otherwise the text can be cut off or missing).
-            expired.getDialogPane().setMinHeight(Region.USE_PREF_SIZE);
-            expired.getDialogPane().setMinWidth(Region.USE_PREF_SIZE);
-            expired.setResizable(true);
-            expired.show();
+            // The app's own pop-up (as on every other screen), not the plain Windows-style box.
+            shared.Modal.notice(stage, "Session expired",
+                    "You were signed out because the app was not used for a while. Please log in again.");
         });
     }
 

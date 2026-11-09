@@ -64,19 +64,25 @@ public final class SyncStatus {
         mainIp = ip;
     }
 
-    void ok(Instant at) {
+    /** Reached the Main POS (or, on the Main POS, a round went fine). @return true if it was offline before */
+    synchronized boolean ok(Instant at) {
+        boolean wasOffline = Boolean.FALSE.equals(mainReachable);
         mainReachable = true;
         lastContact = at;
         offlineSince = null;
         problem = null;
+        return wasOffline;
     }
 
-    void unreachable(Instant at, String why) {
+    /** Couldn't reach the Main POS. @return true if it was reachable (or not tried) before: a new outage */
+    synchronized boolean unreachable(Instant at, String why) {
+        boolean wasOnline = !Boolean.FALSE.equals(mainReachable);
         if (offlineSince == null) {
             offlineSince = at;
         }
         mainReachable = false;
         problem = why;
+        return wasOnline;
     }
 
     void problem(String why) {

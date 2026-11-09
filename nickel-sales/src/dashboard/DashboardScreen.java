@@ -178,7 +178,11 @@ public final class DashboardScreen {
         Button refresh = new Button("↻  Refresh");
         Styles.rowButton(refresh, Theme.BORDER, Theme.PRIMARY_TEXT);
         refresh.setOnAction(e -> load());
-        VBox right = new VBox(6, refresh, updated);
+        // shows when another register's sales or changes arrive; a click loads them now
+        Button newData = new shared.LiveFilters(this::load).refreshIcon();
+        HBox buttons = new HBox(8, newData, refresh);
+        buttons.setAlignment(Pos.CENTER_RIGHT);
+        VBox right = new VBox(6, buttons, updated);
         right.setAlignment(Pos.TOP_RIGHT);
 
         Region fill = new Region();

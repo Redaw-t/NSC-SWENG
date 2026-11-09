@@ -94,6 +94,7 @@ public class SystemAdminCheck {
             recreate(DB_A);
             recreate(DB_B);
             backupChecks(temp);
+            cleanupChecks();
         } finally {
             drop(DB_A);
             drop(DB_B);
@@ -215,11 +216,14 @@ public class SystemAdminCheck {
         check("Status: last backup warns when there is none or it is over a week old", () -> {
             MemoryBackups records = new MemoryBackups();
             expectItem(SystemStatusService.lastBackup(records, CLOCK), Level.WARNING, "None yet");
-            records.add(backupAt(NOW.minus(Duration.ofHours(3))));
-            expectItem(SystemStatusService.lastBackup(records, CLOCK), Level.OK, "Today");
+            records.add(backupAt(NOW.minus(Duration.ofHours(3))));          // now is Nov 4, 10:00 AM PH time
+            expectItem(SystemStatusService.lastBackup(records, CLOCK), Level.OK, "Today, 7:00 AM");
+            records.rows.clear();
+            records.add(backupAt(NOW.minus(Duration.ofHours(20))));
+            expectItem(SystemStatusService.lastBackup(records, CLOCK), Level.OK, "Yesterday, 2:00 PM");
             records.rows.clear();
             records.add(backupAt(NOW.minus(Duration.ofDays(8))));
-            expectItem(SystemStatusService.lastBackup(records, CLOCK), Level.WARNING, "8 days ago");
+            expectItem(SystemStatusService.lastBackup(records, CLOCK), Level.WARNING, "Oct 27, 2026 10:00 AM");
         });
 
         check("Status: log retention warns 5 days ahead and after 30 days", () -> {
@@ -404,6 +408,41 @@ public class SystemAdminCheck {
             expectTrue(service.check("s", goodBackup[0]).tables() == 1, "the file checks out");
         });
 
+        check("Auto Backup: nsc-autobackup-MMddyyHHmmss, only the newest kept, in the history with no user", () -> {
+            Path auto = temp.resolve("auto");
+            Files.createDirectories(auto);
+            Path older = auto.resolve(BackupService.AUTO_PREFIX + "110426090000.sql.gz");   // last hour's
+            Files.copy(goodBackup[0], older);
+            Path other = auto.resolve("notes.txt");                                          // not a backup: kept
+            Files.writeString(other, "x");
+            int before = records.rows.size();
+            BackupRecord record = service.autoBackup(auto).orElseThrow();
+            expectText(record.fileName(), "nsc-autobackup-110426100000.sql.gz");   // Nov 4 2026 10:00:00 PH time
+            expectText(record.kind(), BackupRecord.AUTO);
+            expectTrue(record.succeeded() && record.userId() == null, "made by the app, not a user");
+            expectText(record.kindLabel(), "Auto Backup");
+            expectTrue(Files.exists(auto.resolve(record.fileName())), "the new file is there");
+            expectTrue(!Files.exists(older), "last hour's was replaced");
+            expectTrue(Files.exists(other), "nothing else in the folder is touched");
+            expectTrue(records.rows.size() == before + 1 && records.rows.get(records.rows.size() - 1) == record,
+                    "recorded in the backup history");
+            expectTrue(service.check("s", auto.resolve(record.fileName())).tables() == 1, "a complete backup");
+        });
+
+        check("Auto Backup: a failure is recorded (Failed), and the hourly timer starts within minutes or on the hour", () -> {
+            Path notAFolder = temp.resolve("auto-is-a-file");
+            Files.writeString(notAFolder, "x");
+            BackupRecord failed = service.autoBackup(notAFolder).orElseThrow();
+            expectText(failed.result(), BackupRecord.FAILED);
+            expectText(failed.kind(), BackupRecord.AUTO);
+            java.time.Instant now = java.time.Instant.parse("2026-11-04T02:00:00Z");
+            expectTrue(system.service.AutoBackup.firstDelay(null, now).toMinutes() == 2, "none yet: in 2 minutes");
+            expectTrue(system.service.AutoBackup.firstDelay(now.minusSeconds(1800), now).toMinutes() == 30,
+                    "last one 30 min ago: in 30 minutes");
+            expectTrue(system.service.AutoBackup.firstDelay(now.minusSeconds(7200), now).toMinutes() == 2,
+                    "last one over an hour ago: soon");
+        });
+
         check("Restore: brings the data back, keeps a safety backup, and is recorded and audited", () -> {
             exec(DB_A, "UPDATE Stock SET Qty = 99 WHERE Id = 1");
             exec(DB_A, "DELETE FROM Stock WHERE Id = 2");
@@ -507,6 +546,84 @@ public class SystemAdminCheck {
             expectThrows(() -> refused.check("s", goodBackup[0]), SystemException.class);
             expectThrows(() -> refused.changeFolder("s", other), SystemException.class);
             expectThrows(() -> refused.history("s"), SystemException.class);
+        });
+    }
+
+    /* ------------------------------- clear logs ------------------------------- */
+
+    /** Clear Logs, on scratch tables shaped like the real ones (DB_B: the store; DB_A: the app config). */
+    static void cleanupChecks() throws Exception {
+        recreate(DB_A);
+        recreate(DB_B);
+        exec(DB_B, "CREATE TABLE ActivityLog (LogID BIGINT AUTO_INCREMENT PRIMARY KEY, CreatedAt DATETIME(3) NOT NULL)");
+        exec(DB_B, "CREATE TABLE SyncLog (LogID BIGINT AUTO_INCREMENT PRIMARY KEY, CreatedAt DATETIME(3) NOT NULL)");
+        exec(DB_B, "CREATE TABLE BackupRecord (BackupID BIGINT AUTO_INCREMENT PRIMARY KEY, CreatedAt DATETIME(3) NOT NULL, "
+                + "Kind VARCHAR(10) NOT NULL, Result VARCHAR(10) NOT NULL)");
+        exec(DB_A, "CREATE TABLE SyncFailed (SyncLogID BIGINT PRIMARY KEY)");
+        // NOW is Nov 4, 2026. Months ago: activity 1, 4, 8, 14; sync 4 (waiting for Retry), 4, 1;
+        // backups: 8 (BACKUP), 7 (AUTO, the newest successful), 1 (a SAFETY one)
+        exec(DB_B, "INSERT INTO ActivityLog (CreatedAt) VALUES ('2026-10-04'), ('2026-07-04'), ('2026-03-04'), ('2025-09-04')");
+        exec(DB_B, "INSERT INTO SyncLog (CreatedAt) VALUES ('2026-07-04'), ('2026-07-04'), ('2026-10-04')");
+        exec(DB_A, "INSERT INTO SyncFailed VALUES (1)");
+        exec(DB_B, "INSERT INTO BackupRecord (CreatedAt, Kind, Result) VALUES ('2026-03-04', 'BACKUP', 'SUCCESS'), "
+                + "('2026-04-04', 'AUTO', 'SUCCESS'), ('2026-10-04', 'SAFETY', 'SUCCESS')");
+        List<String> audit = new ArrayList<>();
+        Path copies = Files.createTempDirectory("nsc-cleared-logs");
+        system.service.LogCleanupService service = new system.service.LogCleanupService(() -> open(DB_B), s -> ADMIN,
+                (event, user) -> audit.add(event + " by " + user), CLOCK, () -> copies, DB_A);
+        java.util.Set<system.service.LogCleanupService.Log> all =
+                java.util.EnumSet.allOf(system.service.LogCleanupService.Log.class);
+
+        check("Clear Logs: counts what would go; a failed sync waiting for Retry and the newest backup are kept", () -> {
+            var n = service.count("s", all, system.service.LogCleanupService.Period.OLDER_3_MONTHS);
+            expectTrue(n.get(system.service.LogCleanupService.Log.ACTIVITY) == 3, "activity: " + n);
+            expectTrue(n.get(system.service.LogCleanupService.Log.SYNC) == 1, "sync, not the one waiting: " + n);
+            expectTrue(n.get(system.service.LogCleanupService.Log.BACKUP_HISTORY) == 1, "backups, not the newest: " + n);
+        });
+
+        check("Clear Logs: deletes only the chosen log's old entries, and logs who did it", () -> {
+            var result = service.clear("s", java.util.EnumSet.of(system.service.LogCleanupService.Log.ACTIVITY),
+                    system.service.LogCleanupService.Period.OLDER_6_MONTHS);
+            var deleted = result.deleted();
+            expectTrue(deleted.get(system.service.LogCleanupService.Log.ACTIVITY) == 2, "two older than 6 months: " + deleted);
+            expectTrue(result.copies().size() == 1, "one CSV copy: " + result.copies());
+            Path csv = result.copies().get(0);
+            expectText(csv.getFileName().toString(), "nickelsales-cleared-ActivityLog-20261104-100000.csv");
+            List<String> lines = Files.readAllLines(csv, java.nio.charset.StandardCharsets.UTF_8);
+            expectTrue(lines.size() == 3 && lines.get(0).contains("CreatedAt (UTC)") && lines.get(1).contains("2026-03-04")
+                    && lines.get(2).contains("2025-09-04"), "the two deleted entries, with a header: " + lines);
+            expectText(rowsOf(DB_B, "ActivityLog").lines().count() + "", "2");
+            expectText(rowsOf(DB_B, "SyncLog").lines().count() + "", "3");   // not chosen: untouched
+            expectTrue(audit.size() == 1 && audit.get(0).startsWith("LOGS_CLEARED target=ActivityLog 2 entries, older than 6 months"),
+                    "logged: " + audit);
+        });
+
+        check("Clear Logs: if the CSV copy can't be saved, nothing is deleted", () -> {
+            Path notAFolder = copies.resolve("a-file");
+            Files.writeString(notAFolder, "x");
+            system.service.LogCleanupService blocked = new system.service.LogCleanupService(() -> open(DB_B), s -> ADMIN,
+                    null, CLOCK, () -> notAFolder, DB_A);
+            String before = rowsOf(DB_B, "SyncLog");
+            expectThrows(() -> blocked.clear("s", java.util.EnumSet.of(system.service.LogCleanupService.Log.SYNC),
+                    system.service.LogCleanupService.Period.ALL_TIME), SystemException.class);
+            expectText(rowsOf(DB_B, "SyncLog"), before);
+        });
+
+        check("Clear Logs: all time still keeps the newest backup and a failed sync waiting for Retry", () -> {
+            service.clear("s", all, system.service.LogCleanupService.Period.ALL_TIME);
+            expectText(rowsOf(DB_B, "ActivityLog"), "");
+            expectTrue(rowsOf(DB_B, "SyncLog").startsWith("1|"), "the one waiting for Retry is kept: " + rowsOf(DB_B, "SyncLog"));
+            expectTrue(rowsOf(DB_B, "BackupRecord").startsWith("2|"), "the newest backup is kept: " + rowsOf(DB_B, "BackupRecord"));
+        });
+
+        check("Clear Logs: nothing chosen, or not an admin, is refused", () -> {
+            expectThrows(() -> service.clear("s", java.util.EnumSet.noneOf(system.service.LogCleanupService.Log.class),
+                    system.service.LogCleanupService.Period.ALL_TIME), SystemException.class);
+            system.service.LogCleanupService refused = new system.service.LogCleanupService(() -> open(DB_B), s -> {
+                throw new SystemException("You do not have permission.");
+            }, null, CLOCK, () -> copies, DB_A);
+            expectThrows(() -> refused.count("s", all, system.service.LogCleanupService.Period.ALL_TIME), SystemException.class);
+            expectThrows(() -> refused.clear("s", all, system.service.LogCleanupService.Period.ALL_TIME), SystemException.class);
         });
     }
 

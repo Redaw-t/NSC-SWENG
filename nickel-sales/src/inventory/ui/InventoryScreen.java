@@ -342,7 +342,18 @@ public final class InventoryScreen {
 
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
-        stockToolbar = new HBox(12, search, statusFilter, categoryFilter, spacer, stockIn, stockOut, adjust);
+        Button stockReset = new Button("Reset");   // back to how the tab opened: no search, all statuses and categories
+        toolbarStyle(stockReset, Theme.BORDER, Theme.PRIMARY_TEXT);
+        stockReset.setOnAction(e -> {
+            search.clear();
+            statusFilter.setValue(StatusChoice.ALL);
+            categoryFilter.setValue(ALL_CATEGORIES);
+            applyFilters(true);
+        });
+        // shows when another register's changes arrive; a click reads the stock again (filters stay)
+        javafx.scene.Node stockRefresh = new shared.LiveFilters(() -> reload(null)).refreshIcon();
+        stockToolbar = new HBox(12, search, statusFilter, categoryFilter, stockReset, stockRefresh, spacer,
+                stockIn, stockOut, adjust);
         stockToolbar.setAlignment(Pos.CENTER_LEFT);
         stockToolbar.setMaxWidth(Double.MAX_VALUE);
 
@@ -362,7 +373,8 @@ public final class InventoryScreen {
             toDate.setValue(null);
             applyFilters(true);
         });
-        historyToolbar = new HBox(12, historySearch, fromDate, toDate, reset);
+        javafx.scene.Node historyRefresh = new shared.LiveFilters(() -> reload(null)).refreshIcon();
+        historyToolbar = new HBox(12, historySearch, fromDate, toDate, reset, historyRefresh);
         historyToolbar.setAlignment(Pos.CENTER_LEFT);
         historyToolbar.setMaxWidth(Double.MAX_VALUE);
 
@@ -379,13 +391,10 @@ public final class InventoryScreen {
                 statBox("Out of Stock:", outValue));
         boxes.setAlignment(Pos.CENTER);
 
-        view.getChildren().addAll(tabs.getView(), toolbarSlot, tables, message, pagerSlot, boxes);
-        view.addEventFilter(KeyEvent.KEY_PRESSED, e -> {
-            if (e.getCode() == KeyCode.ESCAPE) {
-                screen.goHome();
-                e.consume();
-            }
-        });
+        // The tabs, and under them on the right the Refresh button: reads the stock and history again.
+        // (No keyboard shortcuts here: only POS has them.)
+        view.getChildren().addAll(shared.PageHeader.of(tabs.getView(), () -> reload(null)), toolbarSlot, tables,
+                message, pagerSlot, boxes);
     }
 
     private void buildStockTable() {

@@ -72,6 +72,11 @@ public final class Modal {
         return card;
     }
 
+    /** This pop-up's window: the owner to give a pop-up opened from this one, so it opens on top of it. */
+    public Window window() {
+        return stage;
+    }
+
     public void showAndWait() {
         dim();
         stage.showAndWait();

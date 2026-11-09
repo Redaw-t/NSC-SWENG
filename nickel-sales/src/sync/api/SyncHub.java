@@ -33,6 +33,15 @@ public interface SyncHub {
     /** The list after place {@code after}, at most {@code limit} changes. */
     Page pull(long after, int limit) throws Exception;
 
+    /**
+     * As {@link #pull(long, int)}, but if nothing is new yet, waits up to {@code waitMillis} for
+     * something to arrive and answers as soon as it does ("wait for news", so a change on one terminal
+     * shows on the others at once).
+     */
+    default Page pull(long after, int limit, long waitMillis) throws Exception {
+        return pull(after, limit);
+    }
+
     /** A new ID of {@code kind} (shared.MasterIds), never handed out twice. */
     String nextId(String kind) throws Exception;
 

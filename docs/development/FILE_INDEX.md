@@ -111,14 +111,15 @@ Paths are relative to `nickel-sales/src/` (sections 1 to 10), `nickel-sales/test
 |---|---|---|---|---|
 | `sync/README.md` | How every register's changes reach every other register through the Main POS: what is synced, IDs, offline, ports. | Sync | — | Read first. |
 | `sync/SyncEngine.java` | One sync round (push / pull / apply, or the Main POS's own queue); the Main POS's `SyncHub`. | Sync | `SyncDb`, `ChangeApplier`, `sync.api`, `system.contract.SyncLogWriter`. Used by `SyncWorker`, `app.SyncRuntime`. | Core: keep changes idempotent (a change may arrive twice). |
-| `sync/SyncWorker.java` | Runs a round every 3 s on a daemon thread. | Sync | `SyncEngine` | |
+| `sync/SyncWorker.java` | Runs sync on daemon threads: sends a change the moment it is saved, keeps a "wait for news" call open to the Main POS, checks every second that the Main POS is on. | Sync | `SyncEngine` | |
 | `sync/SyncDb.java` | Sync tables in `nickelsales_appconfig` (queue, Main POS list, failed changes, ID counter, applied place). | Sync | Used by `SyncEngine`, `MasterIdSources`, `app.Main` (pending count). | |
 | `sync/ChangeApplier.java` | Writes a change into this PC's store tables (only synced tables, existing columns). | Sync | `shared.SyncTables`, `shared.Json` | Never write a table or column a change names without checking it. |
 | `sync/SyncStatus.java`, `sync/MasterIdSources.java` | Status for System Status; where new shared IDs come from. | Sync | Used by `app.SyncRuntime`, `app.Main` | |
 | `sync/api/SyncHub.java`, `sync/api/MainPosLink.java` | The Main POS's sync calls; what an Additional POS needs from it. | Sync | Implemented by `SyncEngine` / `MainPosClient` | **SHARED CONTRACT.** |
-| `sync/discovery/Discovery.java` | Finding the Main POS on the network (UDP 8766). | Sync | `MainPosClient.verifyMainPos`. Used by `app.SyncRuntime`, Installation Setup, `app.MainPosAddressCard`. | |
 | `shared/SyncOutbox.java`, `shared/SyncTables.java`, `shared/MasterIds.java`, `shared/Json.java`, `shared/MainPosUnavailableException.java` | Recording changes for sync (in the change's transaction), which tables sync and how, new shared IDs, JSON, the "needs the Main POS" message. | Shared (Sync) | Used by every MySQL repository that writes a synced table. | **SHARED — CHANGE CAREFULLY.** A new synced table goes in `SyncTables` and its repository records it. |
-| `app/SyncRuntime.java`, `app/MainPosAddressCard.java` | Starts sync once the PC is set up; Settings card for the Main POS's address on an Additional POS. | App | `sync`, `app.install.PosTerminalRepository` | |
+| `app/SyncRuntime.java`, `app/SystemConfigModal.java`, `app/MainPosAddressModal.java` | Starts sync once the PC is set up; Settings > General > System Configuration pop-up (Store Details, Change Main POS IP Address). | App | `sync`, `system.ui.StoreDetailsModals`, `app.install.PosTerminalRepository` | |
+| `system/ui/StoreDetailsModals.java` | Store Details pop-ups: view, Edit, View Logs. | System | `StoreDetailsService` | |
+| `sync/discovery/MainPosScanner.java` | Finds the Main POS on this PC's network by trying TCP 8765 on each address. | Sync | `MainPosClient`. Used by `app.SyncRuntime`, Installation Setup, `MainPosAddressModal`. | |
 
 ## 8. reports
 

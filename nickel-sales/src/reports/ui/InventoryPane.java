@@ -74,12 +74,17 @@ final class InventoryPane implements ReportsPane {
         show.getItems().setAll(ALL, LOW, OUT);
         show.setValue(ALL);
         show.setPrefWidth(170);
-        show.valueProperty().addListener((obs, old, now) -> filter());
         search.setPrefWidth(260);
 
-        Button apply = ReportsUi.applyButton(this::load);
-        apply.setText("Refresh");
-        HBox toolbar = new HBox(12, show, search, apply);
+        // The list narrows as you choose or type (nothing is read again); the refresh icon reads the
+        // stock again when another register's changes arrive.
+        shared.LiveFilters filters = new shared.LiveFilters(this::filter);
+        filters.watch(show, search);
+        Button reset = filters.resetButton(() -> {
+            show.setValue(ALL);
+            search.clear();
+        });
+        HBox toolbar = new HBox(12, show, search, reset, new shared.LiveFilters(this::load).refreshIcon());
         toolbar.setAlignment(Pos.CENTER_LEFT);
 
         view.getChildren().addAll(toolbar, table, message, ReportsUi.footer(pager,

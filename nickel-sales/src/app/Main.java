@@ -192,7 +192,14 @@ public final class Main {
         app.register(SyncLogService.class, syncLog);
         app.register(SyncLogWriter.class, syncLog);
         app.register(BackupService.class, backups);
-        app.register(system.service.StoreDetailsService.class, app.storeDetails());   // Settings > Store Details
+        // Settings > General > Clear Logs (Admin): only the logs that are a record, never data the system uses.
+        app.register(system.service.LogCleanupService.class,
+                new system.service.LogCleanupService(Database::getConnection, systemAccess, app.audit(), clock,
+                        backups::folder));   // the cleared entries are saved as CSV in the backup folder first
+        // Every hour, on its own: the newest copy only, in a folder people don't use (started when the app opens).
+        app.register(system.service.AutoBackup.class,
+                new system.service.AutoBackup(backups, system.service.AutoBackup.defaultFolder(), clock));
+        app.register(system.service.StoreDetailsService.class, app.storeDetails());   // Settings > General > System Configuration > Store Details
         app.register(SystemStatusService.class, new SystemStatusService(systemAccess, List.of(
                 SystemStatusService.database(Database::getConnection),
                 () -> syncLink(syncRuntime),

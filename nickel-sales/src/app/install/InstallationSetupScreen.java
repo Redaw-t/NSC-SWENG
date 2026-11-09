@@ -32,7 +32,6 @@ import javafx.scene.layout.HBox;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.InetAddress;
 import java.util.Objects;
 import java.util.function.Consumer;
 
@@ -446,7 +445,7 @@ public final class InstallationSetupScreen {
                     + " (" + FirstAdminService.ADMIN_ID + "); store details registered");
             showDoneStep(PosTerminalRepository.MAIN_ID, "This computer is the Main POS. Other terminals connect "
                     + "to it at " + mainIp + ". Sign in as " + adminLogin + " with the password you chose. "
-                    + "An admin can change the store details in Settings > Store Details.");
+                    + "An admin can change the store details in Settings > General > System Configuration > Store Details.");
         };
         next.setOnAction(e -> submit.run());
         for (TextField f : new TextField[] {name, address, proprietor, tin, phone}) {
@@ -529,14 +528,14 @@ public final class InstallationSetupScreen {
     }
 
     /**
-     * Looks for this store's Main POS on the network (sync.discovery.Discovery) and fills in its address
-     * if the box is still empty. The address can still be typed or changed.
+     * Looks for this store's Main POS on the network (sync.discovery.MainPosScanner) and fills in its
+     * address if the box is still empty. The address can still be typed or changed.
      */
     private void findMainPos(TextField mainIp, Label found) {
         String key = apiKey;
         Thread look = new Thread(() -> {
-            java.util.Optional<String> ip = sync.discovery.Discovery.find(ApiServer.port(), key,
-                    java.time.Duration.ofSeconds(2));
+            java.util.Optional<String> ip = sync.discovery.MainPosScanner.find(ApiServer.port(), key,
+                    app.SyncRuntime.FIND_LIMIT);
             Platform.runLater(() -> {
                 if (ip.isPresent() && mainIp.getText().isBlank()) {
                     mainIp.setText(ip.get());
@@ -585,11 +584,13 @@ public final class InstallationSetupScreen {
                 java.nio.file.Path copy = null;
                 try {
                     copy = java.nio.file.Files.createTempFile("nickelsales-sync-", ".sql.gz");
-                    long startsAt = new MainPosClient(mainIp, ApiServer.port(), apiKey).downloadSnapshot(copy);
+                    MainPosClient client = new MainPosClient(mainIp, ApiServer.port(), apiKey);
+                    long startsAt = client.downloadSnapshot(copy);
+                    String mainName = client.ping();   // the Main POS's computer name, kept with its address
                     Platform.runLater(() -> status.setText("Saving the data on this computer..."));
                     InitialSync.Result loaded = InitialSync.load(copy);
                     // From here on this PC syncs with the Main POS, starting where its copy of the data ends.
-                    terminals.completeAdditionalSetup(mainIp, terminalId, myIp, name, apiKey, startsAt);
+                    terminals.completeAdditionalSetup(mainIp, mainName, terminalId, myIp, name, apiKey, startsAt);
                     System.out.println("[SETUP] first sync done: " + loaded.tables() + " tables from the Main POS at "
                             + mainIp + "; this computer is " + terminalId);
                     Platform.runLater(() -> showDoneStep(terminalId, "This computer is an Additional POS of the Main "
@@ -681,15 +682,7 @@ public final class InstallationSetupScreen {
 
     /** This computer's Windows name, so the Main POS recognises it if it asks again; null if unknown. */
     private static String computerName() {
-        String name = System.getenv("COMPUTERNAME");
-        if (name != null && !name.isBlank()) {
-            return name.trim();
-        }
-        try {
-            return InetAddress.getLocalHost().getHostName();
-        } catch (IOException e) {
-            return null;
-        }
+        return shared.ComputerName.get();
     }
 
     private static String orEmpty(String s) {

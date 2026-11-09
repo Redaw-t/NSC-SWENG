@@ -56,6 +56,7 @@ public class SyncCheck {
         System.out.println("=================================================================");
 
         jsonChecks();
+        scanChecks();
         databaseChecks();
 
         System.out.println("-----------------------------------------------------------------");
@@ -100,6 +101,17 @@ public class SyncCheck {
         });
     }
 
+    static void scanChecks() {
+        check("Finding the Main POS: every address of this PC's network, at most a /24, not the network or broadcast", () -> {
+            List<String> home = sync.discovery.MainPosScannerAccess.network("192.168.1.37", 24);
+            expectTrue(home.size() == 254 && home.get(0).equals("192.168.1.1") && home.get(253).equals("192.168.1.254"),
+                    "192.168.1.1 to .254: " + home.size());
+            List<String> big = sync.discovery.MainPosScannerAccess.network("10.0.7.5", 16);
+            expectTrue(big.size() == 254 && big.get(0).equals("10.0.7.1"), "a big network: only this PC's /24");
+            expectTrue(sync.discovery.MainPosScannerAccess.network("192.168.1.37", 31).isEmpty(), "too small: nothing");
+        });
+    }
+
     /* --------------------------- part 2: two terminals --------------------------- */
 
     /** One terminal's databases. */
@@ -133,6 +145,7 @@ public class SyncCheck {
         Clock clock = Clock.systemUTC();
         SyncEngine mainEngine = SyncEngine.mainPos(main.db(), "T01", (t, ip) -> log.seen.add(t + "@" + ip), log, clock);
         boolean[] down = {false};
+        String[] mainName = {"MAIN-POS"};
         MainPosLink direct = new MainPosLink() {
             @Override
             public int push(String terminalId, List<SyncHub.Sent> changes) throws MainPosClient.MainPosException {
@@ -159,11 +172,31 @@ public class SyncCheck {
             }
 
             @Override
+            public SyncHub.Page pull(long after, int limit, long waitMillis) throws MainPosClient.MainPosException {
+                if (down[0]) {
+                    throw new MainPosClient.MainPosException("Can't reach the Main POS (test: it is off).");
+                }
+                try {
+                    return mainEngine.pull(after, limit, waitMillis);
+                } catch (SQLException | InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+
+            @Override
+            public String ping() throws MainPosClient.MainPosException {
+                if (down[0]) {
+                    throw new MainPosClient.MainPosException("Can't reach the Main POS (test: it is off).");
+                }
+                return mainName[0];
+            }
+
+            @Override
             public String mainIp() {
                 return "192.168.1.20";
             }
         };
-        SyncEngine t02Engine = SyncEngine.additional(t02.db(), "T02", () -> direct, ip -> { }, null, log, clock);
+        SyncEngine t02Engine = SyncEngine.additional(t02.db(), "T02", () -> direct, log, clock);
         Runnable round = () -> {   // the order sync runs in on a real store: T02 sends, the Main POS applies, T02 gets
             t02Engine.cycle();
             mainEngine.cycle();
@@ -236,6 +269,40 @@ public class SyncCheck {
                 expectTrue(log.has(SyncTables.STOCK, "FAILED"), "flagged in the Sync log");
             });
 
+            check("Screens are told when another register's changes arrive (refresh icon), not for this PC's own", () -> {
+                int[] told = {0};
+                Runnable listener = () -> told[0]++;
+                shared.DataChanged.listen(listener);
+                addProduct(main, "P-0005", "4800000000307", "9.00");   // made on the Main POS (an ID below the others: the ID check stays as is)
+                mainEngine.mainRound();
+                int afterOwn = told[0];
+                t02Engine.pullRound(0);                                // T02 gets it: another register's change
+                expectTrue(told[0] > afterOwn, "T02's screens were told");
+                int before = told[0];
+                t02Engine.pullRound(0);                                // nothing new
+                expectTrue(told[0] == before, "not told again when nothing new arrived");
+                expectTrue(listener != null, "listener kept alive for the check");
+            });
+
+            check("Every PC knows each register's invoice counter, from the sales it receives", () -> {
+                // T02 sold T02-2026-000001 .. 000003; the Main POS got them by sync, never the counter itself
+                expectText(text(main, "SELECT NextNumber FROM InvoiceSequence WHERE TerminalID = 'T02' AND InvoiceYear = 2026"), "4");
+                expectText(text(t02, "SELECT NextNumber FROM InvoiceSequence WHERE TerminalID = 'T01' AND InvoiceYear = 2026"), "2");
+            });
+
+            check("A register whose counter went back (set up again, backup restored) never repeats a number", () -> {
+                exec(t02, "DELETE FROM InvoiceSequence WHERE TerminalID = 'T02'");   // as if its counter was lost
+                java.time.Instant midYear = java.time.Instant.parse("2026-06-01T00:00:00Z");
+                String next;
+                try (Connection c = t02.open()) {
+                    c.setAutoCommit(false);
+                    next = new pos.repository.InvoiceNumberGenerator().nextInvoiceNo(c, "T02", midYear);
+                    c.commit();
+                }
+                expectText(next, "T02-2026-000004");   // after its highest saved, T02-2026-000003
+                expectText(text(t02, "SELECT NextNumber FROM InvoiceSequence WHERE TerminalID = 'T02' AND InvoiceYear = 2026"), "5");
+            });
+
             check("An edit reaches every terminal; the newest edit wins", () -> {
                 editPrice(main, "P-0001", "12.00");
                 round.run();
@@ -249,9 +316,113 @@ public class SyncCheck {
                         text(t02, "SELECT RetailPrice FROM Product WHERE ProductID = 'P-0001'"));
             });
 
+            check("Main POS off: known within the every-second check; \"needs the Main POS\" refuses at once", () -> {
+                down[0] = true;
+                t02Engine.heartbeat();
+                expectTrue(Boolean.FALSE.equals(t02Engine.status().mainReachable()), "offline shown");
+                for (int i = 0; i < 3; i++) {                          // the send thread's every-second round,
+                    t02Engine.pushRound();                             // with nothing to send, must not
+                    expectTrue(Boolean.FALSE.equals(t02Engine.status().mainReachable()),   // flip it back to OK
+                            "still offline after a send round with nothing to send");
+                    t02Engine.heartbeat();
+                }
+                MasterIds.Source ids = MasterIdSources.additional(() -> {
+                    throw new AssertionError("must not wait on the network when the Main POS is known to be off");
+                }, t02Engine.status(), clock);
+                long start = System.nanoTime();
+                try {
+                    ids.requireMain();
+                    throw new AssertionError("allowed while the Main POS is off");
+                } catch (shared.MainPosUnavailableException expected) {
+                    // refused
+                }
+                try {
+                    ids.next(MasterIds.PRODUCT);
+                    throw new AssertionError("an ID was given while the Main POS is off");
+                } catch (shared.MainPosUnavailableException expected) {
+                    // refused
+                }
+                long ms = (System.nanoTime() - start) / 1_000_000;
+                expectTrue(ms < 100, "refused at once (" + ms + " ms)");
+                down[0] = false;
+                t02Engine.heartbeat();
+                expectTrue(Boolean.TRUE.equals(t02Engine.status().mainReachable()), "online again");
+                ids.requireMain();   // reached a moment ago: allowed without asking again
+            });
+
+            check("The Additional POS keeps the Main POS's computer name: saved once, again only if it changes", () -> {
+                List<String> savedNames = new ArrayList<>();
+                t02Engine.onMainName(savedNames::add);
+                t02Engine.heartbeat();
+                t02Engine.heartbeat();
+                t02Engine.heartbeat();
+                expectTrue(savedNames.equals(List.of("MAIN-POS")), "saved once: " + savedNames);
+                mainName[0] = "MAIN-POS-NEW";   // the PC was renamed
+                t02Engine.heartbeat();
+                expectTrue(savedNames.equals(List.of("MAIN-POS", "MAIN-POS-NEW")), "again when it changed: " + savedNames);
+                t02Engine.onMainName(null);
+                mainName[0] = "MAIN-POS";
+            });
+
+            check("Main POS gone for 30 s: the Additional POS looks for it on the network and follows it", () -> {
+                java.time.Instant[] now = {java.time.Instant.parse("2026-11-10T08:00:00Z")};
+                Clock moving = new Clock() {
+                    @Override public java.time.ZoneId getZone() { return java.time.ZoneOffset.UTC; }
+                    @Override public Clock withZone(java.time.ZoneId zone) { return this; }
+                    @Override public java.time.Instant instant() { return now[0]; }
+                };
+                int[] looked = {0};
+                String[] saved = {null};
+                SyncEngine following = SyncEngine.additional(t02.db(), "T02", () -> direct, () -> {
+                    looked[0]++;
+                    return java.util.Optional.of("192.168.1.35");
+                }, ip -> saved[0] = ip, log, moving);
+                down[0] = true;
+                following.heartbeat();
+                now[0] = now[0].plusSeconds(20);
+                following.heartbeat();
+                expectTrue(looked[0] == 0, "not before 30 s");
+                now[0] = now[0].plusSeconds(11);
+                following.heartbeat();
+                expectTrue(looked[0] == 1 && "192.168.1.35".equals(saved[0]), "looked once and followed it: " + saved[0]);
+                now[0] = now[0].plusSeconds(10);
+                following.heartbeat();
+                expectTrue(looked[0] == 1, "at most once a minute");
+                expectTrue(log.lines.stream().anyMatch(l -> l[3].startsWith("Main POS found at 192.168.1.35")), "logged");
+                down[0] = false;
+            });
+
+            check("Wait for news: a change on the Main POS reaches a waiting terminal at once", () -> {
+                long head = mainEngine.pull(0, 0).head();
+                SyncHub.Page[] got = new SyncHub.Page[1];
+                long[] tookMs = new long[1];
+                Thread waiting = new Thread(() -> {
+                    long start = System.nanoTime();
+                    try {
+                        got[0] = mainEngine.pull(head, 10, 10_000);
+                    } catch (Exception e) {
+                        throw new RuntimeException(e);
+                    }
+                    tookMs[0] = (System.nanoTime() - start) / 1_000_000;
+                });
+                waiting.start();
+                Thread.sleep(300);                                   // the terminal is now waiting
+                addProduct(main, "P-0020", "4800000000208", "8.00");
+                mainEngine.mainRound();                              // the Main POS takes its own change
+                waiting.join(10_000);
+                expectTrue(got[0] != null && !got[0].changes().isEmpty(), "the change arrived");
+                expectTrue(tookMs[0] < 3_000, "at once, not after the 10 s wait (" + tookMs[0] + " ms)");
+                long quiet = System.nanoTime();
+                SyncHub.Page none = mainEngine.pull(got[0].head(), 10, 500);   // nothing new: answered after the wait
+                long waited = (System.nanoTime() - quiet) / 1_000_000;
+                expectTrue(none.changes().isEmpty() && waited >= 400, "nothing new: waited " + waited + " ms");
+                round.run();
+                expectTrue(count(t02, "SELECT COUNT(*) FROM Product WHERE ProductID = 'P-0020'") == 1, "on T02");
+            });
+
             check("New IDs come from the Main POS and are never handed out twice", () -> {
-                expectText(mainEngine.nextId(MasterIds.PRODUCT), "P-0002");
-                expectText(mainEngine.nextId(MasterIds.PRODUCT), "P-0003");   // P-0002 handed out but not saved yet
+                expectText(mainEngine.nextId(MasterIds.PRODUCT), "P-0021");   // after P-0020, the highest
+                expectText(mainEngine.nextId(MasterIds.PRODUCT), "P-0022");   // P-0021 handed out but not saved yet
                 expectText(mainEngine.nextId(MasterIds.USER), "NSC-00002");
                 exec(main, "INSERT INTO Category (CategoryID, CategoryName) VALUES (5, 'Drinks')");
                 expectText(mainEngine.nextId(MasterIds.CATEGORY), "6");
@@ -304,10 +475,23 @@ public class SyncCheck {
                     try {
                         MainPosClient client = new MainPosClient("127.0.0.1", port, key);
                         client.verifyMainPos();
+                        expectText(client.ping(), shared.ComputerName.get());   // the Main POS says its computer name
+                        expectTrue(sync.discovery.MainPosScannerAccess.isMainPos("127.0.0.1", port, key),
+                                "the scan's check accepts this store's Main POS");
+                        expectTrue(!sync.discovery.MainPosScannerAccess.isMainPos("127.0.0.1", port, "WRONG-KEY"),
+                                "... but not with another store's key");
+                        int nothing;
+                        try (ServerSocket free = new ServerSocket(0)) {
+                            nothing = free.getLocalPort();
+                        }
+                        long t0 = System.nanoTime();
+                        expectTrue(!sync.discovery.MainPosScannerAccess.isMainPos("127.0.0.1", nothing, key),
+                                "nothing listening: not the Main POS");
+                        expectTrue((System.nanoTime() - t0) / 1_000_000 < 1000, "and that is known at once");
                         String id = client.nextId(MasterIds.USER);
                         expectText(id, "NSC-00003");
                         addUser(t02, id, "MSantos");
-                        SyncEngine overApi = SyncEngine.additional(t02.db(), "T02", () -> client, ip -> { }, null, log, clock);
+                        SyncEngine overApi = SyncEngine.additional(t02.db(), "T02", () -> client, log, clock);
                         overApi.cycle();
                         mainEngine.cycle();
                         expectTrue(count(main, "SELECT COUNT(*) FROM Users WHERE UserID = '" + id + "'") == 1, "user on Main");

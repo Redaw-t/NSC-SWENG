@@ -105,20 +105,6 @@ final class ReportsUi {
         return picker;
     }
 
-    /** The light-blue Apply button. */
-    static Button applyButton(Runnable onClick) {
-        Button button = new Button("Apply");
-        String base = "-fx-background-radius: 4; -fx-font-size: 15px; -fx-pref-height: 40; -fx-padding: 0 24 0 24; "
-                + "-fx-cursor: hand; -fx-text-fill: white; -fx-background-color: ";
-        String normal = base + Theme.INFORMATION + ";";
-        String hover = base + Styles.darker(Theme.INFORMATION) + ";";
-        button.setMinWidth(Region.USE_PREF_SIZE);
-        button.setStyle(normal);
-        button.hoverProperty().addListener((obs, was, is) -> button.setStyle(is ? hover : normal));
-        button.setOnAction(e -> onClick.run());
-        return button;
-    }
-
     /** The grey search box; Enter runs {@code onEnter}. */
     static TextField searchField(String prompt, Runnable onEnter) {
         TextField field = new TextField();
@@ -174,6 +160,9 @@ final class ReportsUi {
         Label message = new Label();
         message.setWrapText(true);
         message.setMinHeight(Region.USE_PREF_SIZE);
+        // Takes no room while there is nothing to say, so it never leaves a gap above the table.
+        message.managedProperty().bind(message.textProperty().isNotEmpty());
+        message.visibleProperty().bind(message.textProperty().isNotEmpty());
         return message;
     }
 }

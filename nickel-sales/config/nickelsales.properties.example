@@ -33,7 +33,7 @@ NSC_TERMINAL_ID=T01
 
 # --- Receipts ------------------------------------------------------------
 # Store details: used only until they are saved in the database (Installation Setup's
-# Store Register, or Settings > Store Details by an admin); then the database wins.
+# Store Register, or Settings > General > System Configuration > Store Details by an admin); then the database wins.
 #NSC_STORE_NAME=NICKEL SALES CENTER
 #NSC_STORE_ADDRESS=
 #NSC_STORE_PROPRIETOR=

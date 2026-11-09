@@ -453,6 +453,24 @@ public final class PosScreen {
             showError(payHint.getText().isEmpty() ? "This sale can't be paid yet." : payHint.getText());
             return;
         }
+        // Check the stock again in the database before taking any money: another register may have sold
+        // the last pieces since they were added (saving checks once more, inside its transaction).
+        List<StockProblem> problems;
+        try {
+            problems = pos.findStockProblems();
+        } catch (RuntimeException e) {
+            showError(UiErrors.message(e, "The stock could not be checked. Try Payment again."));
+            return;
+        }
+        if (!problems.isEmpty()) {
+            refresh(null);   // marks the short lines and greys out Payment
+            String more = problems.size() == 1 ? "" : " (and " + (problems.size() - 1)
+                    + (problems.size() == 2 ? " other item)" : " other items)");
+            showError(problems.get(0).message() + more + " Another register may have just sold it; "
+                    + "then press Payment again.");
+            focusBarcode();
+            return;
+        }
         Sale sale = pos.currentSale().orElseThrow();
         paymentCard = PaymentOverlay.show(content, payments, sale, this::completePayment, () -> {
             paymentCard = null;

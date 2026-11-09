@@ -68,6 +68,7 @@ public class NickelSalesApp extends Application {
         // The version is shown at the bottom right of Settings ("App Version: ..."), not in the title.
         stage.setTitle("Nickel Sales Center - POS (" + context.config().terminalId() + ")");
         router.showLogin();
+        context.find(system.service.AutoBackup.class).ifPresent(system.service.AutoBackup::start);   // hourly backup
         startSync();
         startApiIfMain();
     }
@@ -126,5 +127,6 @@ public class NickelSalesApp extends Application {
             api.stop();
         }
         context.find(SyncRuntime.class).ifPresent(SyncRuntime::stop);
+        context.find(system.service.AutoBackup.class).ifPresent(system.service.AutoBackup::stop);
     }
 }

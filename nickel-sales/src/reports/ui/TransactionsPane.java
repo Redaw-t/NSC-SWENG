@@ -64,6 +64,7 @@ final class TransactionsPane implements ReportsPane {
 
     private List<TransactionRow> rows = List.of();
     private BigDecimal netSales = Money.ZERO;
+    private shared.LiveFilters filters;
 
     TransactionsPane(ScreenContext screen, TransactionHistoryService history) {
         this.screen = screen;
@@ -98,8 +99,18 @@ final class TransactionsPane implements ReportsPane {
         method.getItems().setAll(methods);
         method.setValue(methods.get(0));
 
-        Button apply = ReportsUi.applyButton(this::load);
-        FlowPane toolbar = new FlowPane(12, 12, period.getView(), cashier, terminal, method, invoice, apply);
+        filters = new shared.LiveFilters(this::load);   // no Apply: it updates as you choose or type
+        period.watch(filters);
+        filters.watch(cashier, terminal, method, invoice);
+        Button reset = filters.resetButton(() -> {
+            period.reset();
+            cashier.setValue(cashier.getItems().get(0));
+            terminal.setValue(terminal.getItems().get(0));
+            method.setValue(method.getItems().get(0));
+            invoice.clear();
+        });
+        FlowPane toolbar = new FlowPane(12, 12, period.getView(), cashier, terminal, method, invoice, reset,
+                filters.refreshIcon());
         toolbar.setAlignment(Pos.CENTER_LEFT);
 
         view.getChildren().addAll(toolbar, table, message, ReportsUi.footer(pager,
@@ -132,8 +143,10 @@ final class TransactionsPane implements ReportsPane {
             rows = list.rows();
             netSales = list.netSales();
             list.cashierIds().forEach(names::remember);
-            setChoices(cashier, "All Cashiers", list.cashierIds(), names::label);
-            setChoices(terminal, "All Terminals", list.terminalIds(), id -> id);
+            filters.quietly(() -> {   // refreshing the lists is not a new choice: no second load
+                setChoices(cashier, "All Cashiers", list.cashierIds(), names::label);
+                setChoices(terminal, "All Terminals", list.terminalIds(), id -> id);
+            });
             ReportsUi.placeholder(table, EMPTY);
             TransactionRow first = rows.isEmpty() ? null : rows.get(rows.size() - 1);   // oldest = the sale
             message.setText(filter.invoiceNo() != null && first != null

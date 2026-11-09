@@ -66,16 +66,14 @@ public class InstallCheck {
             }
         });
 
-        check("Firewall: the terminals' API (TCP 8765) and the Main POS search (UDP 8766), local network only", () -> {
+        check("Firewall: the terminals' API (TCP 8765), local network only; the old search rules are removed", () -> {
             List<String> tcp = InstallTasks.firewallRule(InstallTasks.FIREWALL_TCP_RULE, "TCP", 8765);
             expectTrue(tcp.containsAll(List.of("dir=in", "action=allow", "protocol=TCP", "localport=8765",
                     "remoteip=localsubnet", "profile=any")), "TCP rule: " + tcp);
-            expectTrue(tcp.contains("name=" + InstallTasks.FIREWALL_TCP_RULE)
-                    && !InstallTasks.FIREWALL_TCP_RULE.contains(" ") && !InstallTasks.FIREWALL_UDP_RULE.contains(" "),
-                    "one-word rule names (netsh, and the uninstaller removes them by name)");
-            List<String> udp = InstallTasks.firewallRule(InstallTasks.FIREWALL_UDP_RULE, "UDP",
-                    sync.discovery.Discovery.PORT);
-            expectTrue(udp.contains("protocol=UDP") && udp.contains("localport=8766"), "UDP rule: " + udp);
+            expectTrue(tcp.contains("name=" + InstallTasks.FIREWALL_TCP_RULE) && !InstallTasks.FIREWALL_TCP_RULE.contains(" "),
+                    "one-word rule name (netsh, and the uninstaller removes it by name)");
+            expectTrue(InstallTasks.OLD_FIREWALL_RULES.size() == 3
+                    && InstallTasks.OLD_FIREWALL_RULES.stream().noneMatch(n -> n.contains(" ")), "old rules named");
         });
 
         check("my.ini: port 3307, this PC only, no X Protocol port, forward slashes", () -> {

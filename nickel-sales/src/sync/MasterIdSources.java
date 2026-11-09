@@ -18,8 +18,8 @@ import java.util.function.Supplier;
  */
 public final class MasterIdSources {
 
-    /** An Additional POS that synced this recently counts as reaching the Main POS without asking again. */
-    static final Duration RECENT = Duration.ofSeconds(15);
+    /** Reached this recently (the check runs every second) counts as reaching the Main POS now. */
+    static final Duration RECENT = Duration.ofSeconds(3);
 
     private MasterIdSources() { }
 
@@ -52,6 +52,7 @@ public final class MasterIdSources {
         return new MasterIds.Source() {
             @Override
             public String next(String kind) {
+                requireMain();   // known to be off: say so at once, without waiting on the network
                 MainPosClient main = client.get();
                 if (main == null) {
                     throw new MainPosUnavailableException();
@@ -63,19 +64,28 @@ public final class MasterIdSources {
                 }
             }
 
+            /**
+             * Answered from the every-second check (sync.SyncWorker), so it never makes the person wait:
+             * reached within the last few seconds = fine; known to be off = refused at once. Only before
+             * the first check (just after start-up) does it ask the Main POS itself.
+             */
             @Override
             public void requireMain() {
+                Boolean reachable = status.mainReachable();
                 Instant last = status.lastContact();
-                if (Boolean.TRUE.equals(status.mainReachable()) && last != null
+                if (Boolean.TRUE.equals(reachable) && last != null
                         && Duration.between(last, clock.instant()).compareTo(RECENT) <= 0) {
                     return;
+                }
+                if (Boolean.FALSE.equals(reachable)) {
+                    throw new MainPosUnavailableException();
                 }
                 MainPosClient main = client.get();
                 if (main == null) {
                     throw new MainPosUnavailableException();
                 }
                 try {
-                    main.pull(Long.MAX_VALUE - 1, 0);   // a quick call that needs the key
+                    main.ping();
                 } catch (MainPosClient.MainPosException e) {
                     throw new MainPosUnavailableException(e);
                 }

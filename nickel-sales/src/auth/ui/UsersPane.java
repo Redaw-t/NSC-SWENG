@@ -144,7 +144,13 @@ final class UsersPane {
         statusFilter.setValue(StatusFilter.ALL);
         statusFilter.setPrefWidth(180);
         statusFilter.valueProperty().addListener((obs, old, v) -> applyFilters(true));
-        HBox filters = new HBox(12, search, roleFilter, statusFilter);
+        shared.LiveFilters live = new shared.LiveFilters(() -> reload(false));
+        Button reset = live.resetButton(() -> {   // back to how the tab opened
+            search.clear();
+            roleFilter.setValue(RoleFilter.ALL);
+            statusFilter.setValue(StatusFilter.ALL);
+        });
+        HBox filters = new HBox(12, search, roleFilter, statusFilter, reset, live.refreshIcon());
         filters.setAlignment(Pos.CENTER_LEFT);
 
         // ---- table

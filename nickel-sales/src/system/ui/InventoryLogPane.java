@@ -75,6 +75,7 @@ final class InventoryLogPane implements SystemPane {
     private final Label adjustValue = new Label("0");
     private final Label message = new Label();
     private final VBox view = new VBox(16);
+    private shared.LiveFilters filters;
     private final UserNames names;
 
     private List<InventoryLogEntry> rows = List.of();
@@ -110,13 +111,21 @@ final class InventoryLogPane implements SystemPane {
         typeFilter.setPrefWidth(170);
         search.setPrefWidth(280);
 
-        Button apply = SystemUi.applyButton("Apply");
-        apply.setOnAction(e -> load());
+        // No Apply: the list updates as soon as a date or choice changes, or after a pause in typing.
+        filters = new shared.LiveFilters(this::load);
+        filters.watch(from, to, typeFilter, search);
+        Button reset = filters.resetButton(() -> {
+            from.setValue(null);
+            to.setValue(null);
+            typeFilter.setValue(ALL_TYPES);
+            search.clear();
+        });
+        javafx.scene.Node refreshIcon = filters.refreshIcon();   // shows when another register's changes arrive
         Button export = SystemUi.exportButton(this::export);
 
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
-        HBox toolbar = new HBox(12, from, to, typeFilter, search, apply, spacer, export);
+        HBox toolbar = new HBox(12, from, to, typeFilter, search, reset, refreshIcon, spacer, export);
         toolbar.setAlignment(Pos.CENTER_LEFT);
 
         message.setWrapText(true);

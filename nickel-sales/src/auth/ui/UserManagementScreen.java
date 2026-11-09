@@ -43,7 +43,8 @@ public class UserManagementScreen {
                                 Runnable onBack) {
         this.usersPane = new UsersPane(admin, authz, sessionId, onBack);
 
-        view.getChildren().addAll(tabs.getView(), body);
+        // The tabs, and under them on the right the Refresh button: loads the shown tab again.
+        view.getChildren().addAll(shared.PageHeader.of(tabs.getView(), () -> show(shown)), body);
         VBox.setVgrow(body, Priority.ALWAYS);
         show(Tab.USERS);   // if loading fails, the message shows and the sidebar still works
     }
@@ -52,7 +53,10 @@ public class UserManagementScreen {
         return view;
     }
 
+    private Tab shown = Tab.USERS;
+
     private void show(Tab tab) {
+        shown = tab;
         tabs.select(tab.ordinal());
         switch (tab) {
             case USERS -> {

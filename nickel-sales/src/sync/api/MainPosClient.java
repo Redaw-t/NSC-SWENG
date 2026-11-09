@@ -35,7 +35,12 @@ public final class MainPosClient implements MainPosLink {
     private final String mainIp;
     private final int port;
     private final String apiKey;
-    private final HttpClient http = HttpClient.newBuilder().connectTimeout(TIMEOUT).build();
+    /** How long to try to connect: on a store network a PC answers well within this, or is off. */
+    private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(2);
+    /** The every-second check that the Main POS is on. */
+    private static final Duration PING_TIMEOUT = Duration.ofMillis(1500);
+
+    private final HttpClient http = HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).build();
 
     /**
      * @param mainIp the Main POS's IP address, e.g. 192.168.1.20
@@ -162,8 +167,19 @@ public final class MainPosClient implements MainPosLink {
     /** The Main POS's list of changes after place {@code after} (at most {@code limit}). */
     @Override
     public SyncHub.Page pull(long after, int limit) throws MainPosException {
-        HttpRequest request = HttpRequest.newBuilder(uri("/api/sync/pull?after=" + after + "&limit=" + limit))
-                .timeout(SYNC_TIMEOUT)
+        return pull(after, limit, 0);
+    }
+
+    /**
+     * As {@link #pull(long, int)}; with {@code waitMillis} the Main POS holds the call until something
+     * new arrives (or the wait ends), so this terminal gets other terminals' changes the moment they
+     * happen.
+     */
+    @Override
+    public SyncHub.Page pull(long after, int limit, long waitMillis) throws MainPosException {
+        HttpRequest request = HttpRequest.newBuilder(uri("/api/sync/pull?after=" + after + "&limit=" + limit
+                        + (waitMillis > 0 ? "&wait=" + waitMillis : "")))
+                .timeout(SYNC_TIMEOUT.plusMillis(Math.max(0, waitMillis)))
                 .header(ApiKey.HEADER, apiKey)
                 .GET()
                 .build();
@@ -201,6 +217,19 @@ public final class MainPosClient implements MainPosLink {
      *
      * @throws MainPosException it isn't (the message says what to check)
      */
+    /** The quick check (every second) that the Main POS is on: it answers /api/ping as T01. */
+    @Override
+    public String ping() throws MainPosException {
+        HttpRequest ping = HttpRequest.newBuilder(uri("/api/ping")).timeout(PING_TIMEOUT).GET().build();
+        HttpResponse<String> answer = send(ping);
+        Map<String, String> fields = Json.fields(answer.body());
+        if (answer.statusCode() != 200 || !"T01".equals(fields.get("terminalId"))) {
+            throw new MainPosException("Something at " + mainIp + " answered, but it is not the Main POS (T01).");
+        }
+        String name = fields.get("computerName");
+        return name == null || name.isBlank() ? null : name.trim();
+    }
+
     public void verifyMainPos() throws MainPosException {
         HttpRequest ping = HttpRequest.newBuilder(uri("/api/ping")).timeout(TIMEOUT).GET().build();
         HttpResponse<String> answer = send(ping);

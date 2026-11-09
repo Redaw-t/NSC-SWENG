@@ -6,7 +6,6 @@ import javafx.scene.Parent;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.TableView;
-import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
@@ -63,16 +62,25 @@ final class SalesSummaryPane implements ReportsPane {
         ReportsUi.placeholder(table, "No days in this period.");
         pager.fitToHeight(table, Tables.HEADER_HEIGHT, Tables.ROW_HEIGHT, this::showPage);
 
-        Button apply = ReportsUi.applyButton(this::load);
-        HBox toolbar = new HBox(12, period.getView(), apply);
+        shared.LiveFilters filters = new shared.LiveFilters(this::load);   // no Apply: it updates as you choose
+        period.watch(filters);
+        HBox toolbar = new HBox(12, period.getView(), filters.resetButton(period::reset), filters.refreshIcon());
         toolbar.setAlignment(Pos.CENTER_LEFT);
 
         Styles.cardTitle(title);
-        FlowPane tiles = new FlowPane(12, 12,
+        // One even row of tiles across the page (none left alone on a second row).
+        HBox tiles = new HBox(12,
                 ReportsUi.tile("Total Income", income), ReportsUi.tile("Transactions", transactions),
                 ReportsUi.tile("VATable Sales", vatable), ReportsUi.tile("VAT-exempt Sales", exempt),
                 ReportsUi.tile("VAT (12%)", vat), ReportsUi.tile("Retail", retail),
                 ReportsUi.tile("Wholesale", wholesale));
+        for (javafx.scene.Node n : tiles.getChildren()) {
+            VBox tile = (VBox) n;
+            tile.setMinWidth(120);
+            tile.setMaxWidth(Double.MAX_VALUE);
+            tile.setStyle(tile.getStyle().replace("-fx-padding: 4 28 4 28;", "-fx-padding: 6 10 6 10;"));
+            HBox.setHgrow(tile, Priority.ALWAYS);
+        }
         Label note = new Label(SPLIT_NOTE);
         Styles.muted(note);
         note.setWrapText(true);

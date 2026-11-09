@@ -65,7 +65,8 @@ final class CategoriesPane {
 
         Button add = ProductUi.primaryButton("+ Add Category");
         add.setOnAction(e -> addCategory());
-        HBox toolbar = new HBox(12, search, add);
+        shared.LiveFilters filters = new shared.LiveFilters(this::reload);
+        HBox toolbar = new HBox(12, search, filters.resetButton(search::clear), filters.refreshIcon(), add);
         toolbar.setAlignment(Pos.CENTER_LEFT);
 
         message.setWrapText(true);

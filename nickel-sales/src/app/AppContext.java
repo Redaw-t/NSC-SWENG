@@ -170,7 +170,7 @@ public final class AppContext {
 
     /**
      * The store details on receipts and labels, logged with who changed them: registered in
-     * Installation Setup, changed by an admin in Settings &gt; Store Details.
+     * Installation Setup, changed by an admin in Settings &gt; General &gt; System Configuration &gt; Store Details.
      */
     public StoreDetailsService storeDetails() {
         return storeDetails;

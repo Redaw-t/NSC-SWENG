@@ -68,8 +68,14 @@ final class CashierPane implements ReportsPane {
         groupBy.setValue(BY_CASHIER);
         groupBy.setPrefWidth(160);
 
-        Button apply = ReportsUi.applyButton(this::load);
-        FlowPane toolbar = new FlowPane(12, 12, period.getView(), groupBy, apply);
+        shared.LiveFilters filters = new shared.LiveFilters(this::load);   // no Apply: it updates as you choose
+        period.watch(filters);
+        filters.watch(groupBy);
+        Button reset = filters.resetButton(() -> {
+            period.reset();
+            groupBy.setValue(BY_CASHIER);
+        });
+        FlowPane toolbar = new FlowPane(12, 12, period.getView(), groupBy, reset, filters.refreshIcon());
         toolbar.setAlignment(Pos.CENTER_LEFT);
 
         view.getChildren().addAll(toolbar, table, message, ReportsUi.footer(pager,

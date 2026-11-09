@@ -26,7 +26,7 @@ final class BarcodeDetailsDialog {
         int r = 0;
         r = Modal.row(grid, r, "Product Code", value(row.product().productId()));
         r = Modal.row(grid, r, "Product Name", value(row.product().name()));
-        r = Modal.row(grid, r, "Barcode", value(row.barcode() == null ? "(none)" : row.barcode()));
+        r = Modal.row(grid, r, "Barcode", value(row.barcode() == null ? "No Barcode" : row.barcode()));
         if (row.barcode() != null) {
             r = Modal.row(grid, r, "Format", value(formatName(row.barcode())));
         }

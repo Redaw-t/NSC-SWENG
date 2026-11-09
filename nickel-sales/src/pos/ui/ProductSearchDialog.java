@@ -159,6 +159,7 @@ final class ProductSearchDialog {
                     + (p.barcode() == null ? "no barcode" : p.barcode()));
             details.setStyle("-fx-font-size: 13px; -fx-text-fill: " + Theme.SECONDARY_TEXT + ";");
             VBox left = new VBox(2, name, details);
+            left.setAlignment(javafx.geometry.Pos.CENTER_LEFT);   // name and stock line in the middle of the row, like the price
 
             Label price = new Label(PosScreen.peso(p.retailPrice()));
             price.setStyle("-fx-font-size: 16px; -fx-font-weight: bold; -fx-text-fill: " + Theme.PRIMARY_TEXT + ";");

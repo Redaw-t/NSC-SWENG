@@ -43,6 +43,18 @@ final class PeriodControls {
         return view;
     }
 
+    /** The report updates as soon as the period or a date changes. */
+    void watch(shared.LiveFilters filters) {
+        filters.watch(kind, day, to);
+    }
+
+    /** Back to how the screen opened: Daily, today. */
+    void reset() {
+        kind.setValue(ReportPeriod.Kind.DAY);
+        day.setValue(PhTime.today());
+        to.setValue(PhTime.today());
+    }
+
     /**
      * The chosen period.
      *

@@ -1,5 +1,6 @@
 package sync;
 
+import shared.InvoiceCounters;
 import shared.Json;
 import shared.SyncTables;
 
@@ -95,6 +96,11 @@ public final class ChangeApplier {
     /* ---------------------------------- writing ---------------------------------- */
 
     private void insertIfNew(Connection tx, SyncTables.Spec spec, Map<String, String> values) throws SQLException {
+        if (spec.table().equals("Sale")) {
+            // Every PC keeps where each register's invoice numbers have got to (shared.InvoiceCounters),
+            // so a register set up again from a copy continues after its last number.
+            InvoiceCounters.atLeastPast(tx, values.get("InvoiceNo"));
+        }
         if (exists(tx, spec, values)) {
             return;   // already here: sent twice, or this PC's own change coming back
         }

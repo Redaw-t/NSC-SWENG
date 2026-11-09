@@ -84,7 +84,8 @@ final class BackupPane implements SystemPane {
         table.getColumns().add(Tables.<BackupRecord>textColumn("Size", 80, BackupRecord::sizeLabel));
         table.getColumns().add(Tables.<BackupRecord>textColumn("Terminal", 85, BackupRecord::terminalId));
         table.getColumns().add(Tables.<BackupRecord>nodeColumn("Result", 95, 85, BackupPane::resultCell));
-        table.getColumns().add(Tables.<BackupRecord>textColumn("Performed By", 140, r -> names.name(r.userId())));
+        table.getColumns().add(Tables.<BackupRecord>textColumn("Performed By", 140,
+                r -> r.userId() == null && BackupRecord.AUTO.equals(r.kind()) ? "Automatic" : names.name(r.userId())));
         table.getColumns().add(Tables.<BackupRecord>nodeColumn("Actions", 90, 80,
                 r -> SystemUi.viewButton(() -> showDetails(r))));
         SystemUi.placeholder(table, EMPTY);
@@ -107,7 +108,15 @@ final class BackupPane implements SystemPane {
         message.setWrapText(true);
         message.setMinHeight(Region.USE_PREF_SIZE);
 
-        view.getChildren().addAll(toolbar, table, message, SystemUi.footer(pager,
+        // The hourly automatic backup (system.service.AutoBackup): where it goes; its runs are in the list.
+        Label auto = new Label(screen.app().find(system.service.AutoBackup.class)
+                .map(a -> "Auto Backup is stored in " + a.folder() + " (Automatic every hour)")
+                .orElse("Automatic backup is not running in this build."));
+        auto.setWrapText(true);
+        auto.setMinHeight(Region.USE_PREF_SIZE);
+        auto.setStyle("-fx-font-size: 14px; -fx-text-fill: " + Theme.SECONDARY_TEXT + ";");
+
+        view.getChildren().addAll(toolbar, auto, table, message, SystemUi.footer(pager,
                 SystemUi.tile("Last Backup", lastValue), SystemUi.tile("Successful", okValue),
                 SystemUi.tile("Failed", failedValue), SystemUi.tile("Restores", restoreValue)));
         VBox.setVgrow(table, Priority.ALWAYS);
@@ -141,9 +150,9 @@ final class BackupPane implements SystemPane {
             loadFailed(UiErrors.message(e, "The backup history could not be loaded. Try again."));
         }
         Optional<Instant> last = rows.stream()
-                .filter(r -> BackupRecord.BACKUP.equals(r.kind()) && r.succeeded())
+                .filter(r -> (BackupRecord.BACKUP.equals(r.kind()) || BackupRecord.AUTO.equals(r.kind())) && r.succeeded())
                 .map(BackupRecord::createdAt).findFirst();
-        lastValue.setText(last.map(at -> ROW_TIME.format(PhTime.of(at))).orElse("None"));
+        lastValue.setText(last.map(at -> PhTime.relative(at, java.time.Instant.now())).orElse("None"));
         okValue.setText(SystemUi.count(rows.stream().filter(r -> !BackupRecord.RESTORE.equals(r.kind()) && r.succeeded()).count()));
         failedValue.setText(SystemUi.count(rows.stream().filter(r -> !r.succeeded()).count()));
         restoreValue.setText(SystemUi.count(rows.stream().filter(r -> BackupRecord.RESTORE.equals(r.kind()) && r.succeeded()).count()));

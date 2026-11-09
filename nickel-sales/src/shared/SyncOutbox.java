@@ -37,6 +37,7 @@ public final class SyncOutbox {
 
     private static volatile boolean enabled;
     private static volatile boolean warnedMissing;
+    private static volatile Runnable onRecorded = () -> { };
 
     private SyncOutbox() { }
 
@@ -47,6 +48,14 @@ public final class SyncOutbox {
 
     public static boolean enabled() {
         return enabled;
+    }
+
+    /**
+     * Called after every change is queued (the sync worker sends it at once instead of waiting for its
+     * next round); null for nothing. It runs inside the change's transaction, so it must only signal.
+     */
+    public static void onRecorded(Runnable listener) {
+        onRecorded = listener == null ? () -> { } : listener;
     }
 
     /** A new change or row ID, unique across all terminals. */
@@ -90,6 +99,7 @@ public final class SyncOutbox {
             ps.setString(4, Json.write(payload));
             ps.setObject(5, LocalDateTime.ofInstant(Instant.now(), ZoneOffset.UTC));
             ps.executeUpdate();
+            onRecorded.run();
         } catch (SQLException e) {
             if (e.getErrorCode() == NO_SUCH_TABLE) {
                 if (!warnedMissing) {

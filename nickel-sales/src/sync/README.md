@@ -51,21 +51,34 @@ more than a PC's own stock.
 
 **A change a PC can't take** (e.g. a barcode another product there already has) is skipped, logged
 as Failed in Settings > Sync Logs, and kept in `SyncFailed`. **Retry** applies it again once the
-clash is fixed. Anything else that goes wrong (database down) stops the round, and the next round,
-3 seconds later, tries again.
+clash is fixed. Anything else that goes wrong (database down) stops that part, and it tries again a
+second later.
+
+## Instant, and knowing at once when the Main POS is off (`SyncWorker`)
+
+- **Sending:** a change saved here wakes the sender at once (`SyncOutbox.onRecorded`), so it reaches
+  the Main POS within a fraction of a second. If nothing wakes it, it still looks every second.
+- **Receiving:** an Additional POS keeps a "wait for news" call open to the Main POS
+  (`/api/sync/pull?...&wait=20000`). The Main POS answers it the moment a change arrives from any
+  terminal, or after 20 s with "nothing new", and the call is made again. So a sale or price change on
+  one register shows on the others at once.
+- **Main POS check:** every second an Additional POS asks the Main POS `/api/ping` (1.5 s limit). System
+  Status shows "Main POS offline" within about a second, and adding or editing a product, user,
+  category, supplier, store details or reorder level is refused **at once** with "This needs the Main
+  POS...", instead of waiting for the network to time out.
 
 ## Files
 
 | File | What |
 | ---- | ---- |
-| `SyncEngine` | One round: push / pull / apply (Additional POS), or move own queue + apply (Main POS). Also the Main POS's `SyncHub`. |
-| `SyncWorker` | Runs a round every 3 s on a background thread. |
+| `SyncEngine` | Push, pull + apply, the Main POS check (Additional POS); move own queue + apply (Main POS). Also the Main POS's `SyncHub` (with "wait for news"). |
+| `SyncWorker` | The background threads: send at once, "wait for news", check the Main POS every second. |
 | `SyncDb` | The sync tables in `nickelsales_appconfig` (`SyncOutbox`, `SyncFeed`, `SyncFailed`, `IdCounter`, setting `SyncAppliedSeq`). |
 | `ChangeApplier` | Writes a change into this PC's store tables. Only synced tables and columns that exist here. |
 | `SyncStatus` | What System Status shows. |
 | `MasterIdSources` | Where new shared IDs come from (Main POS / ask the Main POS). |
+| `discovery/MainPosScanner` | Finds the Main POS on this PC's network: tries TCP 8765 on every address (1–254), many at once, a few seconds in all. Phones and printers just refuse the knock; only the one answering as T01 gets the API key, to check it. |
 | `api/` | The Main POS's API (`ApiServer`: pairing, first copy, `/api/sync/push`, `/pull`, `/next-id`) and its client (`MainPosClient`). |
-| `discovery/` | Finding the Main POS on the network: it answers on **UDP 8766**. Used when the router changes its address, in Installation Setup (fills in the IP) and in Settings. |
 
 Captured in the repositories: `MySqlSaleRepository`, `MySqlReturnRepository`,
 `MySqlInventoryRepository`, `MySqlActivityLogRepository`, `MySqlStoreDetailsRepository`,
@@ -76,12 +89,15 @@ up). Recording is on only in the real app (`Main.start`), never in the self-test
 ## Network
 
 - **TCP 8765**: the Main POS's API, which every Additional POS calls (shared API key in `X-API-Key`).
-- **UDP 8766**: the Main POS answers "where is the Main POS?".
-- The installer opens both in Windows Firewall, for the local network only (`InstallTasks.allowTerminalSync`).
-- **Main POS's address changed** (the router): an Additional POS that can't reach it for 30 s
-  looks for it on the network, checks it (answers as T01 and accepts the key) and follows it. If that
-  can't work, an admin sets it in **Settings > General > Main POS** ("Check and Save" changes nothing
-  unless the check passes).
+- The installer opens it in Windows Firewall, for the local network only (`InstallTasks.allowTerminalSync`).
+- **Finding the Main POS** (`MainPosScanner`) uses the same TCP 8765: no other port or firewall rule.
+  If two PCs can sync, the scan finds the Main POS. It can't across two networks (another router).
+- **Main POS's address changed** (the router): an Additional POS that can't reach it for 30 s scans its
+  network (at most once a minute) and follows it if found. An admin can also do it in **Settings >
+  General > System Configuration > Change Main POS IP Address**: Find Automatically, or type it, then
+  Check and Save, which changes nothing unless the address answers as the Main POS (T01) and accepts
+  the store's key.
+- **Installation Setup** fills in the Main POS's address by scanning too (it can still be typed).
 - **An Additional POS's address changed:** nothing to do. The Main POS never calls it, and it notes
   the new address when the terminal next sends changes.
 

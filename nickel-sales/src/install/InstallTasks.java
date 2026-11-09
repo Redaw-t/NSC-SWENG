@@ -173,6 +173,11 @@ public final class InstallTasks {
         Path backups = dataDir.resolve("backups");       // before-update backups (the Start menu links here)
         Files.createDirectories(backups);
         icacls(backups, "/grant", USERS + ":(OI)(CI)RX");
+        // The app's hourly automatic backup (system.service.AutoBackup): the app runs as the cashier's
+        // Windows user, which must be able to write it and replace the previous one.
+        Path auto = backups.resolve("auto");
+        Files.createDirectories(auto);
+        icacls(auto, "/grant", USERS + ":(OI)(CI)M");
 
         Path myIni = mysqlDir.resolve("my.ini");
         Path dataFiles = mysqlDir.resolve("data");
@@ -246,30 +251,30 @@ public final class InstallTasks {
         }
     }
 
-    /** Windows Firewall rule names (no spaces, so netsh reads them as one word); the uninstaller removes them. */
+    /** The Windows Firewall rule's name (no spaces, so netsh reads it as one word); the uninstaller removes it. */
     static final String FIREWALL_TCP_RULE = "NickelSales-TerminalSync-TCP8765";
-    static final String FIREWALL_UDP_RULE = "NickelSales-FindMainPos-UDP8766";
+    /** Rules an earlier version added for finding the Main POS on the network (no longer used): removed. */
+    static final List<String> OLD_FIREWALL_RULES = List.of("NickelSales-FindMainPos-UDP8766",
+            "NickelSales-FindReply-UDP8766", "NickelSales-FindReply");
 
     /**
-     * Lets the other POS terminals on the store network reach this PC: TCP 8765 (the Main POS's API,
-     * which every terminal syncs through) and UDP 8766 (the answer that lets a terminal find the Main
-     * POS). Only from the local network (remoteip=localsubnet), on any network profile, since a store's
-     * network is often marked Public. The same rules on every PC: any of them may become the Main POS.
-     * Added fresh each time (an update replaces them). A failure is only reported: the terminals can be
-     * set up again, or the rule added by hand.
+     * Lets the other POS terminals on the store network reach this PC on TCP 8765: the Main POS's API,
+     * which every terminal syncs through. Only from the local network (remoteip=localsubnet), on any
+     * network profile, since a store's network is often marked Public. Every PC gets it, since setup
+     * doesn't know yet which one will be the Main POS (on an Additional POS nothing listens there).
+     * Added fresh each time (an update replaces it). A failure is only reported: the rule can be added
+     * by hand.
      */
     void allowTerminalSync() throws Exception {
         step("Allowing the other POS terminals through Windows Firewall");
-        rule(FIREWALL_TCP_RULE, "TCP", 8765);
-        rule(FIREWALL_UDP_RULE, "UDP", sync.discovery.Discovery.PORT);
-    }
-
-    private static void rule(String name, String protocol, int port) throws Exception {
-        run(List.of("netsh", "advfirewall", "firewall", "delete", "rule", "name=" + name));   // none yet: fails harmlessly
-        int code = run(firewallRule(name, protocol, port));
+        for (String old : OLD_FIREWALL_RULES) {
+            run(List.of("netsh", "advfirewall", "firewall", "delete", "rule", "name=" + old));   // none: fails harmlessly
+        }
+        run(List.of("netsh", "advfirewall", "firewall", "delete", "rule", "name=" + FIREWALL_TCP_RULE));
+        int code = run(firewallRule(FIREWALL_TCP_RULE, "TCP", 8765));
         if (code != 0) {
-            System.out.println("[INSTALL] Could not add the firewall rule " + name + " (netsh exit code " + code
-                    + "). Other terminals may not reach this PC until it is added.");
+            System.out.println("[INSTALL] Could not add the firewall rule " + FIREWALL_TCP_RULE + " (netsh exit code "
+                    + code + "). Other terminals may not reach this PC until it is added.");
         }
     }
 

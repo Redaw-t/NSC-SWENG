@@ -113,12 +113,12 @@ public final class BackupService {
         User actor = access.require(sessionId);
         begin();
         try {
-            BackupRecord record = write(folder, BackupRecord.BACKUP, actor);
+            BackupRecord record = write(folder, BackupRecord.BACKUP, actor.getUserId(), fileName(BackupRecord.BACKUP));
             save(record);
             log("BACKUP_CREATED target=" + record.fileName(), actor);
             return record;
         } catch (SystemException e) {
-            save(failure(BackupRecord.BACKUP, "-", folder, e.getMessage(), actor));
+            save(failure(BackupRecord.BACKUP, "-", folder, e.getMessage(), actor.getUserId()));
             log("BACKUP_FAILED", actor);
             throw e;
         } finally {
@@ -152,9 +152,9 @@ public final class BackupService {
 
             BackupRecord safety;
             try {
-                safety = write(folder, BackupRecord.SAFETY, actor);
+                safety = write(folder, BackupRecord.SAFETY, actor.getUserId(), fileName(BackupRecord.SAFETY));
             } catch (SystemException e) {
-                save(failure(BackupRecord.SAFETY, "-", folder, e.getMessage(), actor));
+                save(failure(BackupRecord.SAFETY, "-", folder, e.getMessage(), actor.getUserId()));
                 throw new SystemException("The restore was cancelled because a safety backup of the current data "
                         + "could not be made. Nothing was changed. " + e.getMessage(), e);
             }
@@ -185,23 +185,80 @@ public final class BackupService {
         try {
             load(safetyFile);
         } catch (SQLException | IOException e) {
-            save(failure(BackupRecord.RESTORE, name, folder, "Failed; safety backup not put back: " + e.getMessage(), actor));
+            save(failure(BackupRecord.RESTORE, name, folder, "Failed; safety backup not put back: " + e.getMessage(),
+                    actor.getUserId()));
             log("RESTORE_FAILED_UNRECOVERED target=" + target, actor);
             throw new SystemException("The restore failed, and the previous data could not be put back automatically. "
                     + "Do not use the system. Restore this safety backup: " + safetyFile, cause);
         }
         save(safety);
-        save(failure(BackupRecord.RESTORE, name, folder, "Failed; previous data put back: " + cause.getMessage(), actor));
+        save(failure(BackupRecord.RESTORE, name, folder, "Failed; previous data put back: " + cause.getMessage(),
+                actor.getUserId()));
         log("RESTORE_FAILED target=" + target, actor);
         throw new SystemException("The restore failed, so the previous data was put back. No data was lost.", cause);
     }
 
+    /* ----------------------------- automatic backup ----------------------------- */
+
+    /** Automatic backups are named nsc-autobackup-MMddyyHHmmss.sql.gz (Philippine time). */
+    public static final String AUTO_PREFIX = "nsc-autobackup-";
+    private static final DateTimeFormatter AUTO_TIME = DateTimeFormatter.ofPattern("MMddyyHHmmss", Locale.US);
+
+    /**
+     * The hourly automatic backup (system.service.AutoBackup): backs the database up to
+     * {@code autoFolder} as nsc-autobackup-MMddyyHHmmss.sql.gz, then deletes the previous automatic
+     * backup there, so the folder always holds just the newest one (the old one goes only AFTER the new
+     * one is complete and checked). Recorded in the backup history as "Auto Backup", with no user;
+     * a failure is recorded too. Never throws.
+     *
+     * @return the record, or empty if it was skipped because a backup or restore is running
+     */
+    public Optional<BackupRecord> autoBackup(Path autoFolder) {
+        Objects.requireNonNull(autoFolder, "autoFolder");
+        if (!busy.compareAndSet(false, true)) {
+            return Optional.empty();   // a backup or restore is running: AutoBackup tries again shortly
+        }
+        try {
+            String name = AUTO_PREFIX + AUTO_TIME.format(PhTime.of(clock.instant())) + EXTENSION;
+            BackupRecord record = write(autoFolder, BackupRecord.AUTO, null, name);
+            deleteOlderAutoBackups(autoFolder, name);
+            save(record);
+            System.out.println("[BACKUP] automatic backup " + autoFolder.resolve(name));
+            return Optional.of(record);
+        } catch (SystemException e) {
+            BackupRecord failed = failure(BackupRecord.AUTO, "-", autoFolder, e.getMessage(), null);
+            save(failed);
+            System.err.println("[BACKUP] automatic backup failed: " + e.getMessage());
+            return Optional.of(failed);
+        } finally {
+            busy.set(false);
+        }
+    }
+
+    /** Deletes every automatic backup in {@code folder} except {@code keep}. */
+    private static void deleteOlderAutoBackups(Path folder, String keep) {
+        try (var files = Files.list(folder)) {
+            for (Path old : files.filter(p -> {
+                String n = p.getFileName().toString();
+                return n.startsWith(AUTO_PREFIX) && n.endsWith(EXTENSION) && !n.equals(keep);
+            }).toList()) {
+                Files.deleteIfExists(old);
+            }
+        } catch (IOException e) {
+            System.err.println("[BACKUP] could not remove the previous automatic backup: " + e.getMessage());
+        }
+    }
+
+    /** The name of a manual or safety backup file made now. */
+    private String fileName(String kind) {
+        String prefix = BackupRecord.SAFETY.equals(kind) ? "nickelsales-safety-" : "nickelsales-";
+        return prefix + terminalId + "-" + FILE_TIME.format(PhTime.of(clock.instant())) + EXTENSION;
+    }
+
     /** Writes a backup file and returns its record (not saved yet). */
-    private BackupRecord write(Path into, String kind, User actor) throws SystemException {
+    private BackupRecord write(Path into, String kind, String userId, String name) throws SystemException {
         prepare(into);
         Instant now = clock.instant();
-        String prefix = BackupRecord.SAFETY.equals(kind) ? "nickelsales-safety-" : "nickelsales-";
-        String name = prefix + terminalId + "-" + FILE_TIME.format(PhTime.of(now)) + EXTENSION;
         Path file = into.resolve(name);
         Path part = into.resolve(name + ".part");
         try {
@@ -213,7 +270,7 @@ public final class BackupService {
             validate(part);
             Files.move(part, file, StandardCopyOption.REPLACE_EXISTING);
             return new BackupRecord(0, now, terminalId, kind, name, into.toString(), Files.size(file),
-                    BackupRecord.SUCCESS, null, actor.getUserId());
+                    BackupRecord.SUCCESS, null, userId);
         } catch (SQLException e) {
             throw new SystemException("The database could not be read. Check that MySQL is running and try again.", e);
         } catch (IOException e) {
@@ -268,9 +325,9 @@ public final class BackupService {
         }
     }
 
-    private BackupRecord failure(String kind, String name, Path where, String message, User actor) {
+    private BackupRecord failure(String kind, String name, Path where, String message, String userId) {
         return new BackupRecord(0, clock.instant(), terminalId, kind, name, where.toString(), null,
-                BackupRecord.FAILED, message, actor.getUserId());
+                BackupRecord.FAILED, message, userId);
     }
 
     /** History is a record of the work, not the work itself: failing to save it never fails a backup. */

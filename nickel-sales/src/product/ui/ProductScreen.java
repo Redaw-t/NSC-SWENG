@@ -60,7 +60,8 @@ public class ProductScreen {
         this.barcodePane = labelPrinter == null ? null
                 : new BarcodePane(new BarcodeService(products, new ProductBarcodes(products, actor), labelPrinter));
 
-        view.getChildren().addAll(tabs.getView(), body);
+        // The tabs, and under them on the right the Refresh button: loads the shown tab again.
+        view.getChildren().addAll(shared.PageHeader.of(tabs.getView(), () -> show(shown)), body);
         VBox.setVgrow(body, Priority.ALWAYS);
         show(Tab.PRODUCTS);   // if loading fails, the message shows and the other tabs and the sidebar still work
     }
@@ -69,7 +70,10 @@ public class ProductScreen {
         return view;
     }
 
+    private Tab shown = Tab.PRODUCTS;
+
     private void show(Tab tab) {
+        shown = tab;
         tabs.select(tab.ordinal());
         switch (tab) {
             case PRODUCTS -> {

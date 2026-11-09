@@ -25,8 +25,8 @@ import java.util.List;
  * Sync Logs | Open Items &amp; Price Edits) above the tab's own screen, inside the app's sidebar frame.
  * System Status and Backup &amp; Restore moved to the Settings screen ({@link SystemSettingsTabs}).
  *
- * Keyboard: Ctrl+1 to Ctrl+4 open the tabs, Ctrl+F goes to the search box, Ctrl+E exports and F5
- * reloads. They work wherever the focus is on this screen, and not while a pop-up is open.
+ * The Refresh button under the tabs reloads the shown tab (F5 does the same). No other keyboard shortcuts:
+ * this screen is used with the mouse; only POS has shortcuts.
  */
 public final class SystemScreen {
 
@@ -40,9 +40,6 @@ public final class SystemScreen {
             this.label = label;
         }
     }
-
-    private static final List<KeyCode> TAB_KEYS = List.of(KeyCode.DIGIT1, KeyCode.DIGIT2, KeyCode.DIGIT3,
-            KeyCode.DIGIT4);
 
     private final List<SystemPane> panes;
     private final TabBar tabs = new TabBar(Arrays.stream(Tab.values()).map(t -> t.label).toList(),
@@ -58,10 +55,9 @@ public final class SystemScreen {
         this.panes = List.of(new ActivityLogPane(screen, activity), new InventoryLogPane(screen, inventory),
                 new SyncLogPane(screen, sync), new SaleLineLogPane(screen, saleLines));
 
-        Label hint = new Label("Ctrl+1 to Ctrl+4: tabs   |   Ctrl+F: search   |   Ctrl+E: export   |   F5: refresh");
-        Styles.muted(hint);
-        VBox header = new VBox(6, tabs.getView(), hint);
-        header.setAlignment(Pos.CENTER_RIGHT);
+        // The tabs, and under them on the right the Refresh button (F5 does the same; it isn't printed).
+        // No other keyboard shortcuts here: these screens are used with the mouse (only POS has shortcuts).
+        VBox header = shared.PageHeader.of(tabs.getView(), () -> current.refresh());
 
         view.getChildren().addAll(header, body);
         VBox.setVgrow(body, Priority.ALWAYS);
@@ -92,18 +88,9 @@ public final class SystemScreen {
         if (view.isDisabled()) {
             return;
         }
-        int tab = TAB_KEYS.indexOf(e.getCode());
         if (e.getCode() == KeyCode.F5) {
             current.refresh();
-        } else if (e.isShortcutDown() && tab >= 0) {
-            show(Tab.values()[tab]);
-        } else if (e.isShortcutDown() && e.getCode() == KeyCode.F) {
-            current.focusSearch();
-        } else if (e.isShortcutDown() && e.getCode() == KeyCode.E) {
-            current.export();
-        } else {
-            return;
+            e.consume();
         }
-        e.consume();
     }
 }

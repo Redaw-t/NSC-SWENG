@@ -39,10 +39,8 @@ final class ReportsScreen {
         this.tabs = List.copyOf(tabs);
         this.bar = new TabBar(this.tabs.stream().map(Tab::label).toList(), this::show);
 
-        Label hint = new Label("F5: refresh");
-        Styles.muted(hint);
-        VBox header = new VBox(6, bar.getView(), hint);
-        header.setAlignment(Pos.CENTER_RIGHT);
+        // The tabs, and under them on the right the Refresh button (F5 does the same; it isn't printed).
+        VBox header = shared.PageHeader.of(bar.getView(), () -> current.refresh());
 
         view.getChildren().addAll(header, body);
         VBox.setVgrow(body, Priority.ALWAYS);
