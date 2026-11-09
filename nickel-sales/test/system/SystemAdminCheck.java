@@ -514,14 +514,10 @@ public class SystemAdminCheck {
 
     /** A connection to scratch database {@code name}, with the app's own server and settings. */
     static Connection open(String name) throws SQLException {
-        String url = System.getenv("NSC_DB_URL");
-        if (url == null || url.isEmpty()) {
-            url = "jdbc:mysql://localhost:3306/NickelSales_Database?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC";
-        }
-        String user = System.getenv("NSC_DB_USER");
-        String password = System.getenv("NSC_DB_PASSWORD");
-        return DriverManager.getConnection(url.replace("/NickelSales_Database", "/" + name),
-                user == null || user.isEmpty() ? "root" : user, password == null ? "" : password);
+        String url = shared.Settings.get("NSC_DB_URL", Database.DEFAULT_URL);
+        // Swap the database in the URL, whatever NSC_DB_URL names (NickelSales_Database or a test copy).
+        return DriverManager.getConnection(url.replaceFirst("(//[^/]+/)[^?]*", "$1" + name),
+                shared.Settings.get("NSC_DB_USER", "root"), shared.Settings.get("NSC_DB_PASSWORD", ""));
     }
 
     static void recreate(String name) throws SQLException {

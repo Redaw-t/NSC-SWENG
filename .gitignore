@@ -67,3 +67,8 @@ replay_pid*.log
 Thumbs.db
 desktop.ini
 ~$*
+
+# --- Installer build (installer/build-installer.ps1) ------------------
+installer/build/
+installer/.cache/
+installer/dist/

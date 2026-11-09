@@ -40,7 +40,7 @@ public final class ApiKey {
     }
 
     private static String expectedHash() {
-        String override = System.getenv("NSC_API_KEY_SHA256");
+        String override = Settings.get("NSC_API_KEY_SHA256");
         return override == null || override.isBlank() ? DEFAULT_SHA256 : override.trim().toLowerCase(Locale.ROOT);
     }
 

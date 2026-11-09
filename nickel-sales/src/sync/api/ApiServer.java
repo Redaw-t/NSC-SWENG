@@ -45,9 +45,9 @@ public final class ApiServer {
         this.threads = threads;
     }
 
-    /** The port from NSC_API_PORT, else {@link #DEFAULT_PORT}. */
+    /** The port from NSC_API_PORT (settings file or environment), else {@link #DEFAULT_PORT}. */
     public static int port() {
-        String value = System.getenv("NSC_API_PORT");
+        String value = shared.Settings.get("NSC_API_PORT");
         try {
             int p = value == null || value.isBlank() ? DEFAULT_PORT : Integer.parseInt(value.trim());
             return p > 0 && p < 65536 ? p : DEFAULT_PORT;

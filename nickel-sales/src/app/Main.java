@@ -60,12 +60,32 @@ public final class Main {
     private Main() {}
 
     public static void main(String[] args) {
-        AppConfig base = AppConfig.fromEnvironment();
+        shared.Settings.installedApp();                    // read the installer's settings file; it wins over env vars
+        java.nio.file.Path log = shared.LogFile.start();   // first: the installed app has no console
+        System.out.println("[APP] Nickel Sales Center " + shared.AppVersion.VERSION + " starting; log file "
+                + (log == null ? "none" : log.toString()));
+        if (!SingleInstance.claim(SingleInstance.defaultFile())) {
+            System.out.println("[APP] Already running; this copy closes.");
+            javax.swing.JOptionPane.showMessageDialog(null,
+                    "Nickel Sales Center is already open. Look for it on the taskbar.",
+                    "Nickel Sales Center", javax.swing.JOptionPane.INFORMATION_MESSAGE);
+            System.exit(0);
+        }
+        start("[APP]");
+    }
+
+    /**
+     * Builds the app and opens its window; blocks until it is closed. Shared by the installed app
+     * ({@link #main}) and development runs ({@code DevApp}), so both pick the terminal ID the same way.
+     */
+    static void start(String tag) {
+        AppConfig base = AppConfig.fromSettings();
         // The terminal ID Installation Setup gave this computer wins over NSC_TERMINAL_ID.
         AppConfig config = savedTerminalId().map(base::withTerminalId).orElse(base);
         AppContext app = wire(config);
 
-        System.out.println("[APP] Nickel Sales Center, terminal " + config.terminalId());
+        System.out.println(tag + " Nickel Sales Center, terminal " + config.terminalId()
+                + "; " + shared.Settings.describe());
         // After a first-time setup the app is rebuilt for the terminal ID it was given (e.g. T02).
         NickelSalesApp.launch(app, id -> wire(base.withTerminalId(id)));
     }
@@ -160,7 +180,7 @@ public final class Main {
         app.register(BackupService.class, backups);
         app.register(SystemStatusService.class, new SystemStatusService(systemAccess, List.of(
                 SystemStatusService.database(Database::getConnection),
-                SystemStatusService.otherTerminal(System.getenv("NSC_PEER_URL")),
+                SystemStatusService.otherTerminal(shared.Settings.get("NSC_PEER_URL")),
                 SystemStatusService.printer(PrinterSettings.Use.RECEIPT),
                 SystemStatusService.printer(PrinterSettings.Use.LABEL),
                 SystemStatusService.pendingSync(unsyncedSales, syncLog::syncConnected),

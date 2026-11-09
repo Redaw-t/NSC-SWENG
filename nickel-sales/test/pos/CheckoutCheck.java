@@ -210,6 +210,41 @@ public class CheckoutCheck {
                 expectTrue(nextNumber(terminal, year) == nextBefore, "invoice number not used up");
             });
 
+            check("Saved although the database reported an error, and it can't be asked: pay again, saved once", db, () -> {
+                boolean[] lookupWorks = {true};
+                SalesService pos = new SalesService(products, new PricingService(), terminal + "U",
+                        new CheckoutService(commitsThenFails(repo, lookupWorks), new InvoiceNumberGenerator(), stock, audit));
+                Sale sale = cart(pos, BALLPEN, "1");
+                PaymentRecord pay = payments.recordPayment(sale, PaymentMethod.CASH, Money.of("20"), null);
+                lookupWorks[0] = false;                                   // goes down as soon as the sale is saved
+                expectThrows(() -> pos.finalizeSale(pay), pos.checkout.SaleOutcomeUnknownException.class);
+                expectTrue(sale.getStatus() == SaleStatus.OPEN && pos.currentSale().isPresent(),
+                        "sale stays open, so the cashier can pay again");
+                expectTrue(count("SELECT COUNT(*) FROM Sale WHERE SaleID = ?", sale.getSaleId()) == 1, "it was saved");
+
+                lookupWorks[0] = true;                                    // the database is back: pay again
+                int logBefore = auditLog.size();
+                SaleRecord rec = pos.finalizeSale(pay);
+                expectText(rec.saleId(), sale.getSaleId());
+                expectText(rec.invoiceNo(), terminal + "U-" + year + "-000001");
+                expectTrue(count("SELECT COUNT(*) FROM Sale WHERE SaleID = ?", sale.getSaleId()) == 1, "saved once");
+                expectTrue(sale.getStatus() == SaleStatus.COMPLETED && pos.currentSale().isEmpty(), "now completed");
+                expectTrue(auditLog.size() == logBefore + 1
+                        && auditLog.contains("SALE_COMPLETED " + rec.invoiceNo() + " by " + CASHIER), "logged once");
+            });
+
+            check("Saved although the database reported an error, and it can be asked: treated as saved", db, () -> {
+                boolean[] lookupWorks = {true};
+                SalesService pos = new SalesService(products, new PricingService(), terminal + "V",
+                        new CheckoutService(commitsThenFails(repo, lookupWorks), new InvoiceNumberGenerator(), stock, audit));
+                Sale sale = cart(pos, BALLPEN, "1");
+                SaleRecord rec = pos.finalizeSale(payments.recordPayment(sale, PaymentMethod.CASH, Money.of("20"), null));
+                expectText(rec.saleId(), sale.getSaleId());
+                expectTrue(sale.getStatus() == SaleStatus.COMPLETED, "completed");
+                expectTrue(count("SELECT COUNT(*) FROM Sale WHERE SaleID = ?", sale.getSaleId()) == 1, "saved once");
+                expectTrue(auditLog.contains("SALE_COMPLETED " + rec.invoiceNo() + " by " + CASHIER), "logged");
+            });
+
             check("No gap: the next good sale takes the number the failed ones did not use", db, () -> {
                 SalesService pos = new SalesService(products, new PricingService(), terminal, checkout);
                 Sale sale = cart(pos, PAPER, "1");
@@ -401,6 +436,44 @@ public class CheckoutCheck {
         } catch (SQLException e) {
             System.out.println(" [WARN] could not clean up test data for " + terminal + ": " + e);
         }
+    }
+
+    /**
+     * A sale repository whose save COMMITS the sale (on its own connection, so the checkout's
+     * rollback can't undo it) and then reports a database error, as when the connection drops
+     * while committing. Once it has saved, its lookups fail while {@code lookupWorks[0]} is false.
+     * Use it with its own terminal ID: the checkout's invoice number counter is rolled back.
+     */
+    static pos.repository.SaleRepository commitsThenFails(MySqlSaleRepository repo, boolean[] lookupWorks) {
+        boolean[] saved = {false};
+        return new pos.repository.SaleRepository() {
+            @Override
+            public void save(SaleRecord sale, Connection tx) throws SQLException {
+                try (Connection own = Database.getConnection()) {
+                    repo.save(sale, own);
+                }
+                saved[0] = true;
+                throw new SQLException("simulated: connection lost while committing");
+            }
+
+            @Override
+            public java.util.Optional<SaleRecord> findById(String saleId) {
+                if (saved[0] && !lookupWorks[0]) {
+                    throw new RuntimeException("simulated: database not reachable");
+                }
+                return repo.findById(saleId);
+            }
+
+            @Override
+            public java.util.Optional<SaleRecord> findByInvoiceNo(String invoiceNo) {
+                return repo.findByInvoiceNo(invoiceNo);
+            }
+
+            @Override
+            public List<SaleRecord> findCompleted(Instant from, Instant to) {
+                return repo.findCompleted(from, to);
+            }
+        };
     }
 
     interface Body {

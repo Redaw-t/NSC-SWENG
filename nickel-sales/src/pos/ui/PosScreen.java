@@ -470,6 +470,14 @@ public final class PosScreen {
             showError(e.getMessage() + " Nothing was saved.");
             focusBarcode();
             return;
+        } catch (pos.checkout.SaleOutcomeUnknownException e) {
+            System.err.println("[POS] " + e + (e.getCause() == null ? "" : " <- " + e.getCause()));
+            refresh(null);
+            showError("The database stopped answering, so it is not known whether this sale was saved. "
+                    + "Do NOT cancel it: check the connection, then press Payment again. "
+                    + "A sale that was already saved will not be saved twice.");
+            focusBarcode();
+            return;
         } catch (RuntimeException e) {
             refresh(null);
             showError(UiErrors.message(e, "The sale could not be saved. Nothing was saved; try Payment again."));
