@@ -19,4 +19,10 @@ public interface ReturnHistory {
 
     /** Returns made with {@code from <= returnedAt < to}, oldest first (Reports' transaction history). */
     List<ReturnRecord> findReturned(java.time.Instant from, java.time.Instant to);
+
+    /**
+     * The returns of the sales COMPLETED with {@code from <= completedAt < to}, whenever they were made,
+     * oldest first. With {@link NetSale} this takes a refund off the sales of the day of the sale.
+     */
+    List<ReturnRecord> findForSalesCompletedIn(java.time.Instant from, java.time.Instant to);
 }

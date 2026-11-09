@@ -63,6 +63,7 @@ final class TransactionsPane implements ReportsPane {
     private final VBox view = new VBox(16);
 
     private List<TransactionRow> rows = List.of();
+    private BigDecimal netSales = Money.ZERO;
 
     TransactionsPane(ScreenContext screen, TransactionHistoryService history) {
         this.screen = screen;
@@ -129,6 +130,7 @@ final class TransactionsPane implements ReportsPane {
         try {
             TransactionList list = history.find(screen.sessionId(), filter);
             rows = list.rows();
+            netSales = list.netSales();
             list.cashierIds().forEach(names::remember);
             setChoices(cashier, "All Cashiers", list.cashierIds(), names::label);
             setChoices(terminal, "All Terminals", list.terminalIds(), id -> id);
@@ -145,12 +147,9 @@ final class TransactionsPane implements ReportsPane {
         } catch (RuntimeException e) {
             loadFailed(UiErrors.message(e, "The sales could not be loaded. Try again."));
         }
-        BigDecimal total = Money.ZERO;
-        for (TransactionRow r : rows) {
-            total = total.add(r.total());   // returns are minus: Net Sales = sales - refunds
-        }
         countValue.setText(ReportsUi.count(rows.size()));
-        totalValue.setText(signedPeso(total));
+        // the listed sales minus their own refunds, on the day of the sale (as the Sales Summary)
+        totalValue.setText(signedPeso(netSales));
         pager.reset();
         showPage();
     }
@@ -181,6 +180,7 @@ final class TransactionsPane implements ReportsPane {
 
     private void loadFailed(String text) {
         rows = List.of();
+        netSales = Money.ZERO;
         ReportsUi.placeholder(table, ReportsUi.NOT_LOADED);
         showError(text);
     }

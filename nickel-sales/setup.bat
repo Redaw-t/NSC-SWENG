@@ -95,7 +95,7 @@ if defined TODO (
     echo [setup] works without a database.
 ) else (
     echo [setup] Everything is ready. Double-click run-demo.bat to open the login screen.
-    echo [setup] Demo login: NSC-00001 / Password123
+    echo [setup] First run: Installation Setup creates the admin account ^(NSC-00001^).
 )
 echo.
 pause

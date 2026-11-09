@@ -37,8 +37,25 @@ public class EscPosReceiptPrinter implements PrinterPort {
 
     @Override
     public void printReceipt(Receipt receipt) throws ReceiptPrintException {
+        send(toBytes(ReceiptRenderer.render(receipt, width)));
+    }
+
+    /**
+     * Every receipt in one print job, back to back (each with its own reset and feed, as if printed on
+     * its own): the printer gets a single job, so nothing waits in the queue behind the first receipt.
+     */
+    @Override
+    public void printReceipts(java.util.List<Receipt> receipts) throws ReceiptPrintException {
+        ByteArrayOutputStream all = new ByteArrayOutputStream();
+        for (Receipt r : receipts) {
+            all.writeBytes(toBytes(ReceiptRenderer.render(r, width)));
+        }
+        send(all.toByteArray());
+    }
+
+    /** One print job with {@code data} on the receipt printer. */
+    private static void send(byte[] data) throws ReceiptPrintException {
         PrintService service = findPrinter();
-        byte[] data = toBytes(ReceiptRenderer.render(receipt, width));
         try {
             DocPrintJob job = service.createPrintJob();
             job.print(new SimpleDoc(data, DocFlavor.BYTE_ARRAY.AUTOSENSE, null), null);

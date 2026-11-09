@@ -279,7 +279,7 @@ public class ReceiptCheck {
                 MySqlSaleRepository repo = new MySqlSaleRepository();
                 SalesService pos = new SalesService(products, new PricingService(), terminal,
                         new CheckoutService(repo, new InvoiceNumberGenerator(), new StubStockRecorder(), (e, u) -> { }));
-                Sale open = pos.startSale("NSC-00002");
+                Sale open = pos.startSale(stubs.TestCatalog.TEST_CASHIER);
                 pos.addItem("4800000000019", Quantity.of("2"));
                 pos.addItem("4800000000026", Quantity.of("7"));
                 pos.addItem("4800000000040", Quantity.of("2.333"));

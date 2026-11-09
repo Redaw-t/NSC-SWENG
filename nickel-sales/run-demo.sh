@@ -4,7 +4,7 @@
 #
 #    ./run-demo.sh              the app (DevApp): login, home screen, modules.
 #                               Users and sales from the local MySQL database,
-#                               TEST products until Product & Inventory is connected
+#                               (first run: Installation Setup creates the admin account)
 #    ./run-demo.sh --console    console demo with built-in stub users:
 #                               scenarios, then an interactive login prompt
 #    ./run-demo.sh --scripted   run ALL self-tests (before you push); exit code 1 if any fail
@@ -52,9 +52,9 @@ echo "Compiling..."
 if [[ "${1:-}" == "--scripted" ]]; then
     FAILED=""
     for check in "auth.AuthDemo --scripted" auth.AuthzDemo \
-                 auth.UserAdminDemo pos.PosContractCheck pos.CartCheck \
+                 auth.UserAdminDemo auth.FirstAdminCheck pos.PosContractCheck pos.CartCheck \
                  pos.CheckoutCheck pos.ReceiptCheck pos.ReturnCheck inventory.InventoryCheck \
-                 app.AppCheck product.ProductCheck barcode.BarcodeCheck reports.ReportsCheck system.SystemLogCheck system.SystemAdminCheck; do
+                 app.AppCheck product.ProductCheck barcode.BarcodeCheck reports.ReportsCheck system.SystemLogCheck system.SystemAdminCheck sync.ApiCheck; do
         echo
         echo "----- ${check%% *}"
         # shellcheck disable=SC2086

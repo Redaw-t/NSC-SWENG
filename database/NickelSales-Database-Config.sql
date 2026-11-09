@@ -16,18 +16,14 @@ CREATE TABLE IF NOT EXISTS `Users` (
     UpdatedAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
--- INSERT IGNORE: skips users that already exist, so this script can be re-run safely.
-INSERT IGNORE INTO `Users` (UserID, UserLoginName, UserPassword, UserName, UserLastname, UserRole, UserStatus) VALUES
-	("NSC-00001", "JCubillan", "$2a$10$TjKMuyc2JIk0Kx/PfVAjkeGLmg3O2twxiX.3iCLg1OqhS762FzYSW", "Jerick", "Cubillan", "A;C;I", "Active"),
-    ("NSC-00002", "JDelaCruz", "$2a$10$TjKMuyc2JIk0Kx/PfVAjkeGLmg3O2twxiX.3iCLg1OqhS762FzYSW", "Juan", "Dela Cruz", "C", "Active"),
-    ("NSC-00003", "MSantaAna", "$2a$10$TjKMuyc2JIk0Kx/PfVAjkeGLmg3O2twxiX.3iCLg1OqhS762FzYSW", "Maria", "Santa Ana", "I", "Active"),
-    ("NSC-00004", "RSantos", "$2a$10$TjKMuyc2JIk0Kx/PfVAjkeGLmg3O2twxiX.3iCLg1OqhS762FzYSW", "Rhian", "Santos", "C", "Inactive"),
-    ("NSC-00005", "KRodriguez", "$2a$10$TjKMuyc2JIk0Kx/PfVAjkeGLmg3O2twxiX.3iCLg1OqhS762FzYSW", "Kimberly", "Rodriguez", "C", "Locked");
+-- No users are seeded: the store's first account, the administrator NSC-00001, is created
+-- by Installation Setup on the Main POS (username and password chosen there).
 
 -- ===================== PRODUCT CATALOG =====================
 -- Owned by Product. Money is DECIMAL(12,2), quantities DECIMAL(12,3).
 -- Products, categories and suppliers are never deleted, only deactivated
 -- (IsActive = FALSE), so old sales and receipts can always be explained.
+-- No categories, suppliers or products are seeded: the store adds its own.
 
 CREATE TABLE IF NOT EXISTS `Category` (
     CategoryID INT AUTO_INCREMENT PRIMARY KEY,
@@ -61,52 +57,15 @@ CREATE TABLE IF NOT EXISTS `Product` (
     Vatable BOOLEAN NOT NULL DEFAULT TRUE,       -- FALSE = VAT-exempt
     IsActive BOOLEAN NOT NULL DEFAULT TRUE,      -- FALSE = discontinued: POS will not sell it
     CategoryID INT NULL,
-    SupplierID INT NULL,
-    StockOnHand DECIMAL(12,3) NOT NULL DEFAULT 0, -- READ by Product, WRITTEN only by Inventory (stock in / sale stock-out)
+    SupplierID INT NULL,                         -- (no stock column: stock lives in Inventory.QuantityOnHand)
     CreatedAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UpdatedAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY uq_product_barcode (Barcode),
     INDEX idx_product_name (ProductName),        -- cashier search and sorted lists
     CONSTRAINT fk_product_category FOREIGN KEY (CategoryID) REFERENCES `Category`(CategoryID),
     CONSTRAINT fk_product_supplier FOREIGN KEY (SupplierID) REFERENCES `Supplier`(SupplierID),
-    CONSTRAINT chk_product_prices CHECK (RetailPrice >= 0 AND (WholesalePrice IS NULL OR WholesalePrice >= 0)),
-    CONSTRAINT chk_product_stock CHECK (StockOnHand >= 0)
+    CONSTRAINT chk_product_prices CHECK (RetailPrice >= 0 AND (WholesalePrice IS NULL OR WholesalePrice >= 0))
 );
-
--- TEST CATALOG so POS has something to sell. The self-tests in test/ rely on exactly these nine
--- (test/stubs/TestCatalog resets them before each scenario), so run them on a development database.
--- INSERT IGNORE: skips what already exists, so this script can be re-run safely and never
--- overwrites a price or stock figure changed later. Delete or deactivate these in a real store.
-INSERT IGNORE INTO `Category` (CategoryName) VALUES
-    ('School/Office Supplies'), ('Modiste Items'), ('Groceries'); -- Remove Groceries before Production. Finalize the initial lists of categories with partner before production.
-
-INSERT IGNORE INTO `Supplier` (SupplierName, ContactPerson, Phone) VALUES
-    ('Sample Supplier', 'Test Contact', '0000-000-0001');
-
-INSERT IGNORE INTO `Product`
-    (ProductID, Barcode, ProductName, Unit, RetailPrice, WholesalePrice, Vatable, IsActive, CategoryID, SupplierID, StockOnHand)
-VALUES
-    ('P-0001', '4800000000019', 'Bond Paper A4 (ream)', 'ream', 250.00, 235.00, TRUE, TRUE,
-        (SELECT CategoryID FROM `Category` WHERE CategoryName = 'School/Office Supplies'),
-        (SELECT SupplierID FROM `Supplier` WHERE SupplierName = 'Sample Supplier'), 40),
-    ('P-0002', '4800000000026', 'Ballpen Black', 'pc', 12.00, 10.00, TRUE, TRUE,
-        (SELECT CategoryID FROM `Category` WHERE CategoryName = 'School/Office Supplies'),
-        (SELECT SupplierID FROM `Supplier` WHERE SupplierName = 'Sample Supplier'), 200),
-    ('P-0003', '4800000000033', 'Notebook 80 leaves', 'pc', 45.00, NULL, TRUE, TRUE,              -- no wholesale price
-        (SELECT CategoryID FROM `Category` WHERE CategoryName = 'School/Office Supplies'),
-        (SELECT SupplierID FROM `Supplier` WHERE SupplierName = 'Sample Supplier'), 60),
-    ('P-0004', '4800000000040', 'Rice (per kg)', 'kg', 52.50, 50.00, FALSE, TRUE,                 -- VAT-exempt, sold by weight
-        (SELECT CategoryID FROM `Category` WHERE CategoryName = 'Groceries'),
-        (SELECT SupplierID FROM `Supplier` WHERE SupplierName = 'Sample Supplier'), 100.500),
-    ('P-0005', '4800000000057', 'Masking Tape 1 inch', 'roll', 35.75, 32.00, TRUE, TRUE,          -- out of stock
-        (SELECT CategoryID FROM `Category` WHERE CategoryName = 'School/Office Supplies'),
-        (SELECT SupplierID FROM `Supplier` WHERE SupplierName = 'Sample Supplier'), 0),
-    ('P-0006', '4800000000064', 'Desk Calculator', 'pc', 499.00, NULL, TRUE, FALSE,               -- inactive (no longer sold)
-        (SELECT CategoryID FROM `Category` WHERE CategoryName = 'School/Office Supplies'),
-        (SELECT SupplierID FROM `Supplier` WHERE SupplierName = 'Sample Supplier'), 5),
-    ('P-0007', NULL, 'Glue Stick', 'pc', 18.00, 16.50, TRUE, TRUE,                                -- no barcode: found by search only
-        (SELECT CategoryID FROM `Category` WHERE CategoryName = 'School/Office Supplies'),
-        (SELECT SupplierID FROM `Supplier` WHERE SupplierName = 'Sample Supplier'), 30);
 
 -- ================== TRANSACTION RECORDS ==================
 -- Owned by POS. Money is DECIMAL(12,2), quantities DECIMAL(12,3), times are UTC.
@@ -298,16 +257,6 @@ CREATE TABLE IF NOT EXISTS `BackupRecord` (
     INDEX idx_backup_created (CreatedAt)
 );
 
--- Starting stock for the test catalog (Inventory is the source of truth for stock).
-INSERT IGNORE INTO `Inventory` (ProductID, QuantityOnHand, ReorderLevel, UpdatedAt) VALUES
-    ('P-0001', 40, 0, UTC_TIMESTAMP(3)),
-    ('P-0002', 200, 0, UTC_TIMESTAMP(3)),
-    ('P-0003', 60, 0, UTC_TIMESTAMP(3)),
-    ('P-0004', 100.500, 0, UTC_TIMESTAMP(3)),
-    ('P-0005', 0, 0, UTC_TIMESTAMP(3)),
-    ('P-0006', 5, 0, UTC_TIMESTAMP(3)),
-    ('P-0007', 30, 0, UTC_TIMESTAMP(3));
-
 -- ============ UPGRADES FOR DATABASES MADE BY AN OLDER SCRIPT ============
 -- CREATE TABLE IF NOT EXISTS never changes a table that is already there, so
 -- columns and indexes added after a table was first created are added here,
@@ -347,4 +296,15 @@ PREPARE upgrade FROM @ddl; EXECUTE upgrade; DEALLOCATE PREPARE upgrade;
 SET @missing = (SELECT COUNT(*) = 0 FROM information_schema.COLUMNS
     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'Users' AND COLUMN_NAME = 'LastSignIn');
 SET @ddl = IF(@missing, 'ALTER TABLE `Users` ADD COLUMN LastSignIn TIMESTAMP NULL DEFAULT NULL AFTER UserStatus', 'DO 0');
+PREPARE upgrade FROM @ddl; EXECUTE upgrade; DEALLOCATE PREPARE upgrade;
+
+-- Product.StockOnHand removed (stock is handled by Inventory: Inventory.QuantityOnHand is the only stock figure).
+-- Its CHECK constraint goes first, since MySQL won't drop a column a constraint still uses.
+SET @present = (SELECT COUNT(*) > 0 FROM information_schema.TABLE_CONSTRAINTS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'Product' AND CONSTRAINT_NAME = 'chk_product_stock');
+SET @ddl = IF(@present, 'ALTER TABLE `Product` DROP CHECK chk_product_stock', 'DO 0');
+PREPARE upgrade FROM @ddl; EXECUTE upgrade; DEALLOCATE PREPARE upgrade;
+SET @present = (SELECT COUNT(*) > 0 FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'Product' AND COLUMN_NAME = 'StockOnHand');
+SET @ddl = IF(@present, 'ALTER TABLE `Product` DROP COLUMN StockOnHand', 'DO 0');
 PREPARE upgrade FROM @ddl; EXECUTE upgrade; DEALLOCATE PREPARE upgrade;

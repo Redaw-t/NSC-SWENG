@@ -24,10 +24,17 @@ import java.util.function.Function;
 public final class CashierReportService {
 
     private final SaleHistory history;
+    private final pos.contract.ReturnHistory returns;   // null = refunds not taken off
     private final ReportsAccess access;
 
     public CashierReportService(SaleHistory history, ReportsAccess access) {
+        this(history, null, access);
+    }
+
+    /** Refunds are taken off each sale's cashier / terminal, on the day of the sale. */
+    public CashierReportService(SaleHistory history, pos.contract.ReturnHistory returns, ReportsAccess access) {
         this.history = Objects.requireNonNull(history, "history");
+        this.returns = returns;
         this.access = Objects.requireNonNull(access, "access");
     }
 
@@ -47,10 +54,10 @@ public final class CashierReportService {
         Objects.requireNonNull(period, "period");
         Map<String, Integer> counts = new HashMap<>();
         Map<String, BigDecimal> totals = new HashMap<>();
-        for (SaleRecord sale : SalesSource.completedIn(history, period)) {
-            String k = key.apply(sale);
+        for (pos.contract.NetSale sale : SalesSource.netIn(history, returns, period)) {
+            String k = key.apply(sale.sale());
             counts.merge(k, 1, Integer::sum);
-            totals.merge(k, sale.total(), BigDecimal::add);
+            totals.merge(k, sale.total(), BigDecimal::add);   // refunds taken off
         }
         List<GroupTotal> rows = new ArrayList<>();
         for (Map.Entry<String, Integer> e : counts.entrySet()) {

@@ -49,6 +49,7 @@ import pos.contract.ReturnLineRecord;
 import pos.contract.ReturnRecord;
 import pos.contract.SaleLineRecord;
 import pos.contract.SaleRecord;
+import pos.receipt.PrinterPort;
 import pos.receipt.Receipt;
 import pos.receipt.ReceiptPrintException;
 import pos.returns.ReturnException;
@@ -1401,18 +1402,21 @@ public final class PosScreen {
         String refund = "Refund " + peso(done.total()) + " (" + how + "). ";
         showInfo("Saved " + done.returnNo() + ". " + refund);
         Receipt slip;
+        Receipt invoice;
         try {
             slip = screen.app().receipts().buildReturn(retrieved, done, false);
+            invoice = screen.app().receipts().buildReprint(retrieved);   // the sale's invoice, now with this refund
         } catch (RuntimeException e) {
             System.err.println("[RECEIPT] " + e);
-            showError(done.returnNo() + " is saved, but its return slip could not be made.");
+            showError(done.returnNo() + " is saved, but its receipts could not be made.");
             return;
         }
+        // Both go out as ONE print job: the sales invoice again (listing the refund), then the RETURN slip.
+        PrinterPort invoiceThenSlip = invoiceThenSlip(invoice, done.returnNo());
         if (PosSettings.autoPrintReceipt()) {
             try {
-                screen.app().receiptPrinter().printReceipt(slip);
-                showInfo("Saved " + done.returnNo() + ". " + refund + "Return slip sent to the printer.");
-                checkPrintedLater(done.returnNo());
+                invoiceThenSlip.printReceipt(slip);
+                showInfo("Saved " + done.returnNo() + ". " + refund + "Invoice and return slip sent to the printer.");
             } catch (ReceiptPrintException | RuntimeException e) {
                 System.err.println("[PRINT] " + e);
                 receiptNotPrinted(done.returnNo());
@@ -1422,14 +1426,27 @@ public final class PosScreen {
         try {
             Label top = new Label("REFUND  " + peso(done.total()) + "  ·  " + how);
             top.setStyle("-fx-font-size: 30px; -fx-font-weight: bold; -fx-text-fill: " + RED + ";");
-            if (ReceiptDialog.show(screen.stage(), "Void Complete", "Return " + done.returnNo(), top, slip,
-                    screen.app().receiptPrinter(), screen.app().config().receiptWidth())) {
-                checkPrintedLater(done.returnNo());
-            }
+            ReceiptDialog.show(screen.stage(), "Void Complete", "Return " + done.returnNo()
+                    + "  ·  Print sends the invoice and this slip", top, slip, invoiceThenSlip,
+                    screen.app().config().receiptWidth());
         } catch (RuntimeException e) {
             System.err.println("[RECEIPT] " + e);
             showError(done.returnNo() + " is saved, but its return slip could not be shown.");
         }
+    }
+
+    /**
+     * A printer for the refund's receipts: asked to print the RETURN slip, it sends {@code invoice} (the
+     * sale's invoice again, now listing the refund) and the slip together as ONE print job, invoice
+     * first. Two separate jobs made the printer report "not connected" while the second one waited in
+     * the queue. If the job can't be sent, it says so; the printer is checked again afterwards.
+     */
+    private PrinterPort invoiceThenSlip(Receipt invoice, String returnNo) {
+        PrinterPort printer = screen.app().receiptPrinter();
+        return slip -> {
+            printer.printReceipts(List.of(invoice, slip));
+            checkPrintedLater(returnNo);
+        };
     }
 
     /** Reads the retrieved sale's voids again and redraws it (keeps the screen as it was if that fails). */

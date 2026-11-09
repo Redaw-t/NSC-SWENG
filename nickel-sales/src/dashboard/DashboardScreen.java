@@ -364,6 +364,8 @@ public final class DashboardScreen {
         DashboardStats.Totals yesterday = DashboardStats.Totals.NONE;
         List<SaleRecord> todayList = List.of();
         List<SaleRecord> yesterdayList = List.of();
+        /** Sale ID -> the sale with its refunds taken off (today's and yesterday's sales). */
+        java.util.Map<String, pos.contract.NetSale> net = java.util.Map.of();
         boolean failed;
     }
 
@@ -378,8 +380,16 @@ public final class DashboardScreen {
             s.todayList = screen.app().saleHistory().findCompleted(startToday, now.plusSeconds(1));
             s.yesterdayList = DashboardStats.before(
                     screen.app().saleHistory().findCompleted(startYesterday, startToday), sameTimeYesterday);
-            s.today = DashboardStats.totals(s.todayList, cashier);
-            s.yesterday = DashboardStats.totals(s.yesterdayList, cashier);
+            // Refunds come off the sales of the day the SALE was made, whenever they were made.
+            List<pos.contract.ReturnRecord> refunds = screen.app().returnHistory()
+                    .findForSalesCompletedIn(startYesterday, now.plusSeconds(1));
+            List<pos.contract.NetSale> netToday = pos.contract.NetSale.of(s.todayList, refunds);
+            List<pos.contract.NetSale> netYesterday = pos.contract.NetSale.of(s.yesterdayList, refunds);
+            java.util.Map<String, pos.contract.NetSale> net = new java.util.HashMap<>(pos.contract.NetSale.byId(netToday));
+            net.putAll(pos.contract.NetSale.byId(netYesterday));
+            s.net = net;
+            s.today = DashboardStats.totals(netToday, cashier);
+            s.yesterday = DashboardStats.totals(netYesterday, cashier);
         } catch (RuntimeException e) {
             s.failed = true;
         }
@@ -538,7 +548,10 @@ public final class DashboardScreen {
                 rows.getChildren().add(emptyText("No sales yet today. Your first one will show here."));
             }
             for (SaleRecord s : latest) {
-                Label total = new Label("₱" + Money.format(s.total()));
+                pos.contract.NetSale n = sales.net.get(s.saleId());
+                // what the sale is worth now: refunds taken off
+                Label total = new Label("₱" + Money.format(n == null ? s.total() : n.total())
+                        + (n != null && n.refunded().signum() > 0 ? (n.fullyRefunded() ? "  (refunded)" : "  (part refunded)") : ""));
                 total.setStyle("-fx-font-size: 14px; -fx-font-weight: bold; -fx-text-fill: " + Theme.PRIMARY_TEXT + ";");
                 int items = s.lines().size();
                 rows.getChildren().add(listRow(s.invoiceNo(),

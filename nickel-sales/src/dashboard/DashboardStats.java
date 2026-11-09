@@ -42,20 +42,19 @@ public final class DashboardStats {
 
     /**
      * Totals of {@code sales}; {@code cashierUserId} null = every cashier, else only that cashier's sales.
+     * Refunds are taken off (money and items), on the day of the sale; a sale still counts as a transaction.
      */
-    public static Totals totals(List<SaleRecord> sales, String cashierUserId) {
+    public static Totals totals(List<pos.contract.NetSale> sales, String cashierUserId) {
         int count = 0;
         BigDecimal money = Money.ZERO;
         BigDecimal items = BigDecimal.ZERO;
-        for (SaleRecord s : sales) {
-            if (cashierUserId != null && !cashierUserId.equals(s.cashierUserId())) {
+        for (pos.contract.NetSale s : sales) {
+            if (cashierUserId != null && !cashierUserId.equals(s.sale().cashierUserId())) {
                 continue;
             }
             count++;
             money = money.add(s.total());
-            for (SaleLineRecord line : s.lines()) {
-                items = items.add(line.quantity());
-            }
+            items = items.add(s.items());
         }
         return new Totals(count, money, items);
     }

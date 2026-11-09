@@ -10,13 +10,23 @@ import java.util.List;
  * the period (for the filter drop-downs; they do not shrink when a filter is chosen, so you can switch
  * from one cashier to another).
  *
- * @param sales the matching sales only, newest first
- * @param rows  the matching sales AND returns, newest first (what the table lists)
+ * @param sales    the matching sales only, newest first
+ * @param rows     the matching sales AND returns, newest first (what the table lists)
+ * @param netSales the matching sales' total minus THEIR refunds, whenever those were made (so a refund
+ *                 counts on the day of the sale, like every other sales total)
  */
 public record TransactionList(List<SaleRecord> sales, List<TransactionRow> rows,
-                              List<String> cashierIds, List<String> terminalIds) {
+                              List<String> cashierIds, List<String> terminalIds, java.math.BigDecimal netSales) {
+
+    /** Without refund figures: Net Sales is the sales' own total. */
+    public TransactionList(List<SaleRecord> sales, List<TransactionRow> rows,
+                           List<String> cashierIds, List<String> terminalIds) {
+        this(sales, rows, cashierIds, terminalIds,
+                sales.stream().map(SaleRecord::total).reduce(shared.Money.ZERO, java.math.BigDecimal::add));
+    }
 
     public TransactionList {
+        java.util.Objects.requireNonNull(netSales, "netSales");
         sales = List.copyOf(sales);
         rows = List.copyOf(rows);
         cashierIds = List.copyOf(cashierIds);

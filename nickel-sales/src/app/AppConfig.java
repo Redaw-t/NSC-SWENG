@@ -57,6 +57,11 @@ public record AppConfig(String terminalId, Duration idleTimeout, StoreInfo store
         this(terminalId, idleTimeout, StoreInfo.named(StoreInfo.DEFAULT_NAME), Receipt.DEFAULT_WIDTH);
     }
 
+    /** The same settings for another terminal (the ID Installation Setup gave this computer). */
+    public AppConfig withTerminalId(String id) {
+        return new AppConfig(id, idleTimeout, store, receiptWidth);
+    }
+
     /** From this computer's environment variables. */
     public static AppConfig fromEnvironment() {
         return from(System.getenv());

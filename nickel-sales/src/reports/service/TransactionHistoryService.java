@@ -109,7 +109,30 @@ public final class TransactionHistoryService {
         }
         sales.sort(Comparator.comparing(SaleRecord::completedAt).reversed());
         rows.sort(Comparator.comparing(TransactionRow::when).reversed());
-        return new TransactionList(sales, rows, new ArrayList<>(cashiers), new ArrayList<>(terminals));
+        return new TransactionList(sales, rows, new ArrayList<>(cashiers), new ArrayList<>(terminals),
+                netSales(sales, filter, exact.isPresent()));
+    }
+
+    /**
+     * The listed sales minus their own refunds, whenever those were made: a refund counts on the day of
+     * the sale (as in the Sales Summary and the Dashboard), not on the day it was given.
+     */
+    private java.math.BigDecimal netSales(List<SaleRecord> sales, ReportFilter filter, boolean exactSale)
+            throws ReportException {
+        List<ReturnRecord> refunds = List.of();
+        if (returns != null && !sales.isEmpty()) {
+            try {
+                refunds = exactSale ? returns.findBySaleId(sales.get(0).saleId())
+                        : returns.findForSalesCompletedIn(filter.period().start(), filter.period().end());
+            } catch (RuntimeException e) {
+                throw new ReportException(SalesSource.NOT_LOADED, e);
+            }
+        }
+        java.math.BigDecimal total = shared.Money.ZERO;
+        for (pos.contract.NetSale n : pos.contract.NetSale.of(sales, refunds)) {
+            total = total.add(n.total());
+        }
+        return total;
     }
 
     private SaleRecord saleOf(String saleId) {
