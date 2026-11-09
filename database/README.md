@@ -2,7 +2,7 @@
 
 | Path | What it is |
 |---|---|
-| `NickelSales-Database-Config.sql` | The schema only (tables, no data). Every table is InnoDB. Safe to run again: it only creates what is missing and upgrades older databases (missing columns/indexes, non-InnoDB tables). The setup scripts (`nickel-sales/setup.*`, `setup-database.*`) run it, and so does the installer. |
+| `NickelSales-Database-Config.sql` | The schema only (tables, no data). Every table is InnoDB. `StoreDetails` is a log of the store details on receipts: a change adds a row (with `PerformedBy`), never edits one, and the newest row is the one in use. Safe to run again: it only creates what is missing and upgrades older databases (missing columns/indexes, non-InnoDB tables). The setup scripts (`nickel-sales/setup.*`, `setup-database.*`) run it, and so does the installer. |
 | `NickelSales-AppConfig.sql` | `nickelsales_appconfig`, a separate database for this installation's set-up state: `PosTerminals` (which PC is T01, T02 ... and their addresses) and `AppSettings` (this PC's terminal ID, API key ...). Filled by the app's Installation Setup screen. Safe to run again. The setup scripts and the installer both run it. |
 | `NickelSales-Demo-Data.sql` | Demo users (password `Password123`) and a test catalog with starting stock. **Development databases only, never a store's.** The setup scripts run it after the schema; the installer never does. The self-tests create their own fixture (`test/stubs/TestCatalog`). |
 | Audit and System tables | `ActivityLog` (append-only, never updated or deleted), `SyncLog` and `BackupRecord`. Owned by `nickel-sales/src/system/`. |

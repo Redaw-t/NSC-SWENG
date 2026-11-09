@@ -73,7 +73,9 @@ public final class ActivityDescription {
             Map.entry("RESTORE_FAILED", "Database restore failed: the previous data was put back."),
             Map.entry("RESTORE_FAILED_UNRECOVERED", "Database restore failed: the previous data could not be put back."),
             Map.entry("BACKUP_FOLDER_CHANGED", "Backup folder changed."),
-            Map.entry("SYNC_RETRY_REQUESTED", "Sync retry requested."));
+            Map.entry("SYNC_RETRY_REQUESTED", "Sync retry requested."),
+            Map.entry("STORE_DETAILS_REGISTERED", "Store details registered in Installation Setup."),
+            Map.entry("STORE_DETAILS_CHANGED", "Store details on receipts changed."));
 
     /** How the sentences built in {@link #describe} start, so a search for those words finds them. */
     private static final Map<String, String> OPENINGS = Map.of(

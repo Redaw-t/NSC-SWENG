@@ -25,6 +25,10 @@ import shared.Theme;
 import shared.UiErrors;
 import sync.api.ApiServer;
 import sync.api.MainPosClient;
+import system.service.StoreDetailsService;
+import system.service.SystemException;
+import pos.receipt.StoreInfo;
+import javafx.scene.layout.HBox;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -45,10 +49,12 @@ import java.util.function.Consumer;
  *       <b>create the admin account</b>:
  *       the store admin's first and last name, then (on the next screen) the username made from them, as
  *       Add user does (e.g. JCubillan), and a password. The store's first user, NSC-00001, with every role.
- *       Only then are the admin and T01's address saved. Or <b>Additional POS</b>:
+ *       The admin is saved, then <b>Store Register</b>: the store details printed on receipts (name,
+ *       address, proprietor, TIN, phone), saved in the StoreDetails log as performed by that admin
+ *       (NSC-00001). Only then is T01's address saved and this computer set up. Or <b>Additional POS</b>:
  *       type the Main POS's IP address; the Main POS (its API) answers with this computer's terminal ID
  *       (T02, T03 ...) and adds it to its own list; then T01's address and this computer's own row are
- *       saved here.</li>
+ *       saved here. It gets the store details with the store's data in the next step.</li>
  *   <li><b>Additional POS: Syncing Data</b>: a loading screen while the Main POS sends its whole store
  *       database (never its nickelsales_appconfig) and it is loaded here ({@link InitialSync}). Only then
  *       is this computer saved as set up; TRY AGAIN repeats a failed sync.</li>
@@ -117,6 +123,7 @@ public final class InstallationSetupScreen {
 
     private final PosTerminalRepository terminals;
     private final FirstAdminService firstAdmin;     // Main POS: creates the admin account (NSC-00001)
+    private final StoreDetailsService storeDetails; // Main POS: the store details, logged as performed by the admin
     private final Consumer<String> onDone;
     private final StackPane view = new StackPane();
     private final VBox step = new VBox();          // the part under the title that changes per step
@@ -128,15 +135,18 @@ public final class InstallationSetupScreen {
     private String mainIp;                          // Main POS: set once step 3 accepts it
     private String adminFirst;                      // Main POS: the store admin's names (kept for Back)
     private String adminLast;
+    private String adminLogin;                      // Main POS: the admin's username, once the account is saved
+    private boolean storeRegistered;                // Main POS: the store details are saved (a retry skips them)
 
     /**
      * @param onDone called with this computer's terminal ID (T01, T02 ...) once it is set up;
      *               normally: build the app for that terminal and show the login page
      */
     public InstallationSetupScreen(PosTerminalRepository terminals, FirstAdminService firstAdmin,
-                                   Consumer<String> onDone) {
+                                   StoreDetailsService storeDetails, Consumer<String> onDone) {
         this.terminals = Objects.requireNonNull(terminals, "terminals");
         this.firstAdmin = Objects.requireNonNull(firstAdmin, "firstAdmin");
+        this.storeDetails = Objects.requireNonNull(storeDetails, "storeDetails");
         this.onDone = Objects.requireNonNull(onDone, "onDone");
         buildFrame();
         showRoleStep();
@@ -349,7 +359,7 @@ public final class InstallationSetupScreen {
 
     /**
      * Main POS, admin account part 2: the username made from the names (shown, not typed) and the
-     * password. Saves the admin, then this computer as T01 at {@link #mainIp}.
+     * password. Saves the admin, then goes on to Store Register ({@link #showStoreStep}).
      */
     private void showAdminPasswordStep(String username) {
         TextField login = readOnly(username);
@@ -360,10 +370,9 @@ public final class InstallationSetupScreen {
         Runnable submit = () -> {
             next.setDisable(true);
             back.setDisable(true);
-            String saved;
             try {
-                saved = firstAdmin.create(adminFirst, adminLast, password.getText(), confirm.getText()).getLoginName();
-                terminals.completeMainSetup(mainIp, computerName(), apiKey);
+                adminLogin = firstAdmin.create(adminFirst, adminLast, password.getText(), confirm.getText())
+                        .getLoginName();
             } catch (AccountException e) {
                 showError(e.getMessage());
                 password.requestFocus();
@@ -378,10 +387,8 @@ public final class InstallationSetupScreen {
                 back.setDisable(false);
                 return;
             }
-            System.out.println("[SETUP] this computer is the Main POS (T01) at " + mainIp + "; admin " + saved
-                    + " (" + FirstAdminService.ADMIN_ID + ")");
-            showDoneStep(PosTerminalRepository.MAIN_ID, "This computer is the Main POS. Other terminals connect "
-                    + "to it at " + mainIp + ". Sign in as " + saved + " with the password you chose.");
+            System.out.println("[SETUP] admin " + adminLogin + " (" + FirstAdminService.ADMIN_ID + ") created");
+            showStoreStep();
         };
         next.setOnAction(e -> submit.run());
         password.setOnAction(e -> submit.run());
@@ -391,6 +398,79 @@ public final class InstallationSetupScreen {
                 caption("Username"), gap(6), login, gap(22),
                 caption("Password"), gap(6), password, gap(12), confirm, gap(8),
                 note(PassPolicy.REQUIREMENTS), gap(8), errorLabel, gap(20), next, gap(16), back);
+    }
+
+    /* ---------------------- 3a-3. Main POS: store register --------------------- */
+
+    /**
+     * Main POS, after the admin account: the store details printed at the top of every receipt. Saved
+     * as the first row of the StoreDetails log, performed by the admin just created (NSC-00001); then
+     * this computer is saved as T01 at {@link #mainIp}, and setup is done. Prefilled with the details
+     * in use (Nickel Sales Center's own unless the settings file has others). No Back: the admin
+     * account is already saved; if setup is closed here, it starts again next time.
+     */
+    private void showStoreStep() {
+        StoreInfo now = storeDetails.current();
+        TextField name = field("Store Name");
+        TextField address = field("Address");
+        TextField proprietor = field("Proprietor");
+        TextField tin = field("TIN, e.g. 000-000-000-00000");
+        TextField phone = field("Phone");
+        name.setText(now.name());
+        address.setText(now.address());
+        proprietor.setText(now.proprietor());
+        tin.setText(now.tin());
+        phone.setText(now.phone());
+        Button next = primary("REGISTER STORE");
+        Runnable submit = () -> {
+            next.setDisable(true);
+            try {
+                if (!storeRegistered) {
+                    storeDetails.registerAtInstallation(FirstAdminService.ADMIN_ID, name.getText(), address.getText(),
+                            proprietor.getText(), tin.getText(), phone.getText());
+                    storeRegistered = true;
+                }
+                terminals.completeMainSetup(mainIp, computerName(), apiKey);
+            } catch (SystemException e) {
+                showError(e.getMessage());
+                next.setDisable(false);
+                return;
+            } catch (RuntimeException e) {
+                System.err.println("[SETUP] " + e + (e.getCause() == null ? "" : " / " + e.getCause()));
+                showError(UiErrors.message(e, "The setup could not be saved. Check that MySQL is running and that "
+                        + "setup.bat has created the databases, then try again."));
+                next.setDisable(false);
+                return;
+            }
+            System.out.println("[SETUP] this computer is the Main POS (T01) at " + mainIp + "; admin " + adminLogin
+                    + " (" + FirstAdminService.ADMIN_ID + "); store details registered");
+            showDoneStep(PosTerminalRepository.MAIN_ID, "This computer is the Main POS. Other terminals connect "
+                    + "to it at " + mainIp + ". Sign in as " + adminLogin + " with the password you chose. "
+                    + "An admin can change the store details in Settings > Store Details.");
+        };
+        next.setOnAction(e -> submit.run());
+        for (TextField f : new TextField[] {name, address, proprietor, tin, phone}) {
+            f.setOnAction(e -> submit.run());
+        }
+        showStep(name, stepTitle("Store Register"), gap(6),
+                note("Printed at the top of every receipt. Only the store name is required; leave a box empty to "
+                        + "leave that line off."), gap(26),
+                labelled("Store Name", name), gap(12), labelled("Address", address), gap(12),
+                labelled("Proprietor", proprietor), gap(12), labelled("TIN", tin), gap(12),
+                labelled("Phone", phone), gap(12), errorLabel, gap(22), next);
+    }
+
+    /** A field with its name on the left, so a long form fits on the page. */
+    private static HBox labelled(String text, TextField field) {
+        Label label = new Label(text);
+        label.setStyle("-fx-font-size: 16px; -fx-font-weight: bold; -fx-text-fill: " + Theme.SECONDARY_TEXT + ";");
+        label.setMinWidth(130);
+        label.setPrefWidth(130);
+        label.setAlignment(Pos.CENTER_RIGHT);
+        HBox row = new HBox(16, label, field);
+        row.setAlignment(Pos.CENTER);
+        row.setPadding(new javafx.geometry.Insets(0, 146, 0, 0));   // keeps the fields centred under the title
+        return row;
     }
 
     /* --------------------------- 3b. Additional POS -------------------------- */

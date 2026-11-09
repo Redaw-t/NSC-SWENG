@@ -21,9 +21,9 @@ import java.util.Objects;
  * | NSC_STORE_PROPRIETOR     | owner, printed "NAME - PROPRIETOR"            | the store's owner   |
  * | NSC_STORE_TIN            | VAT-REG TIN on receipts                       | the store's TIN     |
  * | NSC_STORE_PHONE          | phone on receipts (left off if not set)       |                     |
- * | NSC_RECEIPT_WIDTH        | characters per receipt line: 32 for 58 mm     | 32                  |
- * |                          | paper, 42-48 for 80 mm (32-48)                |                     |
  *
+ * The NSC_STORE_* details are only used until store details are saved in the database
+ * (system.service.StoreDetailsService); then the newest StoreDetails row wins.
  * The address, proprietor and TIN default to Nickel Sales Center's own details
  * (pos.receipt.StoreInfo.NICKEL_*); set a variable to override it, or to a blank
  * value to leave that line off the receipt.
@@ -35,7 +35,8 @@ import java.util.Objects;
  * @param terminalId   1-8 letters, digits or dashes
  * @param idleTimeout  at least 1 minute
  * @param store        printed on receipts
- * @param receiptWidth characters per receipt line
+ * @param receiptWidth characters per receipt line: always Receipt.DEFAULT_WIDTH (58 mm paper);
+ *                     the store only uses 58 mm, so it is not a setting
  */
 public record AppConfig(String terminalId, Duration idleTimeout, StoreInfo store, int receiptWidth) {
 
@@ -71,7 +72,7 @@ public record AppConfig(String terminalId, Duration idleTimeout, StoreInfo store
 
     /**
      * From a map of settings (shared.Settings.all(), or a test's own map).
-     * A bad idle timeout or receipt width falls back to the default with a
+     * A bad idle timeout falls back to the default with a
      * warning; a bad terminal ID stops the app, because it would make wrong
      * invoice numbers.
      */
@@ -81,7 +82,7 @@ public record AppConfig(String terminalId, Duration idleTimeout, StoreInfo store
             terminal = DEFAULT_TERMINAL_ID;
         }
         long idleMinutes = number(env, "NSC_IDLE_TIMEOUT_MINUTES", DEFAULT_IDLE_TIMEOUT.toMinutes(), 1, Long.MAX_VALUE);
-        int width = (int) number(env, "NSC_RECEIPT_WIDTH", Receipt.DEFAULT_WIDTH, Receipt.MIN_WIDTH, Receipt.MAX_WIDTH);
+        int width = Receipt.DEFAULT_WIDTH;   // 58 mm paper only
         StoreInfo store = new StoreInfo(env.get("NSC_STORE_NAME"),
                 env.getOrDefault("NSC_STORE_ADDRESS", StoreInfo.NICKEL_ADDRESS),
                 env.getOrDefault("NSC_STORE_PROPRIETOR", StoreInfo.NICKEL_PROPRIETOR),

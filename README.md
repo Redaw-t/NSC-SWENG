@@ -194,15 +194,17 @@ screen and receipt show how much of it is VAT (VATable sales = price / 1.12).
 
 The receipt (logo, store details, items, totals, VAT breakdown, invoice barcode)
 is drawn as one picture, so the preview and the printout are identical. It prints
-on the receipt printer chosen in Settings > Printers. The store details default to
-Nickel Sales Center's own; to change them, put them in the settings file (see
-[nickel-sales/CONTRIBUTING.md](nickel-sales/CONTRIBUTING.md#settings)), or on Windows (then open a new window):
-`setx NSC_STORE_ADDRESS "123 Rizal Ave., Manila"`, and likewise
-`NSC_STORE_PROPRIETOR`, `NSC_STORE_TIN`, `NSC_STORE_PHONE`, `NSC_STORE_NAME`.
-Paper width: `setx NSC_RECEIPT_WIDTH 32` for 58 mm (the default), 48 for 80 mm.
-On a store PC (the installed app) these settings are in
-`C:\ProgramData\NickelSales\nickelsales.properties` instead, written by the installer; see
-[installer/README.md](installer/README.md).
+on the receipt printer chosen in Settings > Printers. Receipts are always 58 mm
+paper (32 characters a line).
+
+The **store details** at the top of the receipt (name, address, proprietor, TIN,
+phone) are kept in the store database, in the `StoreDetails` log: every change adds
+a row with who performed it, and the newest row is the one printed. The first row
+is made by Installation Setup on the Main POS (**Store Register**, right after the
+admin account, performed by `NSC-00001`); after that only an admin can change them,
+in **Settings > Store Details**, which also shows the change log. Until a row exists
+(an older database, or a developer PC that never ran setup), receipts use the
+`NSC_STORE_*` settings if set, else Nickel Sales Center's own details.
 Products live in MySQL (`Product`, `Category`, `Supplier`). The demo data script adds test
 products (barcodes `4800000000019`, `4800000000026`, `4800000000040`, ...). If your database was
 created before the Products module, run `setup.bat` again to add the product tables.
@@ -266,7 +268,7 @@ bcrypt hashes, so it's two steps:
 | "The database is out of date…", or errors **after you pulled new changes** | Close the app and run `setup.bat` — it adds any new tables and columns to your database and keeps your data. Still failing? A table changed shape: in MySQL Workbench run `DROP DATABASE NickelSales_Database;`, then run `setup.bat` and answer **Y** to create it again (this resets it to the demo users and removes saved sales) |
 | "A database error occurred…" | The black window shows the real cause on a line starting with `[DATABASE]` — send that line to the team |
 | "No printer is set up on this computer" when printing a receipt | In the app, open Settings → Printer settings and choose your receipt printer (and barcode label printer). Or set a default printer in Windows Settings → Printers, or set the NSC_PRINTER_NAME environment variable to your receipt printer's exact Windows name (for example POS-58). It must be a thermal receipt printer; "Microsoft Print to PDF" will not print a readable receipt |
-| Receipt is cut off at the sides on a receipt printer | For 58 mm paper run `setx NSC_RECEIPT_WIDTH 32`, then open a new window |
+| Receipt is cut off at the sides on a receipt printer | Receipts are made for 58 mm paper: check the printer uses 58 mm rolls and is the one chosen in Settings → Printers |
 | "Invalid username or password." | Use the **username** chosen in Installation Setup (or in Manage users), not the ID (`NSC-00001`) — passwords are case-sensitive (watch for the Caps Lock warning) |
 | "Your session expired. Please log in again." | Nobody used the app for 30 minutes, so it logged out for safety. Just log in again |
 | `setup.bat` says MySQL is **NOT RUNNING** | Press Win+R, type `services.msc`, find the MySQL service, right-click → **Start** |

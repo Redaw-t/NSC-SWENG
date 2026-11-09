@@ -48,7 +48,7 @@ public final class ReceiptRenderer {
     /**
      * The receipt as a black-and-white picture ({@link BufferedImage#TYPE_BYTE_BINARY}).
      *
-     * @param widthChars the receipt width setting (NSC_RECEIPT_WIDTH): 32 for 58 mm paper, 42-48 for 80 mm
+     * @param widthChars characters per line: 32 for 58 mm paper (the app always uses 32)
      */
     public static BufferedImage render(Receipt receipt, int widthChars) {
         int width = dotsFor(widthChars);

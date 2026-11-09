@@ -25,7 +25,8 @@ import java.util.List;
  * The Settings screen (sidebar, bottom entry), with a tab strip like the Products screen:
  * - General (everyone): Account (change password) and Printers (receipt and barcode label printer
  *   for this computer, see {@link PrinterSettingsDialog}).
- * - System Status and Backup &amp; Restore: Admin only (MANAGE_SYSTEM), from {@link SystemSettingsTabs}.
+ * - Store Details (receipt header, with its change log), System Status and Backup &amp; Restore: Admin
+ *   only (MANAGE_SYSTEM), from {@link SystemSettingsTabs}.
  * (Activity, inventory and sync logs stay on the Audit Logs screen.)
  */
 public final class SettingsScreen {

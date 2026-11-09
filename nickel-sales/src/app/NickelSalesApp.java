@@ -49,7 +49,7 @@ public class NickelSalesApp extends Application {
         stage.setMaximized(true);
         if (needsSetup()) {
             stage.setTitle("Nickel Sales Center " + shared.AppVersion.VERSION + " - Installation Setup");
-            InstallationSetupScreen setup = new InstallationSetupScreen(terminals, context.firstAdmin(), id -> {
+            InstallationSetupScreen setup = new InstallationSetupScreen(terminals, context.firstAdmin(), context.storeDetails(), id -> {
                 if (!id.equals(context.config().terminalId()) && rebuild != null) {
                     context = rebuild.apply(id);   // e.g. T02: invoice numbers, logs and backups use the new ID
                 }

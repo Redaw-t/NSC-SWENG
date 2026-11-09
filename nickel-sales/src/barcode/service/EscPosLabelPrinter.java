@@ -22,7 +22,7 @@ public class EscPosLabelPrinter implements LabelPrinterPort {
     public static final int MAX_COPIES = 100;
     private static final int FEED_LINES = 3;
 
-    private final String storeName;
+    private final java.util.function.Supplier<String> storeName;   // asked for each label
     private final int widthDots;
 
     /** A 58 mm printer (384 dots wide). */
@@ -32,13 +32,22 @@ public class EscPosLabelPrinter implements LabelPrinterPort {
 
     /** @param widthDots the paper's printable width in dots (384 for 58 mm, 576 for 80 mm) */
     public EscPosLabelPrinter(String storeName, int widthDots) {
-        this.storeName = storeName;
+        this(() -> storeName, widthDots);
+    }
+
+    /** A 58 mm printer; the store name is asked for each label, so a change shows straight away. */
+    public EscPosLabelPrinter(java.util.function.Supplier<String> storeName) {
+        this(storeName, LabelRenderer.WIDTH_58MM);
+    }
+
+    public EscPosLabelPrinter(java.util.function.Supplier<String> storeName, int widthDots) {
+        this.storeName = java.util.Objects.requireNonNull(storeName, "storeName");
         this.widthDots = widthDots;
     }
 
     @Override
     public LabelBitmap render(LabelContent label) {
-        return LabelRenderer.render(storeName, label, widthDots);
+        return LabelRenderer.render(storeName.get(), label, widthDots);
     }
 
     @Override

@@ -59,12 +59,11 @@ public class AppCheck {
             expectText(AppConfig.from(Map.of("NSC_STORE_TIN", " ")).store().tin(), "");        // blank = left off
             expectTrue(defaults.receiptWidth() == 32, "32 characters (58 mm) by default");
             AppConfig set = AppConfig.from(Map.of("NSC_STORE_NAME", "Nickel Sales Center - Branch 2",
-                    "NSC_STORE_ADDRESS", "123 Rizal Ave.", "NSC_STORE_TIN", "000-123", "NSC_STORE_PHONE", "8123",
-                    "NSC_RECEIPT_WIDTH", "32"));
+                    "NSC_STORE_ADDRESS", "123 Rizal Ave.", "NSC_STORE_TIN", "000-123", "NSC_STORE_PHONE", "8123"));
             expectText(set.store().name() + "|" + set.store().address() + "|" + set.store().tin() + "|"
                     + set.store().phone(), "Nickel Sales Center - Branch 2|123 Rizal Ave.|000-123|8123");
             expectTrue(set.receiptWidth() == 32, "58 mm paper");
-            expectTrue(AppConfig.from(Map.of("NSC_RECEIPT_WIDTH", "80")).receiptWidth() == 32, "out of range -> 32");
+            expectTrue(AppConfig.from(Map.of("NSC_RECEIPT_WIDTH", "42")).receiptWidth() == 32, "width is fixed at 58 mm");
         });
 
         check("Settings file: NSC_NAME=value lines, UTF-8, values trimmed; missing file is empty", () -> {

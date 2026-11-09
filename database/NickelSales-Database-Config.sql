@@ -272,6 +272,25 @@ CREATE TABLE IF NOT EXISTS `BackupRecord` (
     INDEX idx_backup_created (CreatedAt)
 ) ENGINE=InnoDB;
 
+-- The store details printed at the top of every receipt, as a log: a change never edits or deletes
+-- a row, it adds a new one, and the NEWEST row (highest StoreDetailsID) is the one in use. The first
+-- row is made in Installation Setup on the Main POS, performed by the first admin (NSC-00001); later
+-- ones only by an admin, in Settings > Store Details. No rows yet = Nickel Sales Center's own details.
+-- In the store database, so an Additional POS gets it with the rest of the store's data.
+CREATE TABLE IF NOT EXISTS `StoreDetails` (
+    StoreDetailsID BIGINT AUTO_INCREMENT PRIMARY KEY,
+    StoreName VARCHAR(100) NOT NULL,
+    Address VARCHAR(255) NOT NULL DEFAULT '',    -- '' = left off the receipt (likewise below)
+    Proprietor VARCHAR(100) NOT NULL DEFAULT '',
+    TIN VARCHAR(30) NOT NULL DEFAULT '',
+    Phone VARCHAR(30) NOT NULL DEFAULT '',
+    PerformedBy VARCHAR(10) NOT NULL,            -- the admin who made the change
+    PerformedAt DATETIME(3) NOT NULL,            -- UTC
+    TerminalID VARCHAR(10) NOT NULL,             -- the computer it was changed on
+    FOREIGN KEY (PerformedBy) REFERENCES `Users`(UserID),
+    INDEX idx_storedetails_performed (PerformedAt)
+) ENGINE=InnoDB;
+
 -- ============ UPGRADES FOR DATABASES MADE BY AN OLDER SCRIPT ============
 -- CREATE TABLE IF NOT EXISTS never changes a table that is already there, so
 -- columns and indexes added after a table was first created are added here,

@@ -50,8 +50,8 @@ import java.util.zip.GZIPOutputStream;
  * appDir  = the install folder (app\, runtime\, mysql\, database\)
  * dataDir = %ProgramData%\NickelSales: the settings file, logs\, and mysql\ (the database files,
  *           my.ini and root.cnf, readable by administrators only)
- * answers = the wizard's answers (properties, UTF-8): the NSC_* settings to write (store details,
- *           receipt width). An update has none, except BACKUP_FIRST=<new version> when it installs
+ * answers = the wizard's answers (properties, UTF-8): NSC_* settings to write. The wizard asks
+ *           no questions now, so this is empty, except BACKUP_FIRST=<new version> when an update installs
  *           over kept data with no program left to back up with (then it backs up before the schema runs).
  * result  = written here for the installer: BACKUP_FILE, or ERROR with the reason.
  *
@@ -99,7 +99,7 @@ public final class InstallTasks {
     /** Settings the installer owns, in the order they are written. */
     static final List<String> SETTING_ORDER = List.of("NSC_DB_URL", "NSC_DB_USER", "NSC_DB_PASSWORD",
             "NSC_TERMINAL_ID", "NSC_STORE_NAME", "NSC_STORE_ADDRESS", "NSC_STORE_PROPRIETOR",
-            "NSC_STORE_TIN", "NSC_STORE_PHONE", "NSC_RECEIPT_WIDTH");
+            "NSC_STORE_TIN", "NSC_STORE_PHONE");
 
     private static final SecureRandom RANDOM = new SecureRandom();
     private static final String PASSWORD_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";

@@ -144,7 +144,8 @@ public final class Main {
         app.register(SupplierService.class,
                 new SupplierService(supplierRepository, authz, audit));
         app.register(InventoryService.class, inventory);
-        app.register(LabelPrinterPort.class, new EscPosLabelPrinter(config.store().name()));   // Barcode tab: product labels (58 mm)
+        app.register(LabelPrinterPort.class,                                                  // Barcode tab: product labels (58 mm)
+                new EscPosLabelPrinter(() -> app.storeDetails().current().name()));
 
         // Transaction & Reports: read-only, over POS's SaleHistory.
         ReportsAccess reportsAccess = ReportsAccess.of(app.auth(), app.authz());
@@ -178,6 +179,7 @@ public final class Main {
         app.register(SyncLogService.class, syncLog);
         app.register(SyncLogWriter.class, syncLog);
         app.register(BackupService.class, backups);
+        app.register(system.service.StoreDetailsService.class, app.storeDetails());   // Settings > Store Details
         app.register(SystemStatusService.class, new SystemStatusService(systemAccess, List.of(
                 SystemStatusService.database(Database::getConnection),
                 SystemStatusService.otherTerminal(shared.Settings.get("NSC_PEER_URL")),

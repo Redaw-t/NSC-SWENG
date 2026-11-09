@@ -25,6 +25,9 @@ import pos.repository.MySqlReturnRepository;
 import pos.repository.MySqlSaleRepository;
 import pos.returns.ReturnService;
 import product.contract.ProductLookup;
+import system.repository.MySqlStoreDetailsRepository;
+import system.service.StoreDetailsService;
+import system.service.SystemAccess;
 
 import java.util.Map;
 import java.util.Objects;
@@ -61,6 +64,7 @@ public final class AppContext {
     private final PaymentService payments;
     private final ProductLookup products;          // null until Product & Inventory is connected
     private final SalesService salesService;       // null without products and stock
+    private final StoreDetailsService storeDetails;
     private final ReceiptBuilder receipts;
     private final PrinterPort printer;
     private final Map<Class<?>, Object> services = new ConcurrentHashMap<>();
@@ -86,7 +90,10 @@ public final class AppContext {
         this.returnRepository = new MySqlReturnRepository();
         this.returns = stock == null ? null
                 : new ReturnService(returnRepository, stock, audit, config.terminalId());
-        this.receipts = new ReceiptBuilder(config.store(), this::userName, returnRepository::findBySaleId);
+        // Store details: the newest row of the StoreDetails log; the settings file's until one is saved.
+        this.storeDetails = new StoreDetailsService(new MySqlStoreDetailsRepository(), SystemAccess.of(auth, authz),
+                audit, config.terminalId(), config.store(), java.time.Clock.systemUTC());
+        this.receipts = new ReceiptBuilder(storeDetails::current, this::userName, returnRepository::findBySaleId);
         this.printer = new pos.receipt.EscPosReceiptPrinter(config.receiptWidth());
     }
 
@@ -161,7 +168,15 @@ public final class AppContext {
         return payments;
     }
 
-    /** Makes receipts from saved sales, with this terminal's store details. */
+    /**
+     * The store details on receipts and labels, logged with who changed them: registered in
+     * Installation Setup, changed by an admin in Settings &gt; Store Details.
+     */
+    public StoreDetailsService storeDetails() {
+        return storeDetails;
+    }
+
+    /** Makes receipts from saved sales, with the store details in use (see {@link #storeDetails()}). */
     public ReceiptBuilder receipts() {
         return receipts;
     }

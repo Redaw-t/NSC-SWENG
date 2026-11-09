@@ -82,9 +82,7 @@ Filename: "{app}\mysql\bin\mysqld.exe"; Parameters: "--remove {#DbService}"; Fla
 
 [Code]
 var
-  StorePage: TInputQueryWizardPage;
-  PaperPage: TInputOptionWizardPage;
-  IsUpdate: Boolean;          { the store's database is already here: no questions, keep everything }
+  IsUpdate: Boolean;         { the store's database is already here: no questions, keep everything }
   SetupFailed: Boolean;
   OldVersion: String;        { the version installed now, '' if none }
   UpdateBackup: String;      { the backup made before this update }
@@ -157,49 +155,8 @@ end;
 
 { ---------------------------------------------------------------- pages }
 
-procedure InitializeWizard;
-begin
-  StorePage := CreateInputQueryPage(wpSelectDir, 'Store details', 'Printed at the top of every receipt.',
-    'Leave a box empty to leave that line off the receipt. You can change these later with support''s help.');
-  StorePage.Add('Store name:', False);
-  StorePage.Add('Address:', False);
-  StorePage.Add('Proprietor:', False);
-  StorePage.Add('TIN:', False);
-  StorePage.Add('Phone:', False);
-  StorePage.Values[0] := 'NICKEL SALES CENTER';
-  StorePage.Values[1] := 'San Nicolas St Brgy Washington POB. 8400 Surigao City Surigao del Norte Philippines';
-  StorePage.Values[2] := 'JERICK CHUA CUBILLAN';
-  StorePage.Values[3] := '178-188-702-00000';
-
-  PaperPage := CreateInputOptionPage(StorePage.ID, 'Receipt printer', 'What paper does the receipt printer use?',
-    'Look at the paper roll or the printer''s label.', True, False);
-  PaperPage.Add('58 mm (most small receipt printers)');
-  PaperPage.Add('80 mm');
-  PaperPage.Values[0] := True;
-end;
-
-function ShouldSkipPage(PageID: Integer): Boolean;
-begin
-  Result := IsUpdate and ((PageID = StorePage.ID) or (PageID = PaperPage.ID));
-end;
-
-function Refuse(Text: String): Boolean;
-begin
-  MsgBox(Text, mbError, MB_OK);
-  Result := False;
-end;
-
-function NextButtonClick(CurPageID: Integer): Boolean;
-begin
-  Result := True;
-  if (CurPageID = StorePage.ID) and (Trim(StorePage.Values[0]) = '') then
-    Result := Refuse('Enter the store name.');
-end;
-
-function PaperWidth: String;
-begin
-  if PaperPage.Values[1] then Result := '42' else Result := '32';
-end;
+{ The wizard asks no questions of its own: receipts are 58 mm (the app's default width), and the
+  store details come from the app, not from setup. }
 
 function UpdateReadyMemo(Space, NewLine, MemoUserInfoInfo, MemoDirInfo, MemoTypeInfo, MemoComponentsInfo,
   MemoGroupInfo, MemoTasksInfo: String): String;
@@ -209,8 +166,6 @@ begin
     Result := Result + 'Update: the store''s data and settings are kept.' + NewLine + NewLine
   else begin
     Result := Result +
-      'Store:' + NewLine + Space + StorePage.Values[0] + NewLine + Space + StorePage.Values[1] + NewLine + NewLine +
-      'Receipt paper: ' + PaperWidth + ' characters per line' + NewLine + NewLine +
       'The first time it starts, the app asks whether this is the Main POS or an Additional POS ' +
       '(and, on the Main POS, creates the administrator account).' + NewLine + NewLine;
   end;
@@ -358,20 +313,10 @@ procedure WriteAnswers(FileName: String);
 var
   Lines: TArrayOfString;
 begin
-  if IsUpdate then begin
-    SetArrayLength(Lines, 0);
-    if BackupAfterCopy then begin
-      SetArrayLength(Lines, 1);
-      Lines[0] := Prop('BACKUP_FIRST', '{#AppVersion}');
-    end;
-  end else begin
-    SetArrayLength(Lines, 6);
-    Lines[0] := Prop('NSC_STORE_NAME', StorePage.Values[0]);
-    Lines[1] := Prop('NSC_STORE_ADDRESS', StorePage.Values[1]);
-    Lines[2] := Prop('NSC_STORE_PROPRIETOR', StorePage.Values[2]);
-    Lines[3] := Prop('NSC_STORE_TIN', StorePage.Values[3]);
-    Lines[4] := Prop('NSC_STORE_PHONE', StorePage.Values[4]);
-    Lines[5] := Prop('NSC_RECEIPT_WIDTH', PaperWidth);
+  SetArrayLength(Lines, 0);
+  if IsUpdate and BackupAfterCopy then begin
+    SetArrayLength(Lines, 1);
+    Lines[0] := Prop('BACKUP_FIRST', '{#AppVersion}');
   end;
   SaveStringsToUTF8File(FileName, Lines, False);
 end;

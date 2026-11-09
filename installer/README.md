@@ -84,14 +84,17 @@ Options:
 
 ### What the setup wizard asks
 
-Welcome → install folder → **Store details** (printed on receipts; prefilled with Nickel's) →
-**Receipt paper** (58 mm = 32 characters a line, 80 mm = 42) → shortcuts → Ready → Finish.
+Welcome → install folder → shortcuts → Ready → Finish. The wizard asks no questions of its own.
+Receipts are always 58 mm paper (32 characters a line).
 
 The wizard does **not** ask whether this PC is the Main POS or an Additional POS, its terminal ID
-(T01, T02 ...) or the administrator account. The app's own **Installation Setup** screen asks
-those the first time it starts (`nickel-sales/src/app/install/InstallationSetupScreen.java`): on
-the Main POS it creates the admin (`NSC-00001`) and shows the login name; on an Additional POS it
-asks for the Main POS's address, gets its terminal ID from it, and copies the store's data. The
+(T01, T02 ...), the administrator account or the store details. The app's own **Installation
+Setup** screen asks those the first time it starts
+(`nickel-sales/src/app/install/InstallationSetupScreen.java`): on the Main POS it creates the admin
+(`NSC-00001`), then **Store Register** asks for the store details printed on receipts and saves
+them in the `StoreDetails` log as performed by that admin. On an Additional POS it asks for the
+Main POS's address, gets its terminal ID from it, and copies the store's data, store details
+included. Later changes are made by an admin in **Settings > Store Details**. The
 Finish page tells the store to start the app to do this. Every PC, Main or Additional, gets the
 same installer.
 
@@ -116,7 +119,7 @@ the app's own code (password hashing, login names, backups).
 5. creates the MySQL user **`nickelsales`** with a random password and rights on
    `NickelSales_Database` and `nickelsales_appconfig` only. The app signs in to MySQL with this
    user, never with root;
-6. writes the **settings file** (database URL, user and password; store details; paper width).
+6. writes the **settings file** (database URL, user and password).
 
 Everything it does is logged to `install.log` (see [section 5](#5-helping-a-store-when-something-goes-wrong)).
 

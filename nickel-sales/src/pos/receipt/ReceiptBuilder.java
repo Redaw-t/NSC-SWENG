@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 /**
  * Makes the {@link Receipt} for a saved sale (ReceiptBuilder in the class
@@ -14,7 +15,7 @@ import java.util.function.Function;
  */
 public class ReceiptBuilder {
 
-    private final StoreInfo store;
+    private final Supplier<StoreInfo> store;   // asked on every receipt, so a change shows straight away
     private final Function<String, String> cashierNames;
     private final Function<String, List<ReturnRecord>> returnsOfSale;
 
@@ -31,6 +32,15 @@ public class ReceiptBuilder {
      */
     public ReceiptBuilder(StoreInfo store, Function<String, String> cashierNames,
                           Function<String, List<ReturnRecord>> returnsOfSale) {
+        this(fixed(store), cashierNames, returnsOfSale);
+    }
+
+    /**
+     * @param store the store details in use, asked for each receipt (e.g. the newest row of the
+     *              StoreDetails log, see system.service.StoreDetailsService)
+     */
+    public ReceiptBuilder(Supplier<StoreInfo> store, Function<String, String> cashierNames,
+                          Function<String, List<ReturnRecord>> returnsOfSale) {
         this.store = Objects.requireNonNull(store, "store");
         this.cashierNames = Objects.requireNonNull(cashierNames, "cashierNames");
         this.returnsOfSale = Objects.requireNonNull(returnsOfSale, "returnsOfSale");
@@ -38,7 +48,7 @@ public class ReceiptBuilder {
 
     /** The receipt handed over right after the sale. */
     public Receipt build(SaleRecord sale) {
-        return new Receipt(store, sale, nameOf(sale.cashierUserId()), false);
+        return new Receipt(store(), sale, nameOf(sale.cashierUserId()), false);
     }
 
     /**
@@ -47,13 +57,13 @@ public class ReceiptBuilder {
      * @throws RuntimeException the voids could not be read (a copy without them would be wrong)
      */
     public Receipt buildReprint(SaleRecord sale) {
-        return new Receipt(store, sale, nameOf(sale.cashierUserId()), true, refunds(returnsOfSale.apply(sale.saleId())),
+        return new Receipt(store(), sale, nameOf(sale.cashierUserId()), true, refunds(returnsOfSale.apply(sale.saleId())),
                 null);
     }
 
     /** The RETURN slip for one void of {@code sale}. */
     public Receipt buildReturn(SaleRecord sale, ReturnRecord ret, boolean reprint) {
-        return new Receipt(store, sale, nameOf(sale.cashierUserId()), reprint, List.of(),
+        return new Receipt(store(), sale, nameOf(sale.cashierUserId()), reprint, List.of(),
                 new Receipt.Refund(ret, nameOf(ret.cashierUserId())));
     }
 
@@ -71,5 +81,14 @@ public class ReceiptBuilder {
         } catch (RuntimeException e) {
             return null;   // e.g. database down: print the user ID instead
         }
+    }
+
+    private StoreInfo store() {
+        return Objects.requireNonNull(store.get(), "store");
+    }
+
+    private static Supplier<StoreInfo> fixed(StoreInfo store) {
+        Objects.requireNonNull(store, "store");
+        return () -> store;
     }
 }

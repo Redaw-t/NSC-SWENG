@@ -29,12 +29,12 @@ NSC_TERMINAL_ID=T01
 #NSC_PEER_URL=
 
 # --- Receipts ------------------------------------------------------------
+# Store details: used only until they are saved in the database (Installation Setup's
+# Store Register, or Settings > Store Details by an admin); then the database wins.
 #NSC_STORE_NAME=NICKEL SALES CENTER
 #NSC_STORE_ADDRESS=
 #NSC_STORE_PROPRIETOR=
 #NSC_STORE_TIN=
 #NSC_STORE_PHONE=
-# Characters per receipt line: 32 for 58 mm paper, 42-48 for 80 mm.
-#NSC_RECEIPT_WIDTH=32
 # Printer when none is chosen in the app's Settings > Printers (exact Windows name).
 #NSC_PRINTER_NAME=POS-58

@@ -3,8 +3,9 @@ package pos.receipt;
 import java.util.Objects;
 
 /**
- * The store details printed at the top of every receipt. Set per terminal with environment
- * variables (see app.AppConfig): NSC_STORE_NAME, NSC_STORE_ADDRESS, NSC_STORE_PROPRIETOR,
+ * The store details printed at the top of every receipt. Kept in the store database's StoreDetails
+ * log (system.service.StoreDetailsService: the newest row is used); until a row is saved, from the
+ * settings (see app.AppConfig): NSC_STORE_NAME, NSC_STORE_ADDRESS, NSC_STORE_PROPRIETOR,
  * NSC_STORE_TIN, NSC_STORE_PHONE. Blank details are simply left off the receipt.
  *
  * @param proprietor the owner's name, printed as "NAME - PROPRIETOR"
