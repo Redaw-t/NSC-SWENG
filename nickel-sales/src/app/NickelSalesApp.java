@@ -65,7 +65,7 @@ public class NickelSalesApp extends Application {
     /** The normal app: login page first; the API too when this computer is the Main POS. */
     private void openApp(Stage stage) {
         DashboardRouter router = new DashboardRouter(stage, context, Modules.all());
-        // The version is shown faintly at the bottom right of Settings, not in the title.
+        // The version is shown at the bottom right of Settings ("App Version: ..."), not in the title.
         stage.setTitle("Nickel Sales Center - POS (" + context.config().terminalId() + ")");
         router.showLogin();
         startSync();

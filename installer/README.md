@@ -194,7 +194,7 @@ affects the other.
    public static final String VERSION = "0.1.3";   // was 0.1.2
    ```
    Always three numbers. Raise it for every build you give a store. It's how setup tells
-   an update from an older version, and it's shown faintly at the bottom right of Settings.
+   an update from an older version, and it's shown at the bottom right of Settings ("App Version: x.y.z").
 3. **Build**: `powershell -ExecutionPolicy Bypass -File installer\build-installer.ps1`.
 4. **Try it** on a PC that has the previous version installed: run the new setup, check the
    Finish page mentions the backup, sign in, and check your change.

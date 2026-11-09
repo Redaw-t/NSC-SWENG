@@ -28,7 +28,7 @@ import java.util.List;
  * - Store Details (receipt header, with its change log), System Status and Backup &amp; Restore: Admin
  *   only (MANAGE_SYSTEM), from {@link SystemSettingsTabs}.
  * (Activity, inventory and sync logs stay on the Audit Logs screen.)
- * The app's version ({@link shared.AppVersion}) is shown faintly at the bottom right.
+ * The app's version ({@link shared.AppVersion}) is shown at the bottom right ("App Version: 0.1.0").
  */
 public final class SettingsScreen {
 
@@ -69,11 +69,10 @@ public final class SettingsScreen {
         return view;
     }
 
-    /** "Version 0.1.0", faint, at the bottom right of every Settings tab (support asks for it). */
+    /** "App Version: 0.1.0" at the bottom right of every Settings tab (support asks for it). */
     private static HBox versionLine() {
-        Label version = new Label("Version " + shared.AppVersion.VERSION);
-        version.setStyle("-fx-font-size: 12px; -fx-text-fill: " + Theme.SECONDARY_TEXT + ";");
-        version.setOpacity(0.6);
+        Label version = new Label("App Version: " + shared.AppVersion.VERSION);
+        version.setStyle("-fx-font-size: 13px; -fx-text-fill: " + Theme.SECONDARY_TEXT + ";");
         HBox line = new HBox(version);
         line.setAlignment(Pos.BOTTOM_RIGHT);
         line.setMinHeight(Region.USE_PREF_SIZE);
