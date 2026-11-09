@@ -53,7 +53,7 @@ See [`config/nickelsales.properties.example`](config/nickelsales.properties.exam
 | `NSC_TERMINAL_ID` | `T01` (invoice numbers; each terminal needs its own) |
 | `NSC_STORE_NAME` / `NSC_STORE_ADDRESS` / `NSC_STORE_PROPRIETOR` / `NSC_STORE_TIN` / `NSC_STORE_PHONE` | only until store details are saved in the database (Installation Setup's Store Register, or Settings > Store Details); then the newest `StoreDetails` row wins. Address, proprietor and TIN default to the store's own |
 | `NSC_PRINTER_NAME` | none: the printer chosen in Settings > Printers, else the Windows default |
-| `NSC_PEER_URL` | none: the other terminal's address, for System Status |
+| `NSC_PEER_URL` | none: no longer used (System Status shows the sync link with the Main POS) |
 | `NSC_LOG_DIR` | `logs` next to the settings file (`%ProgramData%\NickelSales\logs`), else `%LOCALAPPDATA%\NickelSales\logs`. Only the installed app (`app.Main`) writes a log file, one per day, kept 30 days |
 
 The version is `shared/AppVersion.java` (shown faintly at the bottom right of Settings; the installer uses it).

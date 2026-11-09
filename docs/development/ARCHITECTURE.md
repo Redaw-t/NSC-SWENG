@@ -42,7 +42,7 @@ app (composition root: Main, AppContext, Modules)
 
 pos      -> product.contract, inventory.contract, auth.contract/permission, shared
 reports  -> pos.contract (SaleHistory), product.contract, inventory.contract, auth.contract/permission, shared
-sync     -> pos.contract (SaleExport), product.contract, inventory.contract, shared
+sync     -> system.contract (SyncLogWriter), shared   (repositories record changes via shared.SyncOutbox)
 barcode  -> product.contract, shared
 inventory-> product.contract, auth.*, shared
 product  -> auth.*, shared

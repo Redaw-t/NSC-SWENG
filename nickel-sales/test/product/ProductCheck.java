@@ -311,7 +311,7 @@ public class ProductCheck {
                 yes(auditLog.stream().anyMatch(e -> e.startsWith("PRODUCT_DEACTIVATED")), "deactivation is audited");
             });
 
-            check("MySQL itself refuses duplicate barcodes / IDs and negative stock (two terminals racing)", db, () -> {
+            check("MySQL itself refuses duplicate barcodes / IDs (two terminals racing); stock may go below zero (sync)", db, () -> {
                 Product base = products.createProduct(ADMIN, draft("ZZTEST-0040", "ZZTEST Race", "5", null));
                 // Bypass the service: go straight to the repository, as a second terminal would.
                 try {
@@ -326,12 +326,11 @@ public class ProductCheck {
                 } catch (DuplicateValueException e) {
                     yes(e.isKey("primary"), "the primary key is named (was \"" + e.getKey() + "\")");
                 }
-                try {
-                    setStockAsInventory(base.productId(), "-1");
-                    throw new AssertionError("the database must refuse negative stock");
-                } catch (SQLException expected) {
-                    // refused by the CHECK constraint
-                }
+                // Two terminals that couldn't reach each other may both sell the last item: both sales are
+                // kept, so the database takes stock below zero (the app itself never goes there).
+                setStockAsInventory(base.productId(), "-1");
+                eq(productRepo.findById(base.productId()).orElseThrow().stockOnHand().toPlainString(), "-1.000");
+                setStockAsInventory(base.productId(), "0");
                 // Two terminals pick the same new ID at the same moment: the service tries again.
                 int[] calls = {0};
                 MySqlProductRepository racing = new MySqlProductRepository() {

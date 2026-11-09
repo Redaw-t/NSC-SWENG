@@ -519,10 +519,37 @@ public final class InstallationSetupScreen {
         next.setOnAction(e -> submit.run());
         mainIp.setOnAction(e -> submit.run());
         myIp.setOnAction(e -> submit.run());
+        Label found = new Label("Looking for the Main POS on the network...");
+        found.setStyle("-fx-font-size: 13px; -fx-text-fill: " + Theme.SECONDARY_TEXT + ";");
         showStep(mainIp, intro("Connect this computer to the Main POS"), gap(30),
-                caption("Main POS IP Address"), gap(6), mainIp, gap(22),
+                caption("Main POS IP Address"), gap(6), mainIp, gap(4), found, gap(18),
                 caption("This computer's IP Address"), gap(6), myIp, gap(12), errorLabel, gap(29), next,
                 gap(16), back);
+        findMainPos(mainIp, found);
+    }
+
+    /**
+     * Looks for this store's Main POS on the network (sync.discovery.Discovery) and fills in its address
+     * if the box is still empty. The address can still be typed or changed.
+     */
+    private void findMainPos(TextField mainIp, Label found) {
+        String key = apiKey;
+        Thread look = new Thread(() -> {
+            java.util.Optional<String> ip = sync.discovery.Discovery.find(ApiServer.port(), key,
+                    java.time.Duration.ofSeconds(2));
+            Platform.runLater(() -> {
+                if (ip.isPresent() && mainIp.getText().isBlank()) {
+                    mainIp.setText(ip.get());
+                    found.setText("Found the Main POS on the network. Change it if it's not the right one.");
+                } else if (ip.isPresent()) {
+                    found.setText("The Main POS was found at " + ip.get() + ".");
+                } else {
+                    found.setText("The Main POS was not found on the network: type its IP address.");
+                }
+            });
+        }, "setup-find-main");
+        look.setDaemon(true);
+        look.start();
     }
 
     /* --------------------- 3b-2. Additional POS: first sync -------------------- */
@@ -558,10 +585,11 @@ public final class InstallationSetupScreen {
                 java.nio.file.Path copy = null;
                 try {
                     copy = java.nio.file.Files.createTempFile("nickelsales-sync-", ".sql.gz");
-                    new MainPosClient(mainIp, ApiServer.port(), apiKey).downloadSnapshot(copy);
+                    long startsAt = new MainPosClient(mainIp, ApiServer.port(), apiKey).downloadSnapshot(copy);
                     Platform.runLater(() -> status.setText("Saving the data on this computer..."));
                     InitialSync.Result loaded = InitialSync.load(copy);
-                    terminals.completeAdditionalSetup(mainIp, terminalId, myIp, name, apiKey);
+                    // From here on this PC syncs with the Main POS, starting where its copy of the data ends.
+                    terminals.completeAdditionalSetup(mainIp, terminalId, myIp, name, apiKey, startsAt);
                     System.out.println("[SETUP] first sync done: " + loaded.tables() + " tables from the Main POS at "
                             + mainIp + "; this computer is " + terminalId);
                     Platform.runLater(() -> showDoneStep(terminalId, "This computer is an Additional POS of the Main "

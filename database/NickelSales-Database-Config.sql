@@ -194,18 +194,23 @@ CREATE TABLE IF NOT EXISTS `InvoiceSequence` (
 -- ProductID matches SaleLine.ProductID (VARCHAR(20)). There is no foreign key to the Product
 -- table yet: add one once the Product table is in this script (agree it with the Product owner).
 -- Current stock. A product gets its row the first time it is stocked.
+-- QuantityOnHand is the sum of the product's stock movements. The app never takes stock below
+-- zero, but with several terminals it can be: two terminals sell the last item while they can't
+-- reach each other. Both sales are real, so both are kept; the stock shows below zero until it is
+-- counted and adjusted (sync logs it). So there is no CHECK (QuantityOnHand >= 0).
 CREATE TABLE IF NOT EXISTS `Inventory` (
     ProductID VARCHAR(20) PRIMARY KEY,
     QuantityOnHand DECIMAL(12,3) NOT NULL DEFAULT 0,
     ReorderLevel DECIMAL(12,3) NOT NULL DEFAULT 0,
     UpdatedAt DATETIME(3) NOT NULL,
-    CONSTRAINT chk_inventory_quantity CHECK (QuantityOnHand >= 0),   -- stock can never go negative
     CONSTRAINT chk_inventory_reorder CHECK (ReorderLevel >= 0)
 ) ENGINE=InnoDB;
 
 -- Every change to stock, newest last. Only ever added to, never edited or deleted.
+-- GlobalID: the movement's ID on every terminal (MovementID is each PC's own number).
 CREATE TABLE IF NOT EXISTS `StockMovement` (
     MovementID BIGINT AUTO_INCREMENT PRIMARY KEY,
+    GlobalID CHAR(36) NULL,                      -- UUID; NULL only for movements made before sync existed
     ProductID VARCHAR(20) NOT NULL,
     MovementType VARCHAR(12) NOT NULL,           -- STOCK_IN / STOCK_OUT / ADJUSTMENT / SALE / RETURN
     Quantity DECIMAL(12,3) NOT NULL,             -- SIGNED: +20 stock-in, -2 sale
@@ -216,6 +221,7 @@ CREATE TABLE IF NOT EXISTS `StockMovement` (
     Note VARCHAR(200) NULL,                      -- the stock-in "Reference / Note", adjustment note
     PerformedBy VARCHAR(10) NULL,                -- UserID; NULL for sales for now
     CreatedAt DATETIME(3) NOT NULL,
+    UNIQUE KEY uq_movement_global (GlobalID),
     INDEX idx_movement_product (ProductID, CreatedAt),
     INDEX idx_movement_created (CreatedAt)       -- history list, newest first
 ) ENGINE=InnoDB;
@@ -226,6 +232,7 @@ CREATE TABLE IF NOT EXISTS `StockMovement` (
 -- one row each. Only ever added to, never edited or deleted: the app has no update or delete for it.
 CREATE TABLE IF NOT EXISTS `ActivityLog` (
     LogID BIGINT AUTO_INCREMENT PRIMARY KEY,
+    GlobalID CHAR(36) NULL,                      -- the entry's ID on every terminal (UUID); NULL = made before sync
     CreatedAt DATETIME(3) NOT NULL,
     UserID VARCHAR(30) NULL,                     -- who did it; the typed login name for a failed login
     TerminalID VARCHAR(10) NOT NULL,             -- which POS it happened on (T01, T02 ...)
@@ -235,6 +242,7 @@ CREATE TABLE IF NOT EXISTS `ActivityLog` (
     Details VARCHAR(255) NULL,                   -- the rest of the event, as sent
     OldValue VARCHAR(255) NULL,                  -- before a change (e.g. prices), if the event says
     NewValue VARCHAR(255) NULL,                  -- after the change
+    UNIQUE KEY uq_activity_global (GlobalID),
     INDEX idx_activity_created (CreatedAt),
     INDEX idx_activity_user (UserID, CreatedAt),
     INDEX idx_activity_module (Module, CreatedAt)
@@ -248,8 +256,8 @@ CREATE TABLE IF NOT EXISTS `SyncLog` (
     UpdatedAt DATETIME(3) NOT NULL,
     SourceTerminal VARCHAR(10) NOT NULL,
     TargetTerminal VARCHAR(10) NOT NULL,
-    DataType VARCHAR(20) NOT NULL,               -- SALE / PRODUCT / USER
-    RecordID VARCHAR(50) NOT NULL,               -- the sale, product or user sent
+    DataType VARCHAR(20) NOT NULL,               -- SEND / RECEIVE (a batch), or what one change is (SALE, PRODUCT, STOCK ...)
+    RecordID VARCHAR(50) NOT NULL,               -- e.g. "12 changes", an invoice no., a product ID
     Status VARCHAR(10) NOT NULL,                 -- PENDING / SYNCED / FAILED
     RetryCount INT NOT NULL DEFAULT 0,
     ErrorMessage VARCHAR(255) NULL,
@@ -273,12 +281,13 @@ CREATE TABLE IF NOT EXISTS `BackupRecord` (
 ) ENGINE=InnoDB;
 
 -- The store details printed at the top of every receipt, as a log: a change never edits or deletes
--- a row, it adds a new one, and the NEWEST row (highest StoreDetailsID) is the one in use. The first
+-- a row, it adds a new one, and the NEWEST row (latest PerformedAt) is the one in use. The first
 -- row is made in Installation Setup on the Main POS, performed by the first admin (NSC-00001); later
 -- ones only by an admin, in Settings > Store Details. No rows yet = Nickel Sales Center's own details.
 -- In the store database, so an Additional POS gets it with the rest of the store's data.
 CREATE TABLE IF NOT EXISTS `StoreDetails` (
     StoreDetailsID BIGINT AUTO_INCREMENT PRIMARY KEY,
+    GlobalID CHAR(36) NULL,                      -- the row's ID on every terminal (UUID); NULL = made before sync
     StoreName VARCHAR(100) NOT NULL,
     Address VARCHAR(255) NOT NULL DEFAULT '',    -- '' = left off the receipt (likewise below)
     Proprietor VARCHAR(100) NOT NULL DEFAULT '',
@@ -288,6 +297,7 @@ CREATE TABLE IF NOT EXISTS `StoreDetails` (
     PerformedAt DATETIME(3) NOT NULL,            -- UTC
     TerminalID VARCHAR(10) NOT NULL,             -- the computer it was changed on
     FOREIGN KEY (PerformedBy) REFERENCES `Users`(UserID),
+    UNIQUE KEY uq_storedetails_global (GlobalID),
     INDEX idx_storedetails_performed (PerformedAt)
 ) ENGINE=InnoDB;
 
@@ -341,6 +351,26 @@ PREPARE upgrade FROM @ddl; EXECUTE upgrade; DEALLOCATE PREPARE upgrade;
 SET @present = (SELECT COUNT(*) > 0 FROM information_schema.COLUMNS
     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'Product' AND COLUMN_NAME = 'StockOnHand');
 SET @ddl = IF(@present, 'ALTER TABLE `Product` DROP COLUMN StockOnHand', 'DO 0');
+PREPARE upgrade FROM @ddl; EXECUTE upgrade; DEALLOCATE PREPARE upgrade;
+
+-- Sync between terminals: GlobalID on the only-ever-added tables whose own ID is a per-PC number
+SET @missing = (SELECT COUNT(*) = 0 FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'StockMovement' AND COLUMN_NAME = 'GlobalID');
+SET @ddl = IF(@missing, 'ALTER TABLE `StockMovement` ADD COLUMN GlobalID CHAR(36) NULL AFTER MovementID, ADD UNIQUE KEY uq_movement_global (GlobalID)', 'DO 0');
+PREPARE upgrade FROM @ddl; EXECUTE upgrade; DEALLOCATE PREPARE upgrade;
+SET @missing = (SELECT COUNT(*) = 0 FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ActivityLog' AND COLUMN_NAME = 'GlobalID');
+SET @ddl = IF(@missing, 'ALTER TABLE `ActivityLog` ADD COLUMN GlobalID CHAR(36) NULL AFTER LogID, ADD UNIQUE KEY uq_activity_global (GlobalID)', 'DO 0');
+PREPARE upgrade FROM @ddl; EXECUTE upgrade; DEALLOCATE PREPARE upgrade;
+SET @missing = (SELECT COUNT(*) = 0 FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'StoreDetails' AND COLUMN_NAME = 'GlobalID');
+SET @ddl = IF(@missing, 'ALTER TABLE `StoreDetails` ADD COLUMN GlobalID CHAR(36) NULL AFTER StoreDetailsID, ADD UNIQUE KEY uq_storedetails_global (GlobalID)', 'DO 0');
+PREPARE upgrade FROM @ddl; EXECUTE upgrade; DEALLOCATE PREPARE upgrade;
+
+-- Inventory.chk_inventory_quantity removed: with several terminals stock can go below zero (see Inventory)
+SET @present = (SELECT COUNT(*) > 0 FROM information_schema.TABLE_CONSTRAINTS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'Inventory' AND CONSTRAINT_NAME = 'chk_inventory_quantity');
+SET @ddl = IF(@present, 'ALTER TABLE `Inventory` DROP CHECK chk_inventory_quantity', 'DO 0');
 PREPARE upgrade FROM @ddl; EXECUTE upgrade; DEALLOCATE PREPARE upgrade;
 
 -- Every table InnoDB (older databases may have been made with another default engine,

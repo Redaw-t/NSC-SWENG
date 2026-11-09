@@ -1,6 +1,9 @@
 package auth.repository;
 
 import shared.Database;
+import shared.MasterIds;
+import shared.SyncOutbox;
+import shared.SyncTables;
 
 import auth.contract.User;
 import auth.contract.UserRepository;
@@ -44,16 +47,21 @@ public class MySqlUserRepository implements UserRepository {
     public void save(User user) {
         String sql = "INSERT INTO Users (UserID, UserLoginName, UserPassword, UserName, UserLastname, UserRole, UserStatus) "
                    + "VALUES (?, ?, ?, ?, ?, ?, ?)";
-        try (Connection c = Database.getConnection();
-             PreparedStatement ps = c.prepareStatement(sql)) {
-        	ps.setString(1, user.getUserId());
-        	ps.setString(2, user.getLoginName());
-        	ps.setString(3, user.getPasswordHash());
-        	ps.setString(4, user.getFirstName());
-        	ps.setString(5, user.getLastName());
-        	ps.setString(6, UserRole.toDbCodes(user.getRoles()));
-        	ps.setString(7, user.getStatus().toDbString());
-            ps.executeUpdate();
+        try {
+            Database.inTransaction(c -> {
+                try (PreparedStatement ps = c.prepareStatement(sql)) {
+                    ps.setString(1, user.getUserId());
+                    ps.setString(2, user.getLoginName());
+                    ps.setString(3, user.getPasswordHash());
+                    ps.setString(4, user.getFirstName());
+                    ps.setString(5, user.getLastName());
+                    ps.setString(6, UserRole.toDbCodes(user.getRoles()));
+                    ps.setString(7, user.getStatus().toDbString());
+                    ps.executeUpdate();
+                }
+                queueForSync(c, user.getUserId());
+                return null;
+            });
         } catch (SQLException e) {
             throw new RuntimeException("Could not save user " + user.getUserId(), e);
         }
@@ -63,18 +71,24 @@ public class MySqlUserRepository implements UserRepository {
     public void update(User user) {
     	String sql = "UPDATE Users SET UserLoginName = ?, UserPassword = ?, UserName = ?, UserLastname = ?, "
     	           + "UserRole = ?, UserStatus = ? WHERE UserID = ?";
-        try (Connection c = Database.getConnection();
-             PreparedStatement ps = c.prepareStatement(sql)) {
-        	ps.setString(1, user.getLoginName());
-        	ps.setString(2, user.getPasswordHash());
-        	ps.setString(3, user.getFirstName());
-        	ps.setString(4, user.getLastName());
-        	ps.setString(5, UserRole.toDbCodes(user.getRoles()));
-        	ps.setString(6, user.getStatus().toDbString());
-        	ps.setString(7, user.getUserId());
-            if (ps.executeUpdate() == 0) {
-                throw new RuntimeException("No such user: " + user.getUserId());
-            }
+        MasterIds.requireMain();   // shared by every terminal: changed only while the Main POS is reachable
+        try {
+            Database.inTransaction(c -> {
+                try (PreparedStatement ps = c.prepareStatement(sql)) {
+                    ps.setString(1, user.getLoginName());
+                    ps.setString(2, user.getPasswordHash());
+                    ps.setString(3, user.getFirstName());
+                    ps.setString(4, user.getLastName());
+                    ps.setString(5, UserRole.toDbCodes(user.getRoles()));
+                    ps.setString(6, user.getStatus().toDbString());
+                    ps.setString(7, user.getUserId());
+                    if (ps.executeUpdate() == 0) {
+                        throw new RuntimeException("No such user: " + user.getUserId());
+                    }
+                }
+                queueForSync(c, user.getUserId());
+                return null;
+            });
         } catch (SQLException e) {
             throw new RuntimeException("Could not update user " + user.getUserId(), e);
         }
@@ -83,16 +97,37 @@ public class MySqlUserRepository implements UserRepository {
     @Override
     public void updatePassword(String userId, String newPasswordHash) {
         String sql = "UPDATE Users SET UserPassword = ? WHERE UserID = ?";
-        try (Connection c = Database.getConnection();
-             PreparedStatement ps = c.prepareStatement(sql)) {
-            ps.setString(1, newPasswordHash);
-            ps.setString(2, userId);
-            if (ps.executeUpdate() == 0) {
-                throw new RuntimeException("No such user: " + userId);
-            }
+        // Not limited to when the Main POS is reachable: anyone may change their own password on any
+        // terminal; it reaches the others when they sync.
+        try {
+            Database.inTransaction(c -> {
+                try (PreparedStatement ps = c.prepareStatement(sql)) {
+                    ps.setString(1, newPasswordHash);
+                    ps.setString(2, userId);
+                    if (ps.executeUpdate() == 0) {
+                        throw new RuntimeException("No such user: " + userId);
+                    }
+                }
+                queueForSync(c, userId);
+                return null;
+            });
         } catch (SQLException e) {
             throw new RuntimeException("Could not update password for " + userId, e);
         }
+    }
+
+    /**
+     * Queues the user's row (without LastSignIn, which each terminal keeps for itself) for the other
+     * terminals, in the same transaction (shared.SyncOutbox).
+     */
+    private static void queueForSync(Connection c, String userId) throws SQLException {
+        SyncOutbox.recordRows(c, SyncTables.USER, userId, "Users", "UserID = ?", userId);
+    }
+
+    /** The next user ID from the Main POS when the terminals sync ({@link MasterIds}); null otherwise. */
+    @Override
+    public String nextUserId() {
+        return MasterIds.next(MasterIds.USER);
     }
 
     @Override

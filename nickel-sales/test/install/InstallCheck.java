@@ -4,6 +4,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -63,6 +64,18 @@ public class InstallCheck {
             } finally {
                 Files.deleteIfExists(file);
             }
+        });
+
+        check("Firewall: the terminals' API (TCP 8765) and the Main POS search (UDP 8766), local network only", () -> {
+            List<String> tcp = InstallTasks.firewallRule(InstallTasks.FIREWALL_TCP_RULE, "TCP", 8765);
+            expectTrue(tcp.containsAll(List.of("dir=in", "action=allow", "protocol=TCP", "localport=8765",
+                    "remoteip=localsubnet", "profile=any")), "TCP rule: " + tcp);
+            expectTrue(tcp.contains("name=" + InstallTasks.FIREWALL_TCP_RULE)
+                    && !InstallTasks.FIREWALL_TCP_RULE.contains(" ") && !InstallTasks.FIREWALL_UDP_RULE.contains(" "),
+                    "one-word rule names (netsh, and the uninstaller removes them by name)");
+            List<String> udp = InstallTasks.firewallRule(InstallTasks.FIREWALL_UDP_RULE, "UDP",
+                    sync.discovery.Discovery.PORT);
+            expectTrue(udp.contains("protocol=UDP") && udp.contains("localport=8766"), "UDP rule: " + udp);
         });
 
         check("my.ini: port 3307, this PC only, no X Protocol port, forward slashes", () -> {

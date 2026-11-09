@@ -169,6 +169,10 @@ public class UserAdminService {
     }
 
     private String nextUserId() {
+        String given = userRepository.nextUserId();   // from the Main POS when the terminals sync
+        if (given != null) {
+            return given;
+        }
         int max = 0;
         for (User u : userRepository.findAll()) {
             String id = u.getUserId();

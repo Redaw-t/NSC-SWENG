@@ -3,6 +3,9 @@ package product.repository;
 
 import product.model.Product;
 import shared.Database;
+import shared.MasterIds;
+import shared.SyncOutbox;
+import shared.SyncTables;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -97,8 +100,13 @@ public class MySqlProductRepository implements ProductRepository {
         return found;
     }
 
+    /** The next product ID: from the Main POS when the terminals sync ({@link MasterIds}), else the next free one. */
     @Override
     public String nextProductId() {
+        String given = MasterIds.next(MasterIds.PRODUCT);
+        if (given != null) {
+            return given;
+        }
         String sql = "SELECT COALESCE(MAX(CAST(SUBSTRING(ProductID, 3) AS UNSIGNED)), 0) "
                 + "FROM Product WHERE ProductID REGEXP '^P-[0-9]+$'";
 
@@ -120,22 +128,24 @@ public class MySqlProductRepository implements ProductRepository {
                 + "Vatable, IsActive, CategoryID, SupplierID) "
                 + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";   // no stock: a new product has none until Inventory adds it
 
-        try (Connection c = Database.getConnection();
-             PreparedStatement ps = c.prepareStatement(sql)) {
-
-            ps.setString(1, p.productId());
-            ps.setString(2, p.barcode());
-            ps.setString(3, p.name());
-            ps.setString(4, p.unit());
-            ps.setBigDecimal(5, p.retailPrice());
-            ps.setBigDecimal(6, p.wholesalePrice());
-            ps.setBoolean(7, p.vatable());
-            ps.setBoolean(8, p.active());
-            setNullableInt(ps, 9, p.categoryId());
-            setNullableInt(ps, 10, p.supplierId());
-
-            ps.executeUpdate();
-
+        try {
+            Database.inTransaction(c -> {
+                try (PreparedStatement ps = c.prepareStatement(sql)) {
+                    ps.setString(1, p.productId());
+                    ps.setString(2, p.barcode());
+                    ps.setString(3, p.name());
+                    ps.setString(4, p.unit());
+                    ps.setBigDecimal(5, p.retailPrice());
+                    ps.setBigDecimal(6, p.wholesalePrice());
+                    ps.setBoolean(7, p.vatable());
+                    ps.setBoolean(8, p.active());
+                    setNullableInt(ps, 9, p.categoryId());
+                    setNullableInt(ps, 10, p.supplierId());
+                    ps.executeUpdate();
+                }
+                queueForSync(c, p.productId());
+                return null;
+            });
         } catch (SQLException e) {
             throw MySqlErrors.translate(e, "Could not save product " + p.productId());
         }
@@ -147,24 +157,27 @@ public class MySqlProductRepository implements ProductRepository {
                 + "WholesalePrice = ?, Vatable = ?, IsActive = ?, CategoryID = ?, SupplierID = ? "
                 + "WHERE ProductID = ?";
 
-        try (Connection c = Database.getConnection();
-             PreparedStatement ps = c.prepareStatement(sql)) {
-
-            ps.setString(1, p.barcode());
-            ps.setString(2, p.name());
-            ps.setString(3, p.unit());
-            ps.setBigDecimal(4, p.retailPrice());
-            ps.setBigDecimal(5, p.wholesalePrice());
-            ps.setBoolean(6, p.vatable());
-            ps.setBoolean(7, p.active());
-            setNullableInt(ps, 8, p.categoryId());
-            setNullableInt(ps, 9, p.supplierId());
-            ps.setString(10, p.productId());
-
-            if (ps.executeUpdate() == 0) {
-                throw new RuntimeException("No such product: " + p.productId());
-            }
-
+        MasterIds.requireMain();   // shared by every terminal: changed only while the Main POS is reachable
+        try {
+            Database.inTransaction(c -> {
+                try (PreparedStatement ps = c.prepareStatement(sql)) {
+                    ps.setString(1, p.barcode());
+                    ps.setString(2, p.name());
+                    ps.setString(3, p.unit());
+                    ps.setBigDecimal(4, p.retailPrice());
+                    ps.setBigDecimal(5, p.wholesalePrice());
+                    ps.setBoolean(6, p.vatable());
+                    ps.setBoolean(7, p.active());
+                    setNullableInt(ps, 8, p.categoryId());
+                    setNullableInt(ps, 9, p.supplierId());
+                    ps.setString(10, p.productId());
+                    if (ps.executeUpdate() == 0) {
+                        throw new RuntimeException("No such product: " + p.productId());
+                    }
+                }
+                queueForSync(c, p.productId());
+                return null;
+            });
         } catch (SQLException e) {
             throw MySqlErrors.translate(e, "Could not update product " + p.productId());
         }
@@ -174,19 +187,27 @@ public class MySqlProductRepository implements ProductRepository {
     public void updateBarcode(String productId, String barcode) {
         String sql = "UPDATE Product SET Barcode = ? WHERE ProductID = ?";
 
-        try (Connection c = Database.getConnection();
-             PreparedStatement ps = c.prepareStatement(sql)) {
-
-            ps.setString(1, barcode);
-            ps.setString(2, productId);
-
-            if (ps.executeUpdate() == 0) {
-                throw new RuntimeException("No such product: " + productId);
-            }
-
+        MasterIds.requireMain();   // shared by every terminal: changed only while the Main POS is reachable
+        try {
+            Database.inTransaction(c -> {
+                try (PreparedStatement ps = c.prepareStatement(sql)) {
+                    ps.setString(1, barcode);
+                    ps.setString(2, productId);
+                    if (ps.executeUpdate() == 0) {
+                        throw new RuntimeException("No such product: " + productId);
+                    }
+                }
+                queueForSync(c, productId);
+                return null;
+            });
         } catch (SQLException e) {
             throw MySqlErrors.translate(e, "Could not save the barcode of product " + productId);
         }
+    }
+
+    /** Queues the product's row for the other terminals, in the same transaction (shared.SyncOutbox). */
+    private static void queueForSync(Connection c, String productId) throws SQLException {
+        SyncOutbox.recordRows(c, SyncTables.PRODUCT, productId, "Product", "ProductID = ?", productId);
     }
 
     @Override

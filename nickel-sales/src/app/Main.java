@@ -79,6 +79,8 @@ public final class Main {
      * ({@link #main}) and development runs ({@code DevApp}), so both pick the terminal ID the same way.
      */
     static void start(String tag) {
+        // Every change to the store's records is queued for the other terminals (shared.SyncOutbox).
+        shared.SyncOutbox.enable(true);
         AppConfig base = AppConfig.fromSettings();
         // The terminal ID Installation Setup gave this computer wins over NSC_TERMINAL_ID.
         AppConfig config = savedTerminalId().map(base::withTerminalId).orElse(base);
@@ -163,7 +165,18 @@ public final class Main {
         // Audit & System module.
         SystemAccess systemAccess = SystemAccess.of(app.auth(), app.authz());
         Clock clock = Clock.systemUTC();
-        IntSupplier unsyncedSales = () -> app.saleExport().findUnsynced(UNSYNCED_COUNT_LIMIT).size();
+        // Sync with the other terminals: started when the window opens (NickelSalesApp), shown from the start.
+        SyncRuntime syncRuntime = new SyncRuntime(sync.SyncDb.standard(), clock);
+        app.register(SyncRuntime.class, syncRuntime);
+        // Changes (sales, stock, edits ...) waiting to be sent to the Main POS; the sales count as before
+        // if this PC has no sync queue yet (a database made by an older script).
+        IntSupplier unsyncedSales = () -> {
+            try {
+                return syncRuntime.db().pendingCount();
+            } catch (SQLException e) {
+                return app.saleExport().findUnsynced(UNSYNCED_COUNT_LIMIT).size();
+            }
+        };
         BackupRecordRepository backupRecords = new MySqlBackupRecordRepository();
 
         SyncLogService syncLog = new SyncLogService(new MySqlSyncLogRepository(), systemAccess, app.audit(),
@@ -182,15 +195,46 @@ public final class Main {
         app.register(system.service.StoreDetailsService.class, app.storeDetails());   // Settings > Store Details
         app.register(SystemStatusService.class, new SystemStatusService(systemAccess, List.of(
                 SystemStatusService.database(Database::getConnection),
-                SystemStatusService.otherTerminal(shared.Settings.get("NSC_PEER_URL")),
+                () -> syncLink(syncRuntime),
                 SystemStatusService.printer(PrinterSettings.Use.RECEIPT),
                 SystemStatusService.printer(PrinterSettings.Use.LABEL),
-                SystemStatusService.pendingSync(unsyncedSales, syncLog::syncConnected),
+                SystemStatusService.pendingSync(unsyncedSales, () -> syncRuntime.status().map(s -> s.running()).orElse(false)),
                 SystemStatusService.lastBackup(backupRecords, clock),
                 SystemStatusService.diskSpace(backups::folder),
                 SystemStatusService.logRetention(activityLog, clock))));
 
         return app;
+    }
+
+    /** System Status: this PC's link with the other terminals (sync). */
+    private static system.model.StatusItem syncLink(SyncRuntime runtime) {
+        String name = "Terminal Sync";
+        java.util.Optional<sync.SyncStatus> found = runtime.status();
+        if (found.isEmpty() || !found.get().running()) {
+            return new system.model.StatusItem(name, system.model.StatusItem.Level.INFO, "Not started",
+                    "Sync starts once this computer is set up as the Main POS or an Additional POS.");
+        }
+        sync.SyncStatus s = found.get();
+        java.time.format.DateTimeFormatter time = java.time.format.DateTimeFormatter.ofPattern("MMM d, h:mm a");
+        if (s.mainPos()) {
+            return s.problem() == null
+                    ? new system.model.StatusItem(name, system.model.StatusItem.Level.OK, "Main POS",
+                            "Every terminal sends its changes to this computer and gets the others' from it.")
+                    : new system.model.StatusItem(name, system.model.StatusItem.Level.WARNING, "Problem", s.problem());
+        }
+        if (Boolean.TRUE.equals(s.mainReachable())) {
+            return new system.model.StatusItem(name, system.model.StatusItem.Level.OK, "Connected",
+                    "Syncing with the Main POS at " + s.mainIp() + ". Last sync "
+                            + time.format(shared.PhTime.of(s.lastContact())) + ".");
+        }
+        if (Boolean.FALSE.equals(s.mainReachable())) {
+            return new system.model.StatusItem(name, system.model.StatusItem.Level.WARNING, "Main POS offline",
+                    "The Main POS at " + s.mainIp() + " can't be reached since "
+                            + time.format(shared.PhTime.of(s.offlineSince())) + ". Sales continue here; changes are "
+                            + "kept and sent when it is back. Adding or editing products and users needs it.");
+        }
+        return new system.model.StatusItem(name, system.model.StatusItem.Level.INFO, "Connecting",
+                s.problem() == null ? "Reaching the Main POS..." : s.problem());
     }
 
     /**

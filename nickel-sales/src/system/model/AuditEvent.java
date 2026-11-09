@@ -123,7 +123,7 @@ public record AuditEvent(String module, String action, String target, String det
             return POS;
         }
         if (a.startsWith("LOGS_") || a.startsWith("BACKUP_") || a.startsWith("RESTORE_") || a.startsWith("SYNC_")
-                || a.startsWith("STORE_")) {
+                || a.startsWith("STORE_") || a.startsWith("MAIN_POS_")) {
             return SYSTEM;
         }
         return OTHER;

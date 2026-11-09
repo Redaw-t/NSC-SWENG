@@ -69,4 +69,10 @@ public interface InventoryRepository {
 
     /** Appends a line to the movement history. */
     void addMovement(Connection tx, StockMovement movement) throws SQLException;
+
+    /**
+     * After a reorder level change was saved in {@code tx}: lets the other terminals know (sync).
+     * Default: nothing (stores with one terminal, test stubs).
+     */
+    default void recordReorderLevel(Connection tx, String productId) throws SQLException { }
 }

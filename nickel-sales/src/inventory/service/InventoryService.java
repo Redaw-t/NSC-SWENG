@@ -225,12 +225,14 @@ public class InventoryService implements StockRecorder, StockOverview {
         User actor = access.require(sessionId);
         ProductInfo product = requireProduct(productId);
         BigDecimal level = requireNotNegative(reorderLevel, "Reorder level");
+        shared.MasterIds.requireMain();   // a setting every terminal shares: changed only while the Main POS is reachable
         Instant now = Instant.now();
 
         StockLevel after = repository.inTransaction(tx -> {
             StockLevel current = repository.lockOrCreate(tx, product.productId(), now);
             StockLevel next = current.withReorderLevel(level, now);
             repository.update(tx, next);
+            repository.recordReorderLevel(tx, product.productId());
             return next;
         });
         log("REORDER_LEVEL " + product.productId() + " " + Quantity.format(level), actor);

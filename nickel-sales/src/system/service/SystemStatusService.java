@@ -128,12 +128,12 @@ public final class SystemStatusService {
             int waiting = unsyncedSales.getAsInt();
             if (!connected.getAsBoolean()) {
                 return new StatusItem("Pending Sync", Level.INFO, waiting + " unsent",
-                        "Synchronization is not connected yet. Sales are stored locally.");
+                        "Synchronization is not running yet. Changes are stored on this computer.");
             }
             return waiting == 0
-                    ? new StatusItem("Pending Sync", Level.OK, "None", "All completed sales have been sent.")
+                    ? new StatusItem("Pending Sync", Level.OK, "None", "Every change on this computer has been sent.")
                     : new StatusItem("Pending Sync", Level.WARNING, waiting + " unsent",
-                            "Completed sales are waiting to be sent to the other terminal.");
+                            "Changes (sales, stock, edits) are waiting to be sent to the Main POS.");
         });
     }
 

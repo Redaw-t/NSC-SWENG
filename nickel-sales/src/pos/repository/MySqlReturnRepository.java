@@ -6,6 +6,8 @@ import pos.contract.ReturnHistory;
 import pos.contract.ReturnLineRecord;
 import pos.contract.ReturnRecord;
 import shared.Database;
+import shared.SyncOutbox;
+import shared.SyncTables;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -93,6 +95,12 @@ public class MySqlReturnRepository implements ReturnHistory {
                 ps.addBatch();
             }
             ps.executeBatch();
+        }
+        // Queued for the other terminals in the same transaction (see shared.SyncOutbox).
+        if (SyncOutbox.enabled()) {
+            List<Map<String, Object>> rows = new ArrayList<>(SyncOutbox.rows(tx, "Return", "ReturnID = ?", r.returnId()));
+            rows.addAll(SyncOutbox.rows(tx, "ReturnLine", "ReturnID = ? ORDER BY LineNo", r.returnId()));
+            SyncOutbox.record(tx, SyncTables.RETURN, r.returnNo(), rows);
         }
     }
 

@@ -104,6 +104,11 @@ public final class StoreDetailsService {
         if (details.equals(current())) {
             throw new SystemException("Nothing was changed. Edit a detail, then save.");
         }
+        try {
+            shared.MasterIds.requireMain();   // every terminal prints them: changed only while the Main POS is reachable
+        } catch (shared.MainPosUnavailableException e) {
+            throw new SystemException(e.getMessage(), e);
+        }
         return save(details, actor.getUserId(), "STORE_DETAILS_CHANGED");
     }
 

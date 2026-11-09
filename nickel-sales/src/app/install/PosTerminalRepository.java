@@ -90,12 +90,53 @@ public class PosTerminalRepository implements TerminalRegistrar {
      */
     public void completeAdditionalSetup(String mainIp, String terminalId, String ipAddress, String computerName,
                                         String apiKey) {
+        completeAdditionalSetup(mainIp, terminalId, ipAddress, computerName, apiKey, 0);
+    }
+
+    /**
+     * As above, after the first sync: this PC's sync starts at place {@code syncSeq} of the Main POS's
+     * list of changes (where its copy of the data ends), and its sync queue is emptied, so nothing done
+     * on this computer before it joined the store (e.g. trying the app out) is ever sent.
+     */
+    public void completeAdditionalSetup(String mainIp, String terminalId, String ipAddress, String computerName,
+                                        String apiKey, long syncSeq) {
         inTransaction(c -> {
             upsertTerminal(c, MAIN_ID, mainIp, null);
             upsertTerminal(c, terminalId, ipAddress, computerName);
             AppSettings.put(c, AppSettings.THIS_TERMINAL_ID, terminalId);
             AppSettings.put(c, AppSettings.API_KEY, apiKey);
+            AppSettings.put(c, AppSettings.SYNC_APPLIED_SEQ, Long.toString(Math.max(0, syncSeq)));
+            try (PreparedStatement ps = c.prepareStatement("DELETE FROM SyncOutbox")) {
+                ps.executeUpdate();
+            } catch (SQLException e) {
+                if (e.getErrorCode() != 1146) {   // no queue table yet (older database): nothing to empty
+                    throw e;
+                }
+            }
             return null;
+        });
+    }
+
+    /**
+     * Saves a terminal's new address (the router gave it another one): on the Main POS when an
+     * Additional POS sends changes from a new address; on an Additional POS when the Main POS was found
+     * at a new address (T01). Does nothing if it is the same.
+     *
+     * @return true if it changed
+     */
+    public boolean updateAddress(String terminalId, String ipAddress) {
+        return inTransaction(c -> {
+            try (PreparedStatement ps = c.prepareStatement("UPDATE PosTerminals SET IPAddress = ? "
+                    + "WHERE TerminalID = ? AND (IPAddress IS NULL OR IPAddress <> ?)")) {
+                ps.setString(1, ipAddress);
+                ps.setString(2, terminalId);
+                ps.setString(3, ipAddress);
+                boolean changed = ps.executeUpdate() > 0;
+                if (changed) {
+                    System.out.println("[TERMINALS] " + terminalId + " is now at " + ipAddress);
+                }
+                return changed;
+            }
         });
     }
 

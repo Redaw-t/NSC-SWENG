@@ -12,13 +12,16 @@ import java.net.http.HttpResponse;
 import java.net.http.HttpTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
  * Calls the Main POS's API ({@link ApiServer}) from an Additional POS. Every problem comes out as a
  * {@link MainPosException} whose message is ready to show to the person setting the terminal up.
  */
-public final class MainPosClient {
+public final class MainPosClient implements MainPosLink {
 
     private static final Duration TIMEOUT = Duration.ofSeconds(6);
 
@@ -78,8 +81,10 @@ public final class MainPosClient {
     /**
      * Downloads the Main POS's whole store database (gzip of the backup text) to {@code file}, for this
      * new Additional POS's first sync. Loading it is up to the caller (app.install.InitialSync).
+     *
+     * @return where in the Main POS's sync list the copy starts (0 if the Main POS didn't say)
      */
-    public void downloadSnapshot(java.nio.file.Path file) throws MainPosException {
+    public long downloadSnapshot(java.nio.file.Path file) throws MainPosException {
         HttpRequest request = HttpRequest.newBuilder(uri("/api/sync/snapshot"))
                 .timeout(DOWNLOAD_TIMEOUT)
                 .header(ApiKey.HEADER, apiKey)
@@ -112,6 +117,125 @@ public final class MainPosClient {
         } catch (IOException e) {
             throw new MainPosException("The data stopped coming from the Main POS (" + e.getMessage() + "). Try again.");
         }
+        try {
+            return Long.parseLong(response.headers().firstValue(ApiServer.SYNC_SEQ_HEADER).orElse("0").trim());
+        } catch (NumberFormatException e) {
+            return 0;
+        }
+    }
+
+    /* ------------------------------------- sync ------------------------------------- */
+
+    /** How long one sync call may take. */
+    private static final Duration SYNC_TIMEOUT = Duration.ofSeconds(30);
+
+    /**
+     * Sends this terminal's queued changes (oldest first). The Main POS skips any it already has.
+     *
+     * @return how many it took
+     */
+    @Override
+    public int push(String terminalId, List<SyncHub.Sent> changes) throws MainPosException {
+        List<Object> list = new ArrayList<>();
+        for (SyncHub.Sent c : changes) {
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("id", c.changeId());
+            item.put("kind", c.kind());
+            item.put("record", c.recordId());
+            item.put("at", c.createdAt());
+            item.put("payload", new shared.Json.Raw(c.payload()));   // already JSON
+            list.add(item);
+        }
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("terminal", terminalId);
+        body.put("changes", list);
+        HttpRequest request = HttpRequest.newBuilder(uri("/api/sync/push"))
+                .timeout(SYNC_TIMEOUT)
+                .header("Content-Type", "application/json")
+                .header(ApiKey.HEADER, apiKey)
+                .POST(HttpRequest.BodyPublishers.ofString(shared.Json.write(body), StandardCharsets.UTF_8))
+                .build();
+        Map<String, Object> reply = syncReply(send(request), "send this terminal's changes to");
+        return (int) shared.Json.number(reply, "accepted", 0);
+    }
+
+    /** The Main POS's list of changes after place {@code after} (at most {@code limit}). */
+    @Override
+    public SyncHub.Page pull(long after, int limit) throws MainPosException {
+        HttpRequest request = HttpRequest.newBuilder(uri("/api/sync/pull?after=" + after + "&limit=" + limit))
+                .timeout(SYNC_TIMEOUT)
+                .header(ApiKey.HEADER, apiKey)
+                .GET()
+                .build();
+        Map<String, Object> reply = syncReply(send(request), "get the changes from");
+        List<SyncHub.Listed> changes = new ArrayList<>();
+        for (Object item : shared.Json.list(reply, "changes")) {
+            if (!(item instanceof Map<?, ?> raw)) {
+                continue;
+            }
+            @SuppressWarnings("unchecked")
+            Map<String, Object> c = (Map<String, Object>) raw;
+            changes.add(new SyncHub.Listed(shared.Json.number(c, "seq", 0), shared.Json.text(c, "id"),
+                    shared.Json.text(c, "source"), shared.Json.text(c, "kind"), shared.Json.text(c, "record"),
+                    shared.Json.text(c, "at"), shared.Json.write(c.get("payload"))));
+        }
+        return new SyncHub.Page(shared.Json.number(reply, "head", 0), changes);
+    }
+
+    /** A new product / user / category / supplier ID from the Main POS (shared.MasterIds). */
+    public String nextId(String kind) throws MainPosException {
+        HttpRequest request = HttpRequest.newBuilder(uri("/api/sync/next-id?kind=" + kind))
+                .timeout(TIMEOUT)
+                .header(ApiKey.HEADER, apiKey)
+                .GET()
+                .build();
+        String id = shared.Json.text(syncReply(send(request), "get a new ID from"), "id");
+        if (id == null || id.isBlank()) {
+            throw new MainPosException("The Main POS did not give a new ID. Try again.");
+        }
+        return id.trim();
+    }
+
+    /**
+     * Checks that this address is THIS store's Main POS: it answers as T01, and it accepts our API key.
+     *
+     * @throws MainPosException it isn't (the message says what to check)
+     */
+    public void verifyMainPos() throws MainPosException {
+        HttpRequest ping = HttpRequest.newBuilder(uri("/api/ping")).timeout(TIMEOUT).GET().build();
+        HttpResponse<String> answer = send(ping);
+        String id = answer.statusCode() == 200 ? Json.fields(answer.body()).get("terminalId") : null;
+        if (!"T01".equals(id)) {
+            throw new MainPosException("Something at " + mainIp + " answered, but it is not a Nickel Sales Main POS "
+                    + "(T01). Check the IP address.");
+        }
+        pull(Long.MAX_VALUE - 1, 0);   // a call that needs the key: refused if this store's key is not accepted
+    }
+
+    /** The reply of a sync call as an object, or the problem as a MainPosException. */
+    private Map<String, Object> syncReply(HttpResponse<String> response, String what) throws MainPosException {
+        if (response.statusCode() == 401) {
+            throw new MainPosException("The Main POS at " + mainIp + " did not accept this terminal's API key.");
+        }
+        if (response.statusCode() == 404) {
+            throw new MainPosException("Something at " + mainIp + " answered, but it is not a Nickel Sales Main POS "
+                    + "(or it runs an older version without sync).");
+        }
+        if (response.statusCode() != 200) {
+            String error = Json.fields(response.body()).get("error");
+            throw new MainPosException(error != null ? error
+                    : "Could not " + what + " the Main POS (error " + response.statusCode() + ").");
+        }
+        try {
+            return shared.Json.parseObject(response.body());
+        } catch (IllegalArgumentException e) {
+            throw new MainPosException("The Main POS at " + mainIp + " sent an answer that is not readable.");
+        }
+    }
+
+    /** The Main POS's IP address this client talks to. */
+    public String mainIp() {
+        return mainIp;
     }
 
     private URI uri(String path) throws MainPosException {

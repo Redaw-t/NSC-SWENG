@@ -2,6 +2,8 @@ package system.repository;
 
 import pos.receipt.StoreInfo;
 import shared.Database;
+import shared.SyncOutbox;
+import shared.SyncTables;
 import system.model.StoreDetailsRecord;
 
 import java.sql.Connection;
@@ -21,24 +23,33 @@ public class MySqlStoreDetailsRepository implements StoreDetailsRepository {
 
     @Override
     public StoreDetailsRecord add(StoreDetailsRecord r) {
-        String sql = "INSERT INTO StoreDetails (StoreName, Address, Proprietor, TIN, Phone, PerformedBy, PerformedAt, "
-                + "TerminalID) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
-        try (Connection c = Database.getConnection();
-             PreparedStatement ps = c.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
-            StoreInfo s = r.store();
-            ps.setString(1, s.name());
-            ps.setString(2, s.address());
-            ps.setString(3, s.proprietor());
-            ps.setString(4, s.tin());
-            ps.setString(5, s.phone());
-            ps.setString(6, r.performedBy());
-            ps.setObject(7, Sql.utc(r.performedAt()));
-            ps.setString(8, Sql.fit(r.terminalId(), 10));
-            ps.executeUpdate();
-            try (ResultSet keys = ps.getGeneratedKeys()) {
-                long id = keys.next() ? keys.getLong(1) : 0;
-                return new StoreDetailsRecord(id, s, r.performedBy(), r.performedAt(), r.terminalId());
-            }
+        String sql = "INSERT INTO StoreDetails (GlobalID, StoreName, Address, Proprietor, TIN, Phone, PerformedBy, "
+                + "PerformedAt, TerminalID) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        String globalId = SyncOutbox.newId();   // the row's ID on every terminal
+        StoreInfo s = r.store();
+        try {
+            // One transaction: the row and its sync queue row are saved together.
+            long id = Database.inTransaction(c -> {
+                long newId;
+                try (PreparedStatement ps = c.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+                    ps.setString(1, globalId);
+                    ps.setString(2, s.name());
+                    ps.setString(3, s.address());
+                    ps.setString(4, s.proprietor());
+                    ps.setString(5, s.tin());
+                    ps.setString(6, s.phone());
+                    ps.setString(7, r.performedBy());
+                    ps.setObject(8, Sql.utc(r.performedAt()));
+                    ps.setString(9, Sql.fit(r.terminalId(), 10));
+                    ps.executeUpdate();
+                    try (ResultSet keys = ps.getGeneratedKeys()) {
+                        newId = keys.next() ? keys.getLong(1) : 0;
+                    }
+                }
+                SyncOutbox.recordRows(c, SyncTables.STORE, s.name(), "StoreDetails", "GlobalID = ?", globalId);
+                return newId;
+            });
+            return new StoreDetailsRecord(id, s, r.performedBy(), r.performedAt(), r.terminalId());
         } catch (SQLException e) {
             throw Sql.failure(e);
         }
@@ -53,7 +64,9 @@ public class MySqlStoreDetailsRepository implements StoreDetailsRepository {
     @Override
     public List<StoreDetailsRecord> history(int limit) {
         try (Connection c = Database.getConnection();
-             PreparedStatement ps = c.prepareStatement(SELECT + " ORDER BY StoreDetailsID DESC LIMIT ?")) {
+             // Newest by when it was made, not by this PC's own number: rows from other terminals arrive
+             // later than they were made, and every terminal must agree on which row is in use.
+             PreparedStatement ps = c.prepareStatement(SELECT + " ORDER BY PerformedAt DESC, StoreDetailsID DESC LIMIT ?")) {
             ps.setInt(1, limit);
             try (ResultSet rs = ps.executeQuery()) {
                 List<StoreDetailsRecord> out = new ArrayList<>();

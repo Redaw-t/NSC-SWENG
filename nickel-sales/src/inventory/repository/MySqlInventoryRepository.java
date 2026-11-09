@@ -5,6 +5,8 @@ import inventory.model.StockLevel;
 import inventory.model.StockMovement;
 import inventory.model.StockReason;
 import shared.Database;
+import shared.SyncOutbox;
+import shared.SyncTables;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -169,21 +171,30 @@ public class MySqlInventoryRepository implements InventoryRepository {
 
     @Override
     public void addMovement(Connection tx, StockMovement m) throws SQLException {
+        String globalId = SyncOutbox.newId();   // the movement's ID on every terminal
         try (PreparedStatement ps = tx.prepareStatement(
-                "INSERT INTO StockMovement (ProductID, MovementType, Quantity, QuantityBefore, QuantityAfter, "
-                        + "Reason, ReferenceNo, Note, PerformedBy, CreatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")) {
-            ps.setString(1, m.productId());
-            ps.setString(2, m.type().name());
-            ps.setBigDecimal(3, m.quantity());
-            ps.setBigDecimal(4, m.quantityBefore());
-            ps.setBigDecimal(5, m.quantityAfter());
-            setNullable(ps, 6, m.reason() == null ? null : m.reason().name());
-            setNullable(ps, 7, m.referenceNo());
-            setNullable(ps, 8, m.note());
-            setNullable(ps, 9, m.performedBy());
-            ps.setObject(10, utc(m.createdAt()));
+                "INSERT INTO StockMovement (GlobalID, ProductID, MovementType, Quantity, QuantityBefore, QuantityAfter, "
+                        + "Reason, ReferenceNo, Note, PerformedBy, CreatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")) {
+            ps.setString(1, globalId);
+            ps.setString(2, m.productId());
+            ps.setString(3, m.type().name());
+            ps.setBigDecimal(4, m.quantity());
+            ps.setBigDecimal(5, m.quantityBefore());
+            ps.setBigDecimal(6, m.quantityAfter());
+            setNullable(ps, 7, m.reason() == null ? null : m.reason().name());
+            setNullable(ps, 8, m.referenceNo());
+            setNullable(ps, 9, m.note());
+            setNullable(ps, 10, m.performedBy());
+            ps.setObject(11, utc(m.createdAt()));
             ps.executeUpdate();
         }
+        // The other terminals add the same movement and change their stock by the same amount.
+        SyncOutbox.recordRows(tx, SyncTables.STOCK, m.productId(), "StockMovement", "GlobalID = ?", globalId);
+    }
+
+    @Override
+    public void recordReorderLevel(Connection tx, String productId) throws SQLException {
+        SyncOutbox.recordRows(tx, SyncTables.REORDER, productId, "Inventory", "ProductID = ?", productId);
     }
 
     // ---- helpers -------------------------------------------------------------

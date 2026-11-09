@@ -110,6 +110,8 @@ public final class SettingsScreen {
                 card("Account", "Change the password you use to log in.", changePassword, null),
                 card("Printers", "The printers this computer uses for receipts and barcode labels.",
                         printerSettings, printerRows));
+        // Additional POS, Admin only: the Main POS's address it syncs with (found by itself; this is the fallback).
+        MainPosAddressCard.create(screen).ifPresent(list.getChildren()::add);
         list.setMaxWidth(820);
         list.setAlignment(Pos.TOP_LEFT);
         return list;

@@ -11,7 +11,7 @@ public interface StoreDetailsRepository {
     /** Adds a row; returns it with its new ID. */
     StoreDetailsRecord add(StoreDetailsRecord record);
 
-    /** The newest row (the details in use), or empty if none was ever saved. */
+    /** The newest row by PerformedAt (the details in use), or empty if none was ever saved. */
     Optional<StoreDetailsRecord> latest();
 
     /** Every row, newest first, at most {@code limit}. */

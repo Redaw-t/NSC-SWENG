@@ -37,4 +37,12 @@ public interface UserRepository {
 
     /** Records that this user just signed in successfully. Default does nothing (fakes, tests). */
     default void recordSignIn(String userId) { }
+
+    /**
+     * The ID for a new user when another part of the app hands them out (the Main POS, when the
+     * terminals sync); null = work it out from the existing users, as before.
+     */
+    default String nextUserId() {
+        return null;
+    }
 }

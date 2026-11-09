@@ -53,6 +53,11 @@ public final class UiErrors {
 
     /** Same as {@link #message(Throwable)} with your own fallback text. */
     public static String message(Throwable error, String fallback) {
+        for (Throwable t = error; t != null && t.getCause() != t; t = t.getCause()) {
+            if (t instanceof MainPosUnavailableException) {
+                return t.getMessage();   // an Additional POS can't reach the Main POS: say so, not "database"
+            }
+        }
         if (isConnectionProblem(error)) {
             logCause(error);
             return CANNOT_CONNECT;

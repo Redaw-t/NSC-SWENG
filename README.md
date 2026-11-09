@@ -38,7 +38,9 @@ with a button for each part of the system your role may use:
   stock movement.
 - **System & sync** (admins): activity logs, inventory logs, sync logs, and open items and price
   edits. **Settings** has the printers, and for admins System Status and Backup & Restore.
-  Syncing between registers isn't built yet.
+- **Several registers:** every register keeps selling on its own and syncs every few seconds
+  through the Main POS: sales, stock, products, users, logs. See
+  [nickel-sales/src/sync/README.md](nickel-sales/src/sync/README.md).
 
 Everyone can change their own password and log out.
 
@@ -331,7 +333,7 @@ NSC-SWENG/
       system/          Audit & System (logs, backups, status)
       dashboard/       the home screen
       install/         what the installer runs after copying files (MySQL, databases, settings)
-      sync/            placeholder (README only)
+      sync/            sync between registers, through the Main POS (and its API)
     test/            self-tests, stand-ins (stubs/) and the dev launcher (app/DevApp)
     run-demo.bat     build and run (run-demo.bat --scripted = all self-tests)
 ```

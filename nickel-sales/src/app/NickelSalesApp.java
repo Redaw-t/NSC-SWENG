@@ -68,7 +68,19 @@ public class NickelSalesApp extends Application {
         // The version is shown faintly at the bottom right of Settings, not in the title.
         stage.setTitle("Nickel Sales Center - POS (" + context.config().terminalId() + ")");
         router.showLogin();
+        startSync();
         startApiIfMain();
+    }
+
+    /** Sync with the other terminals (see SyncRuntime), once this computer is set up. */
+    private void startSync() {
+        context.find(SyncRuntime.class).ifPresent(sync -> {
+            try {
+                sync.start(context, terminals);
+            } catch (RuntimeException e) {
+                System.err.println("[SYNC] not started: " + e + (e.getCause() == null ? "" : " / " + e.getCause()));
+            }
+        });
     }
 
     /**
@@ -94,9 +106,11 @@ public class NickelSalesApp extends Application {
         try {
             boolean main = terminals.thisTerminalId().map(PosTerminalRepository.MAIN_ID::equals).orElse(false);
             if (main) {
-                // The new Additional POS's first sync: the whole store database, never nickelsales_appconfig
+                // The new Additional POS's first sync: the whole store database, never nickelsales_appconfig;
+                // afterwards every terminal's changes go through this POS (the sync calls, see sync.SyncEngine).
+                sync.api.SyncHub hub = context.find(SyncRuntime.class).flatMap(SyncRuntime::engine).orElse(null);
                 api = ApiServer.start(ApiServer.port(), PosTerminalRepository.MAIN_ID, terminals,
-                        out -> app.install.InitialSync.writeStoreData(out, PosTerminalRepository.MAIN_ID));
+                        out -> app.install.InitialSync.writeStoreData(out, PosTerminalRepository.MAIN_ID), hub);
             }
         } catch (IOException e) {
             System.err.println("[API] could not listen on port " + ApiServer.port() + " (" + e.getMessage()
@@ -111,5 +125,6 @@ public class NickelSalesApp extends Application {
         if (api != null) {
             api.stop();
         }
+        context.find(SyncRuntime.class).ifPresent(SyncRuntime::stop);
     }
 }

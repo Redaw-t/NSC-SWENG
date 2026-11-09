@@ -119,7 +119,10 @@ the app's own code (password hashing, login names, backups).
 5. creates the MySQL user **`nickelsales`** with a random password and rights on
    `NickelSales_Database` and `nickelsales_appconfig` only. The app signs in to MySQL with this
    user, never with root;
-6. writes the **settings file** (database URL, user and password).
+6. opens **Windows Firewall** for the other registers, local network only: TCP 8765 (the Main POS's
+   API, which every register syncs through) and UDP 8766 (so a register can find the Main POS). The
+   uninstaller removes both rules;
+7. writes the **settings file** (database URL, user and password).
 
 Everything it does is logged to `install.log` (see [section 5](#5-helping-a-store-when-something-goes-wrong)).
 
@@ -378,7 +381,7 @@ admin and the terminal ID come from the app's Installation Setup (`app/install/`
 | 1 | Packaged app with its own Java, version number, log file | ✅ Done |
 | 2 | Installer: wizard, MySQL service, `nickelsales` user, settings file, shortcuts, uninstall | ✅ Done, tested on a dev PC (before the in-app setup took over the first admin) |
 | 3 | Safe updates: backup first, no downgrades, port check, app must be closed | ✅ Done, tested on a dev PC |
-| 4 | **Additional registers**: pairing and the first copy of data are done by the app's Installation Setup and the Main POS's API (`sync/api`). Still missing: a Windows Firewall rule so other PCs can reach the Main POS's API port (MySQL itself is never opened to the network) | Not tested with the installed app |
+| 4 | **Additional registers**: pairing and the first copy of data in the app's Installation Setup; then every register's changes sync through the Main POS ([`sync/`](../nickel-sales/src/sync/README.md)); firewall rules for TCP 8765 and UDP 8766 (MySQL itself is never opened to the network) | Sync tested with two databases on one PC (`sync.SyncCheck`); not yet with two installed PCs |
 | 5 | Polish: clean-VM testing (Windows 10 and 11), wizard branding, code signing | To do |
 
 Known limitation: printer and POS settings are saved per **Windows user**. If cashiers sign in

@@ -87,8 +87,12 @@ public final class InventoryCheck {
         check("movement: zero is refused",
                 throwsIllegal(() -> new StockMovement(0, "P", MovementType.ADJUSTMENT, q("0"), q("1"), q("1"),
                         StockReason.OTHER, null, "x", "U", now)));
-        check("level: negative stock is refused",
-                throwsIllegal(() -> new StockLevel("P", q("-1"), q("0"), now)));
+        // Below zero only happens when two terminals sold the last item without reaching each other:
+        // both sales are kept, so the level can show it (and counts as out of stock).
+        check("level: stock below zero (synced from another terminal) is kept, as Out of Stock",
+                new StockLevel("P", q("-1"), q("0"), now).status() == inventory.model.StockStatus.OUT_OF_STOCK);
+        check("level: a negative reorder level is refused",
+                throwsIllegal(() -> new StockLevel("P", q("1"), q("-1"), now)));
         check("reasons: stock out offers Sale, Damage, Transfer, Other",
                 StockReason.forStockOut().equals(List.of(StockReason.SALE, StockReason.DAMAGE,
                         StockReason.TRANSFER, StockReason.OTHER)));
@@ -368,12 +372,12 @@ public final class InventoryCheck {
             boolean blocked = false;
             try (Connection c = Database.getConnection();
                  PreparedStatement ps = c.prepareStatement(
-                         "UPDATE Inventory SET QuantityOnHand = -1 WHERE ProductID = 'ZZ-INV-1'")) {
+                         "UPDATE Inventory SET ReorderLevel = -1 WHERE ProductID = 'ZZ-INV-1'")) {
                 ps.executeUpdate();
             } catch (SQLException e) {
                 blocked = true;
             }
-            check("MySQL: the database itself refuses negative stock", blocked);
+            check("MySQL: the database itself refuses a negative reorder level", blocked);
         } catch (Exception e) {
             failed++;
             String hint = String.valueOf(e.getMessage()).contains("doesn't exist")

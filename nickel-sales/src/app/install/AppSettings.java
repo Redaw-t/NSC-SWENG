@@ -18,6 +18,8 @@ public final class AppSettings {
     public static final String API_KEY = "ApiKey";
     /** POS Settings: "true" = print the receipt straight after payment, no preview. */
     public static final String AUTO_PRINT_RECEIPT = "AutoPrintReceipt";
+    /** Sync: the last change in the Main POS's list applied on this PC (see sync.SyncDb). */
+    public static final String SYNC_APPLIED_SEQ = "SyncAppliedSeq";
 
     /** The setting's value, if it is set. */
     public Optional<String> get(String key) {

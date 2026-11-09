@@ -39,9 +39,8 @@ public record StockMovement(long movementId, String productId, MovementType type
         if (quantity.signum() == 0) {
             throw new IllegalArgumentException("A stock movement cannot be zero: " + productId);
         }
-        if (quantityBefore.signum() < 0 || quantityAfter.signum() < 0) {
-            throw new IllegalArgumentException("Stock cannot be negative: " + productId);
-        }
+        // Before / after may be below zero only for a movement synced from another terminal (see
+        // StockLevel); the service never makes one here.
         if (quantityBefore.add(quantity).compareTo(quantityAfter) != 0) {
             throw new IllegalArgumentException("Before + quantity must equal after: " + productId);
         }

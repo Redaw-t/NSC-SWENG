@@ -2,6 +2,9 @@ package product.repository;
 
 import product.model.Category;
 import shared.Database;
+import shared.MasterIds;
+import shared.SyncOutbox;
+import shared.SyncTables;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -46,18 +49,38 @@ public class MySqlCategoryRepository implements CategoryRepository {
         return queryOne(SELECT + " WHERE CategoryName = ?", ps -> ps.setString(1, name.trim()));
     }
 
+    /**
+     * Saves a new category. Its ID comes from the Main POS when the terminals sync ({@link MasterIds}),
+     * so two terminals never make the same one; otherwise MySQL numbers it.
+     */
     @Override
     public Category insert(Category category) {
-        String sql = "INSERT INTO Category (CategoryName, IsActive) VALUES (?, ?)";
-        try (Connection c = Database.getConnection();
-             PreparedStatement ps = c.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
-            ps.setString(1, category.name());
-            ps.setBoolean(2, category.active());
-            ps.executeUpdate();
-            try (ResultSet keys = ps.getGeneratedKeys()) {
-                keys.next();
-                return new Category(keys.getInt(1), category.name(), category.active());
-            }
+        Integer givenId = MasterIds.nextNumber(MasterIds.CATEGORY);
+        String sql = givenId == null
+                ? "INSERT INTO Category (CategoryName, IsActive) VALUES (?, ?)"
+                : "INSERT INTO Category (CategoryName, IsActive, CategoryID) VALUES (?, ?, ?)";
+        try {
+            return Database.inTransaction(c -> {
+                int id;
+                try (PreparedStatement ps = c.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+                    ps.setString(1, category.name());
+                    ps.setBoolean(2, category.active());
+                    if (givenId != null) {
+                        ps.setInt(3, givenId);
+                    }
+                    ps.executeUpdate();
+                    if (givenId != null) {
+                        id = givenId;
+                    } else {
+                        try (ResultSet keys = ps.getGeneratedKeys()) {
+                            keys.next();
+                            id = keys.getInt(1);
+                        }
+                    }
+                }
+                SyncOutbox.recordRows(c, SyncTables.CATEGORY, String.valueOf(id), "Category", "CategoryID = ?", id);
+                return new Category(id, category.name(), category.active());
+            });
         } catch (SQLException e) {
             throw MySqlErrors.translate(e, "Could not save category " + category.name());
         }
@@ -65,15 +88,22 @@ public class MySqlCategoryRepository implements CategoryRepository {
 
     @Override
     public void update(Category category) {
+        MasterIds.requireMain();   // shared by every terminal: changed only while the Main POS is reachable
         String sql = "UPDATE Category SET CategoryName = ?, IsActive = ? WHERE CategoryID = ?";
-        try (Connection c = Database.getConnection();
-             PreparedStatement ps = c.prepareStatement(sql)) {
-            ps.setString(1, category.name());
-            ps.setBoolean(2, category.active());
-            ps.setInt(3, category.categoryId());
-            if (ps.executeUpdate() == 0) {
-                throw new RuntimeException("No such category: " + category.categoryId());
-            }
+        try {
+            Database.inTransaction(c -> {
+                try (PreparedStatement ps = c.prepareStatement(sql)) {
+                    ps.setString(1, category.name());
+                    ps.setBoolean(2, category.active());
+                    ps.setInt(3, category.categoryId());
+                    if (ps.executeUpdate() == 0) {
+                        throw new RuntimeException("No such category: " + category.categoryId());
+                    }
+                }
+                SyncOutbox.recordRows(c, SyncTables.CATEGORY, String.valueOf(category.categoryId()), "Category",
+                        "CategoryID = ?", category.categoryId());
+                return null;
+            });
         } catch (SQLException e) {
             throw MySqlErrors.translate(e, "Could not update category " + category.categoryId());
         }

@@ -118,7 +118,7 @@ final class SyncLogPane implements SystemPane {
         message.setMinHeight(Region.USE_PREF_SIZE);
 
         view.getChildren().addAll(toolbar, notice, table, message, SystemUi.footer(pager,
-                SystemUi.tile("Unsent Sales", unsentValue), SystemUi.tile("Failed", failedValue),
+                SystemUi.tile("Unsent Changes", unsentValue), SystemUi.tile("Failed", failedValue),
                 SystemUi.tile("Synced", syncedValue), SystemUi.tile("Last Sync", lastValue)));
         VBox.setVgrow(table, Priority.ALWAYS);
     }
@@ -162,8 +162,8 @@ final class SyncLogPane implements SystemPane {
             boolean connected = logs.syncConnected();
             notice.setVisible(!connected);
             notice.setManaged(!connected);
-            notice.setText("Synchronization is not connected on this terminal yet. Completed sales are stored "
-                    + "locally and will be sent once it is connected.");
+            notice.setText("Synchronization is not running on this terminal yet (it starts once the terminal is set "
+                    + "up). Sales and changes are stored here and will be sent once it runs.");
         } catch (SystemException e) {
             loadFailed(e.getMessage());
         } catch (RuntimeException e) {
@@ -205,7 +205,7 @@ final class SyncLogPane implements SystemPane {
     private void retry(SyncLogEntry e) {
         try {
             logs.retry(screen.sessionId(), e);
-            Modal.notice(screen.stage(), "Retry requested", "The record will be sent again.");
+            Modal.notice(screen.stage(), "Tried again", "The change was tried again. The list shows whether it worked.");
             load();
         } catch (SystemException ex) {
             showError(ex.getMessage());

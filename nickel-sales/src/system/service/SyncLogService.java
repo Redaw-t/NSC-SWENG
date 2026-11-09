@@ -138,9 +138,14 @@ public final class SyncLogService implements SyncLogWriter {
 
     @Override
     public long attempt(String targetTerminal, String dataType, String recordId) {
+        return attempt(terminalId, targetTerminal, dataType, recordId);
+    }
+
+    @Override
+    public long attempt(String sourceTerminal, String targetTerminal, String dataType, String recordId) {
         Instant now = clock.instant();
         try {
-            return repository.add(new SyncLogEntry(0, now, now, terminalId, targetTerminal, dataType, recordId,
+            return repository.add(new SyncLogEntry(0, now, now, sourceTerminal, targetTerminal, dataType, recordId,
                     SyncLogEntry.PENDING, 0, null));
         } catch (RuntimeException e) {
             System.out.println("[SYNC] Could not save to the sync log: " + e.getMessage());

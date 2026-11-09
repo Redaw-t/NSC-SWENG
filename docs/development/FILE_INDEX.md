@@ -109,7 +109,16 @@ Paths are relative to `nickel-sales/src/` (sections 1 to 10), `nickel-sales/test
 
 | File / Class | Purpose | Module / Owner Area | Depends On / Used By | Modification Guidance |
 |---|---|---|---|---|
-| `sync/README.md` | Intended responsibility: send/receive data using exported contracts, never screens. | Sync | `pos.contract.SaleExport`, product/inventory contracts | PLACEHOLDER. Start from `pos/contract/SaleExport.java`, `AppContext.saleExport()`, and the Sync test in `CheckoutCheck`. |
+| `sync/README.md` | How every register's changes reach every other register through the Main POS: what is synced, IDs, offline, ports. | Sync | — | Read first. |
+| `sync/SyncEngine.java` | One sync round (push / pull / apply, or the Main POS's own queue); the Main POS's `SyncHub`. | Sync | `SyncDb`, `ChangeApplier`, `sync.api`, `system.contract.SyncLogWriter`. Used by `SyncWorker`, `app.SyncRuntime`. | Core: keep changes idempotent (a change may arrive twice). |
+| `sync/SyncWorker.java` | Runs a round every 3 s on a daemon thread. | Sync | `SyncEngine` | |
+| `sync/SyncDb.java` | Sync tables in `nickelsales_appconfig` (queue, Main POS list, failed changes, ID counter, applied place). | Sync | Used by `SyncEngine`, `MasterIdSources`, `app.Main` (pending count). | |
+| `sync/ChangeApplier.java` | Writes a change into this PC's store tables (only synced tables, existing columns). | Sync | `shared.SyncTables`, `shared.Json` | Never write a table or column a change names without checking it. |
+| `sync/SyncStatus.java`, `sync/MasterIdSources.java` | Status for System Status; where new shared IDs come from. | Sync | Used by `app.SyncRuntime`, `app.Main` | |
+| `sync/api/SyncHub.java`, `sync/api/MainPosLink.java` | The Main POS's sync calls; what an Additional POS needs from it. | Sync | Implemented by `SyncEngine` / `MainPosClient` | **SHARED CONTRACT.** |
+| `sync/discovery/Discovery.java` | Finding the Main POS on the network (UDP 8766). | Sync | `MainPosClient.verifyMainPos`. Used by `app.SyncRuntime`, Installation Setup, `app.MainPosAddressCard`. | |
+| `shared/SyncOutbox.java`, `shared/SyncTables.java`, `shared/MasterIds.java`, `shared/Json.java`, `shared/MainPosUnavailableException.java` | Recording changes for sync (in the change's transaction), which tables sync and how, new shared IDs, JSON, the "needs the Main POS" message. | Shared (Sync) | Used by every MySQL repository that writes a synced table. | **SHARED — CHANGE CAREFULLY.** A new synced table goes in `SyncTables` and its repository records it. |
+| `app/SyncRuntime.java`, `app/MainPosAddressCard.java` | Starts sync once the PC is set up; Settings card for the Main POS's address on an Additional POS. | App | `sync`, `app.install.PosTerminalRepository` | |
 
 ## 8. reports
 
@@ -181,4 +190,4 @@ Paths are relative to `nickel-sales/src/` (sections 1 to 10), `nickel-sales/test
 | **Inventory** | `inventory/README.md`, `inventory/contract/StockRecorder.java`, `StockLine.java`, `pos/checkout/CheckoutService.java`, `shared/Database.java`, `test/stubs/StubStockRecorder.java`, `test/pos/CheckoutCheck.java` |
 | **POS integration** | `app/Main.java`, `app/AppContext.java`, `pos/ui/PosModule.java`, `pos/cart/SalesService.java`, `pos/checkout/CheckoutService.java`, `test/app/DevApp.java`, `test/app/AppCheck.java` |
 | **Barcode** | `barcode/README.md`, `ProductLookup.findByBarcode`, `pos/ui/PosScreen.java`, `SalesService.addItem(barcode)` |
-| **Sync** | `sync/README.md`, `pos/contract/SaleExport.java`, `pos/repository/MySqlSaleRepository.java`, `AppContext.saleExport()`, `app/Modules.java` ("System & sync") |
+| **Sync** | `sync/README.md`, `sync/SyncEngine.java`, `shared/SyncOutbox.java`, `shared/SyncTables.java`, `app/SyncRuntime.java`, `test/sync/SyncCheck.java` |

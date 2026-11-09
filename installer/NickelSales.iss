@@ -79,6 +79,9 @@ Filename: "{app}\{#AppExe}"; Description: "Start {#AppName}"; Flags: nowait post
 [UninstallRun]
 Filename: "{sys}\net.exe"; Parameters: "stop {#DbService}"; Flags: runhidden waituntilterminated; RunOnceId: "StopDatabase"
 Filename: "{app}\mysql\bin\mysqld.exe"; Parameters: "--remove {#DbService}"; Flags: runhidden waituntilterminated; RunOnceId: "RemoveDatabase"
+; The firewall rules setup added for the other POS terminals (install.InstallTasks.allowTerminalSync)
+Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=NickelSales-TerminalSync-TCP8765"; Flags: runhidden waituntilterminated; RunOnceId: "RemoveFirewallTcp"
+Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=NickelSales-FindMainPos-UDP8766"; Flags: runhidden waituntilterminated; RunOnceId: "RemoveFirewallUdp"
 
 [Code]
 var

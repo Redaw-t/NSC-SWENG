@@ -235,6 +235,8 @@ public final class InstallTasks {
             s.execute("GRANT ALL PRIVILEGES ON `" + APPCONFIG_DATABASE + "`.* TO " + user);
         }
 
+        allowTerminalSync();
+
         step("Writing the settings file " + settingsFile);
         Map<String, String> merged = mergeSettings(settings, answers, appPassword, terminalId);
         boolean newFile = !Files.exists(settingsFile);
@@ -242,6 +244,39 @@ public final class InstallTasks {
         if (newFile) {
             icacls(settingsFile, "/inheritance:r", "/grant:r", SYSTEM + ":F", ADMINISTRATORS + ":F", USERS + ":R");
         }
+    }
+
+    /** Windows Firewall rule names (no spaces, so netsh reads them as one word); the uninstaller removes them. */
+    static final String FIREWALL_TCP_RULE = "NickelSales-TerminalSync-TCP8765";
+    static final String FIREWALL_UDP_RULE = "NickelSales-FindMainPos-UDP8766";
+
+    /**
+     * Lets the other POS terminals on the store network reach this PC: TCP 8765 (the Main POS's API,
+     * which every terminal syncs through) and UDP 8766 (the answer that lets a terminal find the Main
+     * POS). Only from the local network (remoteip=localsubnet), on any network profile, since a store's
+     * network is often marked Public. The same rules on every PC: any of them may become the Main POS.
+     * Added fresh each time (an update replaces them). A failure is only reported: the terminals can be
+     * set up again, or the rule added by hand.
+     */
+    void allowTerminalSync() throws Exception {
+        step("Allowing the other POS terminals through Windows Firewall");
+        rule(FIREWALL_TCP_RULE, "TCP", 8765);
+        rule(FIREWALL_UDP_RULE, "UDP", sync.discovery.Discovery.PORT);
+    }
+
+    private static void rule(String name, String protocol, int port) throws Exception {
+        run(List.of("netsh", "advfirewall", "firewall", "delete", "rule", "name=" + name));   // none yet: fails harmlessly
+        int code = run(firewallRule(name, protocol, port));
+        if (code != 0) {
+            System.out.println("[INSTALL] Could not add the firewall rule " + name + " (netsh exit code " + code
+                    + "). Other terminals may not reach this PC until it is added.");
+        }
+    }
+
+    /** The netsh command that adds an inbound rule for {@code port}. */
+    static List<String> firewallRule(String name, String protocol, int port) {
+        return List.of("netsh", "advfirewall", "firewall", "add", "rule", "name=" + name, "dir=in", "action=allow",
+                "protocol=" + protocol, "localport=" + port, "remoteip=localsubnet", "profile=any");
     }
 
     /** my.ini for the NickelSalesDB service. */

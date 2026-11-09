@@ -9,7 +9,8 @@ import java.util.Objects;
  * CONTRACT — one product's stock at the moment {@link StockOverview#currentStock()} was called.
  *
  * @param barcode      null if the product has none
- * @param onHand       units in stock, in the product's unit; never negative
+ * @param onHand       units in stock, in the product's unit; below zero only after two terminals sold
+ *                     the last items while they couldn't reach each other (counted as out of stock)
  * @param reorderLevel at or below this the product is low on stock
  * @param level        worked out by Inventory (its StockStatus rule), so readers never repeat the rule
  */

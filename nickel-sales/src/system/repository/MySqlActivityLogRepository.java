@@ -1,6 +1,8 @@
 package system.repository;
 
 import shared.Database;
+import shared.SyncOutbox;
+import shared.SyncTables;
 import system.model.ActivityDescription;
 import system.model.ActivityEntry;
 import system.model.ActivityFilter;
@@ -23,19 +25,28 @@ public class MySqlActivityLogRepository implements ActivityLogRepository {
 
     @Override
     public void append(ActivityEntry e) {
-        String sql = "INSERT INTO ActivityLog (CreatedAt, UserID, TerminalID, Module, ActionType, Target, "
-                + "Details, OldValue, NewValue) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
-        try (Connection c = Database.getConnection(); PreparedStatement ps = c.prepareStatement(sql)) {
-            ps.setObject(1, Sql.utc(e.createdAt()));
-            Sql.setNullable(ps, 2, Sql.fit(e.userId(), 30));
-            ps.setString(3, Sql.fit(e.terminalId(), 10));
-            ps.setString(4, Sql.fit(e.module(), 20));
-            ps.setString(5, Sql.fit(e.action(), 40));
-            Sql.setNullable(ps, 6, Sql.fit(e.target(), 50));
-            Sql.setNullable(ps, 7, Sql.fit(e.details(), 255));
-            Sql.setNullable(ps, 8, Sql.fit(e.oldValue(), 255));
-            Sql.setNullable(ps, 9, Sql.fit(e.newValue(), 255));
-            ps.executeUpdate();
+        String sql = "INSERT INTO ActivityLog (GlobalID, CreatedAt, UserID, TerminalID, Module, ActionType, Target, "
+                + "Details, OldValue, NewValue) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        String globalId = SyncOutbox.newId();   // the entry's ID on every terminal
+        try {
+            // One transaction: the entry and its sync queue row are saved together.
+            Database.inTransaction(c -> {
+                try (PreparedStatement ps = c.prepareStatement(sql)) {
+                    ps.setString(1, globalId);
+                    ps.setObject(2, Sql.utc(e.createdAt()));
+                    Sql.setNullable(ps, 3, Sql.fit(e.userId(), 30));
+                    ps.setString(4, Sql.fit(e.terminalId(), 10));
+                    ps.setString(5, Sql.fit(e.module(), 20));
+                    ps.setString(6, Sql.fit(e.action(), 40));
+                    Sql.setNullable(ps, 7, Sql.fit(e.target(), 50));
+                    Sql.setNullable(ps, 8, Sql.fit(e.details(), 255));
+                    Sql.setNullable(ps, 9, Sql.fit(e.oldValue(), 255));
+                    Sql.setNullable(ps, 10, Sql.fit(e.newValue(), 255));
+                    ps.executeUpdate();
+                }
+                SyncOutbox.recordRows(c, SyncTables.ACTIVITY, e.action(), "ActivityLog", "GlobalID = ?", globalId);
+                return null;
+            });
         } catch (SQLException ex) {
             throw Sql.failure(ex);
         }

@@ -7,6 +7,8 @@ import pos.contract.SaleExport;
 import pos.contract.SaleLineRecord;
 import pos.contract.SaleRecord;
 import shared.Database;
+import shared.SyncOutbox;
+import shared.SyncTables;
 
 import java.math.BigDecimal;
 import java.sql.Connection;
@@ -96,6 +98,13 @@ public class MySqlSaleRepository implements SaleRepository, SaleExport {
                 ps.addBatch();
             }
             ps.executeBatch();
+        }
+        // Queued for the other terminals in the same transaction: the sale and its queue row go together.
+        if (SyncOutbox.enabled()) {
+            List<Map<String, Object>> rows = new ArrayList<>(SyncOutbox.rows(tx, "Sale", "SaleID = ?", sale.saleId()));
+            rows.addAll(SyncOutbox.rows(tx, "SaleLine", "SaleID = ? ORDER BY LineNo", sale.saleId()));
+            rows.addAll(SyncOutbox.rows(tx, "Payment", "SaleID = ? ORDER BY PaymentNo", sale.saleId()));
+            SyncOutbox.record(tx, SyncTables.SALE, sale.invoiceNo(), rows);
         }
     }
 

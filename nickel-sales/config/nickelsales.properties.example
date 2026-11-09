@@ -28,6 +28,7 @@ NSC_TERMINAL_ID=T01
 # Minutes without activity before the app logs out (1 or more).
 #NSC_IDLE_TIMEOUT_MINUTES=30
 # Address of the other terminal, for the System Status screen.
+# (No longer needed: System Status shows the link with the Main POS from sync itself.)
 #NSC_PEER_URL=
 
 # --- Receipts ------------------------------------------------------------
