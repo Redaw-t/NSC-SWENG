@@ -22,6 +22,8 @@ NSC_DB_PASSWORD=change-me
 
 # --- This terminal -------------------------------------------------------
 # Goes into every invoice number: give each computer its own (T01, T02 ...).
+# On an installed PC, Installation Setup gives the ID and saves it in the database
+# (nickelsales_appconfig); that one wins. Setup copies it here on the next update.
 NSC_TERMINAL_ID=T01
 # Minutes without activity before the app logs out (1 or more).
 #NSC_IDLE_TIMEOUT_MINUTES=30

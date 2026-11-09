@@ -56,7 +56,7 @@ See [`config/nickelsales.properties.example`](config/nickelsales.properties.exam
 | `NSC_PEER_URL` | none: the other terminal's address, for System Status |
 | `NSC_LOG_DIR` | `logs` next to the settings file (`%ProgramData%\NickelSales\logs`), else `%LOCALAPPDATA%\NickelSales\logs`. Only the installed app (`app.Main`) writes a log file, one per day, kept 30 days |
 
-The version is `shared/AppVersion.java` (shown in the window title; the installer uses it).
+The version is `shared/AppVersion.java` (shown faintly at the bottom right of Settings; the installer uses it).
 Raise it for every build given to a store. Building the Windows app: [`../installer/README.md`](../installer/README.md).
 
 Windows: `setx NSC_DB_PASSWORD "..."`, then open a **new** terminal (restart IntelliJ too).

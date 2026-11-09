@@ -27,6 +27,8 @@ import java.nio.file.attribute.FileTime;
 import java.security.SecureRandom;
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.time.Instant;
@@ -37,6 +39,7 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.TreeMap;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
@@ -222,7 +225,9 @@ public final class InstallTasks {
         String appPassword = APP_USER.equals(settings.get("NSC_DB_USER")) && !isBlank(settings.get("NSC_DB_PASSWORD"))
                 ? settings.get("NSC_DB_PASSWORD") : newPassword();
         step("Giving the app its own database account (" + APP_USER + ")");
+        String terminalId;
         try (Connection root = waitForDatabase("root", rootPassword); Statement s = root.createStatement()) {
+            terminalId = savedTerminalId(root).orElse(null);
             String user = "'" + APP_USER + "'@'localhost'";
             s.execute("CREATE USER IF NOT EXISTS " + user + " IDENTIFIED BY '" + appPassword + "'");
             s.execute("ALTER USER " + user + " IDENTIFIED BY '" + appPassword + "'");
@@ -231,7 +236,7 @@ public final class InstallTasks {
         }
 
         step("Writing the settings file " + settingsFile);
-        Map<String, String> merged = mergeSettings(settings, answers, appPassword);
+        Map<String, String> merged = mergeSettings(settings, answers, appPassword, terminalId);
         boolean newFile = !Files.exists(settingsFile);
         Files.writeString(settingsFile, settingsText(merged), StandardCharsets.UTF_8);
         if (newFile) {
@@ -265,17 +270,24 @@ public final class InstallTasks {
     }
 
     /**
-     * The settings to write: what the file had, the wizard's NSC_* answers on top, and the
-     * database account. Other keys in the file (added by support) are kept.
+     * The settings to write: what the file had, the wizard's NSC_* answers on top, the terminal ID
+     * Installation Setup saved in the database (so the file shows this PC's real ID, e.g. T02), and
+     * the database account. Other keys in the file (added by support) are kept.
+     *
+     * @param terminalId ThisTerminalID from nickelsales_appconfig, or null before the PC is set up
+     *                   (a new install: Installation Setup gives it one when the app first opens)
      */
     static Map<String, String> mergeSettings(Map<String, String> existing, Map<String, String> answers,
-                                             String appPassword) {
+                                             String appPassword, String terminalId) {
         Map<String, String> merged = new LinkedHashMap<>(existing);
         answers.forEach((name, value) -> {
             if (name.startsWith("NSC_")) {
                 merged.put(name, value);
             }
         });
+        if (terminalId != null && !terminalId.isBlank()) {
+            merged.put("NSC_TERMINAL_ID", terminalId.trim());
+        }
         merged.put("NSC_DB_URL", "jdbc:mysql://localhost:" + PORT + "/" + DATABASE + "?" + JDBC_OPTIONS);
         merged.put("NSC_DB_USER", APP_USER);
         merged.put("NSC_DB_PASSWORD", appPassword);
@@ -298,6 +310,24 @@ public final class InstallTasks {
         return text.toString();
     }
 
+    /**
+     * The terminal ID Installation Setup saved for this PC (nickelsales_appconfig.AppSettings,
+     * ThisTerminalID), or empty if it was never set up or the table isn't there yet.
+     */
+    static Optional<String> savedTerminalId(Connection c) {
+        String sql = "SELECT SettingValue FROM `" + APPCONFIG_DATABASE + "`.AppSettings WHERE SettingKey = ?";
+        try (PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setString(1, "ThisTerminalID");   // app.install.AppSettings.THIS_TERMINAL_ID
+            try (ResultSet rs = ps.executeQuery()) {
+                String id = rs.next() ? rs.getString(1) : null;
+                return id == null || id.isBlank() ? Optional.empty() : Optional.of(id.trim());
+            }
+        } catch (SQLException e) {
+            System.out.println("[INSTALL] This PC's terminal ID could not be read (" + e.getMessage() + ").");
+            return Optional.empty();
+        }
+    }
+
     /** A value as a properties file needs it (backslashes doubled; line breaks can't appear). */
     static String escape(String value) {
         return value.replace("\\", "\\\\").replace("\r", "").replace("\n", " ");
@@ -318,7 +348,7 @@ public final class InstallTasks {
         step("Backing up the store's data before updating");
         run(List.of("net", "start", SERVICE));   // fails harmlessly when it is already running
         String rootPassword = Settings.readFile(dataDir.resolve("mysql\\root.cnf")).get("password");
-        String terminal = Settings.readFile(dataDir.resolve(Settings.FILE_NAME)).getOrDefault("NSC_TERMINAL_ID", "T01");
+        String fileTerminal = Settings.readFile(dataDir.resolve(Settings.FILE_NAME)).getOrDefault("NSC_TERMINAL_ID", "T01");
 
         Path folder = dataDir.resolve("backups");
         Files.createDirectories(folder);
@@ -326,6 +356,8 @@ public final class InstallTasks {
         Path file = folder.resolve(updateBackupName(fromVersion, toVersion, LocalDateTime.now()));
         Path part = file.resolveSibling(file.getFileName() + ".part");
         try (Connection c = waitForDatabase("root", rootPassword)) {
+            // The ID Installation Setup gave this PC (e.g. T02) wins, as it does in the app.
+            String terminal = savedTerminalId(c).orElse(fileTerminal);
             c.setCatalog(DATABASE);
             DatabaseDump.Summary written;
             try (Writer out = new BufferedWriter(new OutputStreamWriter(

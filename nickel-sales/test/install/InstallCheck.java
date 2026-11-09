@@ -29,7 +29,7 @@ public class InstallCheck {
             Map<String, String> merged = InstallTasks.mergeSettings(
                     Map.of("NSC_PRINTER_NAME", "POS-58", "NSC_DB_USER", "root", "NSC_TERMINAL_ID", "T09"),
                     Map.of("NSC_TERMINAL_ID", "T01", "NSC_STORE_NAME", "Peña Hardware",
-                            "ADMIN_PASSWORD", "Secret123"), "pw123");
+                            "ADMIN_PASSWORD", "Secret123"), "pw123", null);
             expectText(merged.get("NSC_TERMINAL_ID"), "T01");
             expectText(merged.get("NSC_PRINTER_NAME"), "POS-58");
             expectText(merged.get("NSC_DB_USER"), "nickelsales");
@@ -37,6 +37,17 @@ public class InstallCheck {
             expectText(merged.get("NSC_DB_URL"),
                     "jdbc:mysql://localhost:3307/NickelSales_Database?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC");
             expectTrue(!merged.containsKey("ADMIN_PASSWORD"), "the admin's password must not reach the settings file");
+        });
+
+        check("Settings: the terminal ID Installation Setup saved (e.g. T02) is written; none yet keeps the file's", () -> {
+            Map<String, String> setUp = InstallTasks.mergeSettings(Map.of("NSC_TERMINAL_ID", "T01"), Map.of(),
+                    "pw", " T02 ");
+            expectText(setUp.get("NSC_TERMINAL_ID"), "T02");
+            Map<String, String> fresh = InstallTasks.mergeSettings(Map.of("NSC_TERMINAL_ID", "T03"), Map.of(),
+                    "pw", null);
+            expectText(fresh.get("NSC_TERMINAL_ID"), "T03");
+            expectTrue(!InstallTasks.mergeSettings(Map.of(), Map.of(), "pw", "").containsKey("NSC_TERMINAL_ID"),
+                    "nothing written before setup");
         });
 
         check("Settings file: reads back exactly (UTF-8, backslashes), installer's names first", () -> {
