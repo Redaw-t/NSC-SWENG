@@ -26,6 +26,7 @@ import java.util.List;
  *
  * <p>Opened from a table row ({@code lockProduct} true) the product is fixed and shown as text.
  * Opened from the toolbar it is chosen with a {@link SearchPicker} (type a name or barcode).
+ * Adjust Stock also lets the user change the product's reorder level (0 = no low-stock alert).
  * No rules live here: it only collects input and calls {@link Submit}. It stays open until the
  * service accepts the change.
  */
@@ -34,7 +35,9 @@ final class StockActionDialog {
     enum Mode { STOCK_IN, STOCK_OUT, ADJUST, REORDER }
 
     interface Submit {
-        void run(String productId, BigDecimal quantity, StockReason reason, String note) throws InventoryException;
+        /** {@code reorderLevel} is only filled in by Adjust Stock (null = left empty); other modes pass null. */
+        void run(String productId, BigDecimal quantity, StockReason reason, String note, BigDecimal reorderLevel)
+                throws InventoryException;
     }
 
     /** A list item for {@link SearchPicker}, which shows (and searches) {@code toString()}. */
@@ -73,8 +76,13 @@ final class StockActionDialog {
         qty.setPromptText(switch (mode) {
             case STOCK_IN, STOCK_OUT -> "e.g. 6 or 1.5";
             case ADJUST -> "Counted quantity";
-            case REORDER -> "e.g. 10";
+            case REORDER -> "0 = no alert";
         });
+
+        // Adjust Stock only: the reorder level, filled in with the product's current one.
+        TextField reorderField = new TextField();
+        Styles.underline(reorderField);
+        reorderField.setPromptText("0 = no low-stock alert");
 
         Runnable showChosen = () -> {
             StockRow row = chosen[0];
@@ -85,6 +93,7 @@ final class StockActionDialog {
             current.setText(Quantity.format(row.onHand()) + " " + row.unit());
             if (mode == Mode.ADJUST) {
                 qty.setText(Quantity.format(row.onHand()));
+                reorderField.setText(Quantity.format(row.reorderLevel()));
             } else if (mode == Mode.REORDER) {
                 qty.setText(Quantity.format(row.reorderLevel()));
             }
@@ -118,7 +127,7 @@ final class StockActionDialog {
         SearchPicker<Choice<StockReason>> reason = null;
         if (mode == Mode.STOCK_OUT || mode == Mode.ADJUST) {
             reason = new SearchPicker<>(true, false);
-            reason.setPromptText("Choose a reason");
+            reason.setPromptText(mode == Mode.ADJUST ? "Reason (needed if the quantity changes)" : "Choose a reason");
             List<StockReason> reasons = mode == Mode.STOCK_OUT ? StockReason.forStockOut() : StockReason.forAdjustment();
             for (StockReason r : reasons) {
                 reason.getItems().add(new Choice<>(r, r.label()));
@@ -139,6 +148,9 @@ final class StockActionDialog {
             case ADJUST -> "New Quantity";
             case REORDER -> "Reorder Level";
         }, qty);
+        if (mode == Mode.ADJUST) {
+            r = Modal.row(grid, r, "Reorder Level", reorderField);
+        }
         if (reason != null) {
             r = Modal.row(grid, r, "Reason", reason);
         }
@@ -187,10 +199,23 @@ final class StockActionDialog {
                     return;
                 }
             }
+            BigDecimal reorderLevel = null;
+            if (mode == Mode.ADJUST) {
+                String rt = reorderField.getText() == null ? "" : reorderField.getText().trim().replace(",", "");
+                if (!rt.isEmpty()) {
+                    try {
+                        reorderLevel = new BigDecimal(rt);
+                    } catch (NumberFormatException ex) {
+                        error.setText("Type the reorder level as a number, e.g. 10 (0 = no alert).");
+                        reorderField.requestFocus();
+                        return;
+                    }
+                }
+            }
             StockReason why = reasonPicker == null || reasonPicker.getValue() == null
                     ? null : reasonPicker.getValue().item();
             try {
-                submit.run(row.productId(), quantity, why, note.getText());
+                submit.run(row.productId(), quantity, why, note.getText(), reorderLevel);
                 savedId[0] = row.productId();
                 modal.close();
             } catch (InventoryException ex) {
@@ -203,7 +228,7 @@ final class StockActionDialog {
         String subtitle = switch (mode) {
             case STOCK_IN -> "Adds stock received from a supplier.";
             case STOCK_OUT -> "Removes stock that left without a sale (damaged, expired, returned...).";
-            case ADJUST -> "Sets the stock to what was actually counted.";
+            case ADJUST -> "Sets the stock to what was counted. You can also change the reorder level here.";
             case REORDER -> "The product shows as Low Stock at or below this level. 0 means no alert.";
         };
         modal.card().getChildren().addAll(Modal.title(title), Modal.subtitle(subtitle), grid, error,
