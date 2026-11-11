@@ -34,6 +34,7 @@ import shared.TabBar;
 import shared.TablePager;
 import shared.Tables;
 import shared.Theme;
+import shared.Toast;
 import shared.UiErrors;
 
 import java.math.BigDecimal;
@@ -49,22 +50,23 @@ import java.util.Map;
 import java.util.stream.Stream;
 
 /**
- * The Inventory screen, built from the same shared parts as the Products screen
- * ({@link TabBar}, {@link Tables}, {@link TablePager}, {@link SearchPicker}, {@link Styles}, {@link Modal})
- * so the two look alike. Shown inside the sidebar frame (app.AppShell); Esc goes home.
+ * The Inventory screen, built from the same shared parts as the Products screen. Shown inside the
+ * sidebar frame (app.AppShell), which owns Esc (toggles the sidebar).
  *
  * <p>Two tabs, each with its own toolbar:
  * <ul>
- *   <li><b>Current Stock</b>: search, Status, Category, and the Stock In / Stock Out / Adjust Stock
+ *   <li><b>Current Stock</b>: search, Status, Category, Reset, and the Stock In / Stock Out / Adjust Stock
  *       buttons. Each row has + In / - Out / Adjust / View, and the Reorder Level cell has an Edit button.</li>
  *   <li><b>Stock Movement History</b> (read-only): search, From Date, To Date and Reset. No stock buttons.</li>
  * </ul>
+ * Filters apply as soon as they change. Major results (stock updated) are shown as a toast, a lost
+ * database connection as a pop-up; field problems stay inside the pop-up forms.
  *
  * <p>Only calls {@link InventoryService}; no SQL and no stock rules here.
  */
 public final class InventoryScreen {
 
-    private static final int HISTORY_LIMIT = 1000;
+    private static final int HISTORY_LIMIT = 500;
     private static final String ALL_CATEGORIES = "All Categories";
     private static final String NO_CATEGORY = "(No category)";
     private static final String BAD_RANGE = "The From date is after the To date.";
@@ -107,6 +109,7 @@ public final class InventoryScreen {
     private final Map<String, String> userNames = new HashMap<>();
     private Map<String, String> categoryOf = Map.of();   // product ID -> category name
     private Tab tab = Tab.STOCK;
+    private boolean dbWarningShown;   // one "database unavailable" pop-up per outage, not one per click
 
     private final VBox view = new VBox(16);
     private final TabBar tabs = new TabBar(List.of("Current Stock", "Stock Movement History"),
@@ -167,6 +170,7 @@ public final class InventoryScreen {
             loadCategories();
             rows = loaded;
             movements = history;
+            dbWarningShown = false;
             updateCards();
             applyFilters(false);
             if (keepProductId != null) {
@@ -175,7 +179,12 @@ public final class InventoryScreen {
         } catch (InventoryException e) {
             showError(e.getMessage());
         } catch (RuntimeException e) {
-            showError(UiErrors.message(e, "Inventory could not be loaded. Try again."));
+            String text = UiErrors.message(e, "Inventory could not be loaded. Try again.");
+            showError(text);
+            if (UiErrors.isConnectionProblem(e) && !dbWarningShown) {
+                dbWarningShown = true;
+                Modal.notice(screen.stage(), "Database unavailable", text);
+            }
         }
     }
 
@@ -247,8 +256,10 @@ public final class InventoryScreen {
                 });
         if (saved != null) {
             reload(saved);
+            String title = mode == StockActionDialog.Mode.REORDER ? "Reorder level updated" : "Stock updated";
             rows.stream().filter(r -> r.productId().equals(saved)).findFirst().ifPresent(r ->
-                    showInfo(r.name() + ": " + Quantity.format(r.onHand()) + " " + r.unit() + " on hand."));
+                    Toast.success(screen.stage(), title, r.name() + ": " + Quantity.format(r.onHand()) + " "
+                            + r.unit() + " on hand, reorder level " + Quantity.format(r.reorderLevel()) + "."));
         }
     }
 
@@ -312,7 +323,7 @@ public final class InventoryScreen {
     /* ------------------------------ layout -------------------------------- */
 
     private void buildView() {
-        // --- Current Stock toolbar ---
+        // --- Current Stock toolbar (filters apply immediately; Reset restores the unfiltered list) ---
         search.setPromptText("Scan barcode or search product...");
         search.setPrefWidth(300);
         Styles.input(search);
@@ -333,6 +344,15 @@ public final class InventoryScreen {
             }
         });
 
+        Button stockReset = new Button("Reset");
+        toolbarStyle(stockReset, Theme.BORDER, Theme.PRIMARY_TEXT);
+        stockReset.setOnAction(e -> {
+            search.clear();
+            statusFilter.setValue(StatusChoice.ALL);
+            categoryFilter.setValue(ALL_CATEGORIES);
+            applyFilters(true);
+        });
+
         Button stockIn = toolbarButton("+ Stock In", StockActionDialog.Mode.STOCK_IN);
         Styles.primaryButton(stockIn);
         Button stockOut = toolbarButton("- Stock Out", StockActionDialog.Mode.STOCK_OUT);
@@ -342,7 +362,7 @@ public final class InventoryScreen {
 
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
-        stockToolbar = new HBox(12, search, statusFilter, categoryFilter, spacer, stockIn, stockOut, adjust);
+        stockToolbar = new HBox(12, search, statusFilter, categoryFilter, stockReset, spacer, stockIn, stockOut, adjust);
         stockToolbar.setAlignment(Pos.CENTER_LEFT);
         stockToolbar.setMaxWidth(Double.MAX_VALUE);
 
@@ -380,24 +400,19 @@ public final class InventoryScreen {
         boxes.setAlignment(Pos.CENTER);
 
         view.getChildren().addAll(tabs.getView(), toolbarSlot, tables, message, pagerSlot, boxes);
-        view.addEventFilter(KeyEvent.KEY_PRESSED, e -> {
-            if (e.getCode() == KeyCode.ESCAPE) {
-                screen.goHome();
-                e.consume();
-            }
-        });
+        // Esc is handled by the sidebar frame (app.AppShell): it toggles the sidebar.
     }
 
     private void buildStockTable() {
         stockTable.getColumns().add(Tables.<StockRow>numberColumn(stockPager));
-        stockTable.getColumns().add(Tables.<StockRow>nodeColumn("Code", 120, 100, InventoryScreen::codeCell));
-        stockTable.getColumns().add(Tables.<StockRow>textColumn("Description", 220, StockRow::name));
-        stockTable.getColumns().add(Tables.<StockRow>textColumn("Current\nStock", 90,
+        stockTable.getColumns().add(Tables.<StockRow>nodeColumn("Code", 130, 110, InventoryScreen::codeCell));
+        stockTable.getColumns().add(Tables.<StockRow>textColumn("Product Name", 300, StockRow::name));
+        stockTable.getColumns().add(Tables.<StockRow>textColumn("Current\nStock", 100,
                 r -> Quantity.format(r.onHand()) + " " + r.unit()));
         stockTable.getColumns().add(Tables.<StockRow>nodeColumn("Reorder\nLevel", 130, 120, this::reorderCell));
-        stockTable.getColumns().add(Tables.<StockRow>nodeColumn("Status", 110, 110, r -> statusPill(r.status())));
-        stockTable.getColumns().add(Tables.<StockRow>textColumn("Last\nUpdated", 90, r -> date(r.updatedAt())));
-        stockTable.getColumns().add(Tables.<StockRow>nodeColumn("Actions", 290, 270, this::actions));
+        stockTable.getColumns().add(Tables.<StockRow>nodeColumn("Status", 120, 110, r -> statusPill(r.status())));
+        stockTable.getColumns().add(Tables.<StockRow>textColumn("Last\nUpdated", 100, r -> date(r.updatedAt())));
+        stockTable.getColumns().add(Tables.<StockRow>nodeColumn("Actions", 250, 240, this::actions));
         stockTable.setPlaceholder(new Label("No products found."));
         stockPager.fitToHeight(stockTable, Tables.HEADER_HEIGHT, Tables.ROW_HEIGHT, this::showStockPage);
     }
@@ -406,7 +421,7 @@ public final class InventoryScreen {
         historyTable.getColumns().add(Tables.<StockMovement>numberColumn(historyPager));
         historyTable.getColumns().add(Tables.<StockMovement>textColumn("Date / Time", 130,
                 m -> DAY_TIME.format(PhTime.of(m.createdAt()))));
-        historyTable.getColumns().add(Tables.<StockMovement>textColumn("Product", 200,
+        historyTable.getColumns().add(Tables.<StockMovement>textColumn("Product Name", 220,
                 m -> names.getOrDefault(m.productId(), m.productId())));
         historyTable.getColumns().add(Tables.<StockMovement>textColumn("Type", 100, m -> m.type().label()));
         historyTable.getColumns().add(Tables.<StockMovement>nodeColumn("Quantity", 90, 80, this::quantityCell));
@@ -414,9 +429,9 @@ public final class InventoryScreen {
                 m -> Quantity.format(m.quantityBefore())));
         historyTable.getColumns().add(Tables.<StockMovement>textColumn("After", 70,
                 m -> Quantity.format(m.quantityAfter())));
-        historyTable.getColumns().add(Tables.<StockMovement>textColumn("Reason / Reference", 170,
+        historyTable.getColumns().add(Tables.<StockMovement>textColumn("Reason / Reference", 200,
                 InventoryScreen::referenceText));
-        historyTable.getColumns().add(Tables.<StockMovement>textColumn("Performed By", 130,
+        historyTable.getColumns().add(Tables.<StockMovement>textColumn("Performed By", 140,
                 m -> m.performedBy() == null ? "POS sale" : userNames.getOrDefault(m.performedBy(), m.performedBy())));
         historyTable.setPlaceholder(new Label("No stock movements found."));
         historyPager.fitToHeight(historyTable, Tables.HEADER_HEIGHT, Tables.ROW_HEIGHT, this::showHistoryPage);
@@ -451,7 +466,7 @@ public final class InventoryScreen {
         adj.setOnAction(e -> act(StockActionDialog.Mode.ADJUST, row));
         Button viewButton = rowButton("View", Theme.BORDER, Theme.PRIMARY_TEXT, "View " + row.name());
         viewButton.setOnAction(e -> viewRow(row));
-        HBox box = new HBox(8, in, out, adj, viewButton);
+        HBox box = new HBox(6, in, out, adj, viewButton);
         box.setAlignment(Pos.CENTER);
         return box;
     }
@@ -514,7 +529,7 @@ public final class InventoryScreen {
         LocalDate to = toDate.getValue();
         List<StockMovement> m = new ArrayList<>();
         if (from != null && to != null && from.isAfter(to)) {
-            showError(BAD_RANGE);
+            showError(BAD_RANGE);   // a field problem: stays next to the filters
         } else {
             if (BAD_RANGE.equals(message.getText())) {
                 message.setText("");
@@ -552,7 +567,7 @@ public final class InventoryScreen {
                 || mv.type().label().toLowerCase(Locale.ROOT).contains(q)
                 || referenceText(mv).toLowerCase(Locale.ROOT).contains(q)
                 || (mv.performedBy() != null && userNames.getOrDefault(mv.performedBy(), mv.performedBy())
-                .toLowerCase(Locale.ROOT).contains(q));
+                        .toLowerCase(Locale.ROOT).contains(q));
     }
 
     /** True if the product matches the Category filter ("All Categories" / null = everything). */
@@ -703,10 +718,5 @@ public final class InventoryScreen {
     private void showError(String text) {
         message.setText(text);
         Styles.error(message);
-    }
-
-    private void showInfo(String text) {
-        message.setText(text);
-        message.setStyle("-fx-font-size: 14px; -fx-text-fill: " + Theme.SUCCESS + ";");
     }
 }

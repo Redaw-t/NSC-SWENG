@@ -1,23 +1,36 @@
 package app;
 
 import auth.contract.User;
+import javafx.event.EventHandler;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.scene.Node;
 import javafx.scene.Parent;
+import javafx.scene.Scene;
 import javafx.scene.control.Button;
+import javafx.scene.control.ComboBoxBase;
 import javafx.scene.control.Label;
+import javafx.scene.control.ListView;
+import javafx.scene.control.TableView;
+import javafx.scene.control.TextInputControl;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
+import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyEvent;
+import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.scene.text.TextAlignment;
+import shared.SearchPicker;
 import shared.Styles;
+import shared.Theme;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Consumer;
@@ -33,6 +46,17 @@ import java.util.function.Consumer;
  * the router checks the permission again when one is clicked. The sidebar is open on the
  * Dashboard (so it is open after login) and on Settings, and collapses to a thin strip on every other screen;
  * the hamburger button opens or closes it by hand until the next screen change.
+ *
+ * <p>Keyboard (works anywhere on the screen while no pop-up is open; a pop-up is its own window and
+ * handles Esc itself, so it always closes first):
+ * <ul>
+ *   <li><b>Esc</b>: opens or closes the sidebar. (The POS screen is not in this frame: there Esc goes
+ *       to the Dashboard.)</li>
+ *   <li>While the sidebar is open: <b>Up / Down</b> move the highlight in the menu, <b>Enter</b> opens the
+ *       highlighted entry. Up / Down / Enter are left alone while the cursor is in a text box, a table or a
+ *       drop-down, and Enter only opens a menu entry after Up / Down (or Esc) started menu navigation,
+ *       so it never steals Enter from a button on the screen.</li>
+ * </ul>
  */
 public final class AppShell {
 
@@ -76,6 +100,8 @@ public final class AppShell {
                               Runnable goHome, Consumer<String> openModule, Runnable logout,
                               boolean startOpen) {
         VBox nav = new VBox();
+        List<Button> navButtons = new ArrayList<>();
+        List<Boolean> isCurrent = new ArrayList<>();
         for (Entry entry : ENTRIES) {
             boolean dashboard = entry.moduleTitle() == null;
             boolean settings = SETTINGS.equals(entry.moduleTitle());
@@ -83,7 +109,7 @@ public final class AppShell {
                 continue;
             }
             boolean active = dashboard ? activeTitle == null : entry.moduleTitle().equals(activeTitle);
-            boolean here = dashboard ? activeTitle == null : entry.moduleTitle().equals(activeTitle);
+            boolean here = active;
             Button item = new Button(entry.label());
             item.setMaxWidth(Double.MAX_VALUE);
             Styles.navItem(item, active);
@@ -98,6 +124,8 @@ public final class AppShell {
                 }
             });
             nav.getChildren().add(item);
+            navButtons.add(item);
+            isCurrent.add(active);
         }
 
         // hamburger: three bars
@@ -110,7 +138,7 @@ public final class AppShell {
         Button burger = new Button();
         burger.setGraphic(bars);
         Styles.burger(burger);
-        burger.setAccessibleText("Show or hide the menu");
+        burger.setAccessibleText("Show or hide the menu (Esc)");
 
         // header: logo and name on the left, hamburger on the right
         HBox brand = new HBox(8);
@@ -163,9 +191,32 @@ public final class AppShell {
             setWidth(sidebar, open ? EXPANDED_WIDTH : COLLAPSED_WIDTH);
         };
         applyState.run();
+
+        // keyboard menu: which entry is highlighted, and whether menu navigation has started
+        int[] selected = {0};
+        for (int i = 0; i < isCurrent.size(); i++) {
+            if (isCurrent.get(i)) {
+                selected[0] = i;
+            }
+        }
+        boolean[] navActive = {false};
+        Runnable paint = () -> {
+            for (int i = 0; i < navButtons.size(); i++) {
+                Button b = navButtons.get(i);
+                boolean chosen = navActive[0] && i == selected[0];
+                Styles.navItem(b, isCurrent.get(i) || chosen);
+                if (chosen) {
+                    b.setStyle(b.getStyle() + " -fx-border-color: transparent transparent transparent "
+                            + Theme.PRIMARY_BLUE + "; -fx-border-width: 0 0 0 4;");
+                }
+            }
+        };
+
         burger.setOnAction(e -> {
             expanded[0] = !expanded[0];
+            navActive[0] = false;
             applyState.run();
+            paint.run();
         });
 
         BorderPane host = new BorderPane();
@@ -177,7 +228,60 @@ public final class AppShell {
         Styles.shellRoot(root);
         root.setLeft(sidebar);
         root.setCenter(host);
+
+        // Scene-level keys. A pop-up (Modal, dialog, drop-down) is its own window, so while one is
+        // open these never see the key: Esc closes the pop-up first, as it should.
+        EventHandler<KeyEvent> keys = e -> {
+            KeyCode k = e.getCode();
+            if (k == KeyCode.ESCAPE) {
+                expanded[0] = !expanded[0];
+                navActive[0] = expanded[0];   // opening with Esc starts on the current entry
+                applyState.run();
+                paint.run();
+                e.consume();
+                return;
+            }
+            if (!expanded[0] || navButtons.isEmpty() || typingOrBrowsing(root.getScene())) {
+                return;
+            }
+            if (k == KeyCode.UP || k == KeyCode.DOWN) {
+                int n = navButtons.size();
+                if (!navActive[0]) {
+                    navActive[0] = true;   // first press only starts at the current entry
+                } else {
+                    selected[0] = (selected[0] + (k == KeyCode.DOWN ? 1 : n - 1)) % n;
+                }
+                paint.run();
+                e.consume();
+            } else if (k == KeyCode.ENTER && navActive[0]) {
+                navButtons.get(selected[0]).fire();
+                e.consume();
+            }
+        };
+        EventHandler<MouseEvent> clicks = e -> {
+            if (navActive[0]) {
+                navActive[0] = false;   // the mouse takes over again
+                paint.run();
+            }
+        };
+        root.sceneProperty().addListener((obs, old, scene) -> {
+            if (old != null) {
+                old.removeEventFilter(KeyEvent.KEY_PRESSED, keys);
+                old.removeEventFilter(MouseEvent.MOUSE_PRESSED, clicks);
+            }
+            if (scene != null) {
+                scene.addEventFilter(KeyEvent.KEY_PRESSED, keys);
+                scene.addEventFilter(MouseEvent.MOUSE_PRESSED, clicks);
+            }
+        });
         return root;
+    }
+
+    /** True while the cursor is in a control that uses Up / Down / Enter itself. */
+    private static boolean typingOrBrowsing(Scene scene) {
+        Node focus = scene == null ? null : scene.getFocusOwner();
+        return focus instanceof TextInputControl || focus instanceof TableView || focus instanceof ListView
+                || focus instanceof ComboBoxBase || focus instanceof SearchPicker;
     }
 
     /** The small logo in the header, or null if the image is missing (the name is then shown alone). */

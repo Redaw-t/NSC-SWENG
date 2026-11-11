@@ -6,13 +6,17 @@ import javafx.scene.Node;
 import javafx.scene.control.TableCell;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
+import javafx.scene.input.MouseEvent;
 
 import java.util.function.Function;
 
 /**
- * Builders for the tables of the Products and Users screens: blue header, grid lines, centred
- * cells, columns that share the table's width, and a "No." column. One place, so every table is
- * made the same way.
+ * Builders for the tables of the Products, Users, Inventory, Reports and System screens: blue header,
+ * grid lines, centred cells, columns that share the table's width, and a "No." column. One place, so
+ * every table is made the same way.
+ *
+ * <p>Fixed tables: columns can't be reordered (every builder turns it off) and the header can't be
+ * dragged or resized ({@link #lockHeader}), so the approved widths stay as designed.
  */
 public final class Tables {
 
@@ -29,7 +33,30 @@ public final class Tables {
         table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
         table.setFixedCellSize(ROW_HEIGHT);
         table.setMinHeight(HEADER_HEIGHT + ROW_HEIGHT * 3 + 2);   // TableView would otherwise insist on 400
+        lockHeader(table);
         return table;
+    }
+
+    /**
+     * Stops the user dragging column borders (resize, double-click auto-size) or dragging columns around:
+     * mouse presses, drags and clicks on a column header are swallowed. The headers do nothing else
+     * here (sorting is off), so nothing is lost. Also call it on tables not made by {@link #create}.
+     */
+    public static void lockHeader(TableView<?> table) {
+        table.addEventFilter(MouseEvent.MOUSE_PRESSED, e -> swallowInHeader(e, table));
+        table.addEventFilter(MouseEvent.MOUSE_DRAGGED, e -> swallowInHeader(e, table));
+        table.addEventFilter(MouseEvent.MOUSE_RELEASED, e -> swallowInHeader(e, table));
+        table.addEventFilter(MouseEvent.MOUSE_CLICKED, e -> swallowInHeader(e, table));
+    }
+
+    private static void swallowInHeader(MouseEvent e, Node table) {
+        Node n = e.getTarget() instanceof Node t ? t : null;
+        for (; n != null && n != table; n = n.getParent()) {
+            if (n.getStyleClass().contains("column-header")) {
+                e.consume();
+                return;
+            }
+        }
     }
 
     /** A plain text column. {@code width} is a starting width; the columns share the table's width in that proportion. */
@@ -39,6 +66,7 @@ public final class Tables {
         col.setCellFactory(c -> new Styles.GridCell<S>());
         col.setPrefWidth(width);
         col.setSortable(false);
+        col.setReorderable(false);
         return col;
     }
 
@@ -65,6 +93,7 @@ public final class Tables {
         col.setPrefWidth(width);
         col.setMinWidth(minWidth);
         col.setSortable(false);
+        col.setReorderable(false);
         return col;
     }
 
@@ -96,6 +125,7 @@ public final class Tables {
         col.setMinWidth(46);
         col.setMaxWidth(80);
         col.setSortable(false);
+        col.setReorderable(false);
         return col;
     }
 
