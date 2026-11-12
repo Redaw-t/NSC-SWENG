@@ -68,8 +68,20 @@ final class CashierPane implements ReportsPane {
         groupBy.setValue(BY_CASHIER);
         groupBy.setPrefWidth(160);
 
-        Button apply = ReportsUi.applyButton(this::load);
-        FlowPane toolbar = new FlowPane(12, 12, period.getView(), groupBy, apply);
+        boolean[] resetting = {false};
+        groupBy.valueProperty().addListener((o, was, is) -> {
+            if (!resetting[0]) {
+                load();
+            }
+        });
+        Button reset = ReportsUi.resetButton(() -> {
+            resetting[0] = true;
+            period.reset();
+            groupBy.setValue(BY_CASHIER);
+            resetting[0] = false;
+            load();
+        });
+        FlowPane toolbar = new FlowPane(12, 12, period.getView(), groupBy, reset);
         toolbar.setAlignment(Pos.CENTER_LEFT);
 
         view.getChildren().addAll(toolbar, table, message, ReportsUi.footer(pager,

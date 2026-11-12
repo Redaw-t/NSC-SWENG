@@ -63,8 +63,11 @@ final class SalesSummaryPane implements ReportsPane {
         ReportsUi.placeholder(table, "No days in this period.");
         pager.fitToHeight(table, Tables.HEADER_HEIGHT, Tables.ROW_HEIGHT, this::showPage);
 
-        Button apply = ReportsUi.applyButton(this::load);
-        HBox toolbar = new HBox(12, period.getView(), apply);
+        Button reset = ReportsUi.resetButton(() -> {
+            period.reset();
+            load();
+        });
+        HBox toolbar = new HBox(12, period.getView(), reset);
         toolbar.setAlignment(Pos.CENTER_LEFT);
 
         Styles.cardTitle(title);

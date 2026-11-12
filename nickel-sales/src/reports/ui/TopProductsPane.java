@@ -35,6 +35,7 @@ final class TopProductsPane implements ReportsPane {
 
     private final ScreenContext screen;
     private final ProductPerformanceService products;
+    private boolean resetting;
 
     private final PeriodControls period = new PeriodControls(this::load);
     private final SearchPicker<ProductRanking> ranking = new SearchPicker<>(false, false);
@@ -71,8 +72,25 @@ final class TopProductsPane implements ReportsPane {
         size.setValue(size.getItems().get(1));
         size.setPrefWidth(110);
 
-        Button apply = ReportsUi.applyButton(this::load);
-        FlowPane toolbar = new FlowPane(12, 12, period.getView(), ranking, size, apply);
+        ranking.valueProperty().addListener((o, was, is) -> {
+            if (!resetting) {
+                load();
+            }
+        });
+        size.valueProperty().addListener((o, was, is) -> {
+            if (!resetting) {
+                load();
+            }
+        });
+        Button reset = ReportsUi.resetButton(() -> {
+            resetting = true;
+            period.reset();
+            ranking.setValue(ProductRanking.BY_QUANTITY);
+            size.setValue(size.getItems().get(1));
+            resetting = false;
+            load();
+        });
+        FlowPane toolbar = new FlowPane(12, 12, period.getView(), ranking, size, reset);
         toolbar.setAlignment(Pos.CENTER_LEFT);
 
         Label note = new Label("Sales amounts include VAT. Share = the product's amount out of all products sold "

@@ -21,11 +21,12 @@ final class PeriodControls {
     private final DatePicker day;
     private final DatePicker to;
     private final HBox view;
+    private boolean quiet;   // true while reset() changes the controls (so it loads once, not three times)
 
-    /** @param onEnter Enter in a date box (applies the filters) */
+    /** @param onEnter called whenever a choice changes */
     PeriodControls(Runnable onEnter) {
-        day = ReportsUi.datePicker("Date", onEnter);
-        to = ReportsUi.datePicker("To Date", onEnter);
+        day = ReportsUi.datePicker("Date", () -> { });
+        to = ReportsUi.datePicker("To Date", () -> { });
         day.setValue(PhTime.today());
         to.setValue(PhTime.today());
 
@@ -34,6 +35,11 @@ final class PeriodControls {
         kind.setPrefWidth(160);
         kind.valueProperty().addListener((obs, old, now) -> showToDate(now == ReportPeriod.Kind.CUSTOM));
         showToDate(false);
+
+// every change applies at once
+        kind.valueProperty().addListener((o, was, is) -> changed(onEnter));
+        day.valueProperty().addListener((o, was, is) -> changed(onEnter));
+        to.valueProperty().addListener((o, was, is) -> changed(onEnter));
 
         view = new HBox(12, kind, day, to);
         view.setAlignment(Pos.CENTER_LEFT);
@@ -57,5 +63,20 @@ final class PeriodControls {
         to.setVisible(custom);
         to.setManaged(custom);
         day.setPromptText(custom ? "From Date" : "Date");
+    }
+
+    private void changed(Runnable onChange) {
+        if (!quiet) {
+            onChange.run();
+        }
+    }
+
+    /** Back to Daily, today. Does not call the change callback: the caller loads once afterwards. */
+    void reset() {
+        quiet = true;
+        kind.setValue(ReportPeriod.Kind.DAY);
+        day.setValue(PhTime.today());
+        to.setValue(PhTime.today());
+        quiet = false;
     }
 }

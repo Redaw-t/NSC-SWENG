@@ -77,9 +77,13 @@ final class InventoryPane implements ReportsPane {
         show.valueProperty().addListener((obs, old, now) -> filter());
         search.setPrefWidth(260);
 
-        Button apply = ReportsUi.applyButton(this::load);
-        apply.setText("Refresh");
-        HBox toolbar = new HBox(12, show, search, apply);
+        search.textProperty().addListener((o, was, is) -> filter());   // live as you type
+        Button reset = ReportsUi.resetButton(() -> {
+            show.setValue(ALL);
+            search.clear();
+            filter();
+        });
+        HBox toolbar = new HBox(12, show, search, reset);
         toolbar.setAlignment(Pos.CENTER_LEFT);
 
         view.getChildren().addAll(toolbar, table, message, ReportsUi.footer(pager,

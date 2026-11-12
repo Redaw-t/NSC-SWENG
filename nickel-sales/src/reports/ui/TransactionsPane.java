@@ -49,6 +49,7 @@ final class TransactionsPane implements ReportsPane {
     private final ScreenContext screen;
     private final TransactionHistoryService history;
     private final UserNames names;
+    private boolean updating;   // true while this pane refills its own drop-downs
 
     private final PeriodControls period = new PeriodControls(this::load);
     private final SearchPicker<Choice<String>> cashier = new SearchPicker<>(false, true);
@@ -97,8 +98,17 @@ final class TransactionsPane implements ReportsPane {
         method.getItems().setAll(methods);
         method.setValue(methods.get(0));
 
-        Button apply = ReportsUi.applyButton(this::load);
-        FlowPane toolbar = new FlowPane(12, 12, period.getView(), cashier, terminal, method, invoice, apply);
+        Runnable onFilter = () -> {
+            if (!updating) {
+                load();
+            }
+        };
+        cashier.valueProperty().addListener((o, was, is) -> onFilter.run());
+        terminal.valueProperty().addListener((o, was, is) -> onFilter.run());
+        method.valueProperty().addListener((o, was, is) -> onFilter.run());
+        ReportsUi.onTyping(invoice, onFilter);
+        Button reset = ReportsUi.resetButton(this::reset);
+        FlowPane toolbar = new FlowPane(12, 12, period.getView(), cashier, terminal, method, invoice, reset);
         toolbar.setAlignment(Pos.CENTER_LEFT);
 
         view.getChildren().addAll(toolbar, table, message, ReportsUi.footer(pager,
@@ -130,8 +140,15 @@ final class TransactionsPane implements ReportsPane {
             TransactionList list = history.find(screen.sessionId(), filter);
             rows = list.rows();
             list.cashierIds().forEach(names::remember);
-            setChoices(cashier, "All Cashiers", list.cashierIds(), names::label);
-            setChoices(terminal, "All Terminals", list.terminalIds(), id -> id);
+
+            updating = true;
+            try {
+                setChoices(cashier, "All Cashiers", list.cashierIds(), names::label);
+                setChoices(terminal, "All Terminals", list.terminalIds(), id -> id);
+            } finally {
+                updating = false;
+            }
+
             ReportsUi.placeholder(table, EMPTY);
             TransactionRow first = rows.isEmpty() ? null : rows.get(rows.size() - 1);   // oldest = the sale
             message.setText(filter.invoiceNo() != null && first != null
@@ -230,5 +247,16 @@ final class TransactionsPane implements ReportsPane {
             case MAYA -> "Maya";
             case QRPH -> "QRPh";
         };
+    }
+
+    private void reset() {
+        updating = true;
+        period.reset();
+        cashier.setValue(cashier.getItems().get(0));
+        terminal.setValue(terminal.getItems().get(0));
+        method.setValue(method.getItems().get(0));
+        invoice.clear();
+        updating = false;
+        load();
     }
 }

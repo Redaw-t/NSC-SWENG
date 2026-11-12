@@ -15,6 +15,8 @@ import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.util.StringConverter;
+import javafx.animation.PauseTransition;
+import javafx.util.Duration;
 import shared.Money;
 import shared.Styles;
 import shared.TablePager;
@@ -175,5 +177,26 @@ final class ReportsUi {
         message.setWrapText(true);
         message.setMinHeight(Region.USE_PREF_SIZE);
         return message;
+    }
+
+    /** The grey Reset button: clears the filters only. */
+    static Button resetButton(Runnable onClick) {
+        Button button = new Button("Reset");
+        String base = "-fx-background-radius: 4; -fx-font-size: 15px; -fx-pref-height: 40; -fx-padding: 0 24 0 24; "
+                + "-fx-cursor: hand; -fx-text-fill: " + Theme.PRIMARY_TEXT + "; -fx-background-color: ";
+        String normal = base + Theme.BORDER + ";";
+        String hover = base + Styles.darker(Theme.BORDER) + ";";
+        button.setMinWidth(Region.USE_PREF_SIZE);
+        button.setStyle(normal);
+        button.hoverProperty().addListener((obs, was, is) -> button.setStyle(is ? hover : normal));
+        button.setOnAction(e -> onClick.run());
+        return button;
+    }
+
+    /** Runs {@code action} 300 ms after the user stops typing in {@code field}. */
+    static void onTyping(TextField field, Runnable action) {
+        PauseTransition wait = new PauseTransition(Duration.millis(300));
+        wait.setOnFinished(e -> action.run());
+        field.textProperty().addListener((o, was, is) -> wait.playFromStart());
     }
 }
