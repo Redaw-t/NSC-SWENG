@@ -14,6 +14,7 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.stage.FileChooser;
+
 import shared.Modal;
 import shared.PhTime;
 import shared.Quantity;
@@ -23,6 +24,8 @@ import shared.TablePager;
 import shared.Tables;
 import shared.Theme;
 import shared.UiErrors;
+import shared.Toast;
+
 import system.model.InventoryLogEntry;
 import system.model.InventoryLogFilter;
 import system.service.InventoryLogService;
@@ -247,10 +250,11 @@ final class InventoryLogPane implements SystemPane {
         }
         try {
             int written = logs.exportCsv(screen.sessionId(), rows, file.toPath(), names::nameOrNull);
-            Modal.notice(screen.stage(), "Export complete",
-                    SystemUi.count(written) + " stock changes were saved to " + file.getName() + ".");
+            Toast.success(screen.stage(), "Export complete",
+                    SystemUi.count(written) + " rows were saved to " + file.getName() + ".");
         } catch (SystemException e) {
             showError(e.getMessage());
+            Toast.error(screen.stage(), "Export failed", e.getMessage());
         }
     }
 

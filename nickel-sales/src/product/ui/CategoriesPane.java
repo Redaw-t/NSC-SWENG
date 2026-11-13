@@ -19,6 +19,7 @@ import shared.Styles;
 import shared.TablePager;
 import shared.Tables;
 import shared.UiErrors;
+import shared.Toast;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -96,15 +97,25 @@ final class CategoriesPane {
     }
 
     private void addCategory() {
-        NameDialog.show(owner(), "Add Category", "Category Name", "",
-                text -> service.createCategory(actor.current(), text));
+        String[] done = {null};
+        NameDialog.show(owner(), "Add Category", "Category Name", "", text -> {
+            done[0] = service.createCategory(actor.current(), text).name();
+        });
         reload();
+        if (done[0] != null) {
+            Toast.success(owner(), "Category saved", done[0] + " was added.");
+        }
     }
 
     private void rename(Category c) {
-        NameDialog.show(owner(), "Rename Category", "Category Name", c.name(),
-                text -> service.renameCategory(actor.current(), c.categoryId(), text));
+        String[] done = {null};
+        NameDialog.show(owner(), "Rename Category", "Category Name", c.name(), text -> {
+            done[0] = service.renameCategory(actor.current(), c.categoryId(), text).name();
+        });
         reload();
+        if (done[0] != null) {
+            Toast.success(owner(), "Category saved", "Renamed to " + done[0] + ".");
+        }
     }
 
     private void toggle(Category c) {
@@ -113,7 +124,10 @@ final class CategoriesPane {
                         + "Products already in it keep it.", "Deactivate")) {
             return;
         }
-        attempt(() -> service.setActive(actor.current(), c.categoryId(), !c.active()));
+        attempt(() -> {
+            service.setActive(actor.current(), c.categoryId(), !c.active());
+            Toast.success(owner(), c.active() ? "Category deactivated" : "Category reactivated", c.name());
+        });
     }
 
     private void attempt(Action action) {

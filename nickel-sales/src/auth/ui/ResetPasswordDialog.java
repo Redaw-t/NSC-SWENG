@@ -12,6 +12,7 @@ import shared.Modal;
 import shared.Styles;
 import shared.Theme;
 import shared.UiErrors;
+import shared.Toast;
 
 /**
  * "Reset Password" pop-up: an admin sets a new temporary password for another user.
@@ -74,8 +75,8 @@ final class ResetPasswordDialog {
         modal.showAndWait();
 
         if (done[0]) {
-            Modal.notice(owner, "Password Reset", "The password for " + target.getFullName() + " was reset.\n\n"
-                    + "Give them the new password and ask them to change it after signing in.");
+            Toast.success(owner, "Password reset", "The password for " + target.getFullName()
+                    + " was reset. Ask them to change it after signing in.");
         }
     }
 }

@@ -23,6 +23,8 @@ import shared.TablePager;
 import shared.Tables;
 import shared.Theme;
 import shared.UiErrors;
+import shared.Toast;
+
 import system.model.ActivityDescription;
 import system.model.ActivityEntry;
 import system.model.ActivityFilter;
@@ -284,10 +286,11 @@ final class ActivityLogPane implements SystemPane {
         }
         try {
             int written = activity.exportCsv(screen.sessionId(), rows, file.toPath(), names::nameOrNull);
-            Modal.notice(screen.stage(), "Export complete",
-                    SystemUi.count(written) + " log entries were saved to " + file.getName() + ".");
+            Toast.success(screen.stage(), "Export complete",
+                    SystemUi.count(written) + " rows were saved to " + file.getName() + ".");
         } catch (SystemException e) {
             showError(e.getMessage());
+            Toast.error(screen.stage(), "Export failed", e.getMessage());
         }
     }
 

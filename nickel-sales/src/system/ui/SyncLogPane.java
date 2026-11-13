@@ -14,6 +14,7 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.stage.FileChooser;
+
 import shared.Modal;
 import shared.PhTime;
 import shared.SearchPicker;
@@ -22,6 +23,8 @@ import shared.TablePager;
 import shared.Tables;
 import shared.Theme;
 import shared.UiErrors;
+import shared.Toast;
+
 import system.model.SyncLogEntry;
 import system.model.SyncLogFilter;
 import system.service.SyncLogService;
@@ -223,7 +226,7 @@ final class SyncLogPane implements SystemPane {
     private void retry(SyncLogEntry e) {
         try {
             logs.retry(screen.sessionId(), e);
-            Modal.notice(screen.stage(), "Retry requested", "The record will be sent again.");
+            Toast.success(screen.stage(), "Retry requested", "The record will be sent again.");
             load();
         } catch (SystemException ex) {
             showError(ex.getMessage());
@@ -259,10 +262,11 @@ final class SyncLogPane implements SystemPane {
         }
         try {
             int written = logs.exportCsv(screen.sessionId(), rows, file.toPath());
-            Modal.notice(screen.stage(), "Export complete",
-                    SystemUi.count(written) + " sync attempts were saved to " + file.getName() + ".");
+            Toast.success(screen.stage(), "Export complete",
+                    SystemUi.count(written) + " rows were saved to " + file.getName() + ".");
         } catch (SystemException e) {
             showError(e.getMessage());
+            Toast.error(screen.stage(), "Export failed", e.getMessage());
         }
     }
 

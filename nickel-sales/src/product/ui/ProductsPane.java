@@ -29,6 +29,7 @@ import shared.TablePager;
 import shared.Tables;
 import shared.Theme;
 import shared.UiErrors;
+import shared.Toast;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -230,12 +231,23 @@ final class ProductsPane {
             message.setText(UiErrors.message(e));
             return;
         }
+
+        String[] saved = {null};
         if (existing == null) {
-            ProductFormDialog.show(owner(), null, cats, sups, draft -> products.createProduct(actor.current(), draft));
+            ProductFormDialog.show(owner(), null, cats, sups, draft -> {
+                Product p = products.createProduct(actor.current(), draft);
+                saved[0] = p.name() + " was added.";
+            });
         } else {
-            ProductFormDialog.show(owner(), existing, cats, sups, draft -> products.updateProduct(actor.current(), existing.productId(), draft));
+            ProductFormDialog.show(owner(), existing, cats, sups, draft -> {
+                Product p = products.updateProduct(actor.current(), existing.productId(), draft);
+                saved[0] = p.name() + " was updated.";
+            });
         }
         reload(true);
+        if (saved[0] != null) {
+            Toast.success(owner(), "Product saved", saved[0]);
+        }
     }
 
     private void toggle(Product p) {
@@ -244,7 +256,10 @@ final class ProductsPane {
                 "Deactivate")) {
             return;
         }
-        attempt(() -> products.setActive(actor.current(), p.productId(), !p.active()));
+        attempt(() -> {
+            products.setActive(actor.current(), p.productId(), !p.active());
+            Toast.success(owner(), p.active() ? "Product deactivated" : "Product reactivated", p.name());
+        });
     }
 
     /** Runs the action, then reloads. A failed action shows its message under the table. */

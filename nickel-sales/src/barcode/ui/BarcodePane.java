@@ -21,6 +21,7 @@ import shared.TablePager;
 import shared.Tables;
 import shared.Theme;
 import shared.UiErrors;
+import shared.Toast;
 
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -157,6 +158,7 @@ public final class BarcodePane {
                 : AssignBarcodeDialog.show(owner(), service, without, null, preselect);
         if (saved) {
             reload();
+            Toast.success(owner(), "Barcode saved", "The barcode was saved.");
         }
     }
 
@@ -164,6 +166,7 @@ public final class BarcodePane {
         message.setText("");
         if (AssignBarcodeDialog.show(owner(), service, List.of(), row)) {
             reload();
+            Toast.success(owner(), "Barcode saved", "The barcode was saved.");
         }
     }
 
@@ -177,8 +180,7 @@ public final class BarcodePane {
     }
 
     private void showSuccess(String text) {
-        message.setText(text);
-        message.setStyle("-fx-text-fill: " + Theme.SUCCESS + ";");
+        Toast.success(owner(), "Labels sent", text);
     }
 
     /* ------------------------------ loading & paging ------------------------------ */

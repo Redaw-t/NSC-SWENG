@@ -467,11 +467,13 @@ public final class PosScreen {
         } catch (CartException | CheckoutException | InsufficientStockException e) {
             refresh(null);
             showError(e.getMessage() + " Nothing was saved.");
+            PosToast.warn(content, "Payment failed", "The sale was not saved. Check the message and press Payment again.");
             focusBarcode();
             return;
         } catch (RuntimeException e) {
             refresh(null);
             showError(UiErrors.message(e, "The sale could not be saved. Nothing was saved; try Payment again."));
+            PosToast.warn(content, "Payment failed", "The sale was not saved. Check the message and press Payment again.");
             focusBarcode();
             return;
         }

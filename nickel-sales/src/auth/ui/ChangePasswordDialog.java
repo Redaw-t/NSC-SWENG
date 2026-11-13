@@ -14,6 +14,7 @@ import shared.Modal;
 import shared.Styles;
 import shared.Theme;
 import shared.UiErrors;
+import shared.Toast;
 
 import java.util.Objects;
 
@@ -98,7 +99,7 @@ public class ChangePasswordDialog {
         modal.showAndWait();
 
         if (done[0]) {
-            Modal.notice(owner, "Password Changed", "Your password was changed.");
+            Toast.success(owner, "Password changed", "Your password was changed.");
         }
     }
 

@@ -15,6 +15,7 @@ import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.stage.DirectoryChooser;
 import javafx.stage.FileChooser;
+
 import shared.Modal;
 import shared.PhTime;
 import shared.Styles;
@@ -22,6 +23,8 @@ import shared.TablePager;
 import shared.Tables;
 import shared.Theme;
 import shared.UiErrors;
+import shared.Toast;
+
 import system.model.BackupRecord;
 import system.repository.DatabaseDump;
 import system.service.BackupService;
@@ -190,7 +193,7 @@ final class BackupPane implements SystemPane {
             return () -> {
                 load();
                 showInfo("Backup completed: " + record.fileName() + " (" + record.sizeLabel() + ").");
-                Modal.notice(screen.stage(), "Backup complete", "The backup was saved as " + record.fileName() + ".");
+                Toast.success(screen.stage(), "Backup completed", record.fileName() + " (" + record.sizeLabel() + ")");
             };
         });
     }

@@ -19,6 +19,7 @@ import shared.Styles;
 import shared.TablePager;
 import shared.Tables;
 import shared.UiErrors;
+import shared.Toast;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -100,15 +101,25 @@ final class SuppliersPane {
     }
 
     private void addSupplier() {
-        SupplierFormDialog.show(owner(), null, (name, contact, phone, email, address) ->
-                service.createSupplier(actor.current(), name, contact, phone, email, address));
+        String[] done = {null};
+        SupplierFormDialog.show(owner(), null, (name, contact, phone, email, address) -> {
+            done[0] = service.createSupplier(actor.current(), name, contact, phone, email, address).name();
+        });
         reload();
+        if (done[0] != null) {
+            Toast.success(owner(), "Supplier saved", done[0] + " was added.");
+        }
     }
 
     private void editSupplier(Supplier s) {
-        SupplierFormDialog.show(owner(), s, (name, contact, phone, email, address) ->
-                service.updateSupplier(actor.current(), s.supplierId(), name, contact, phone, email, address));
+        String[] done = {null};
+        SupplierFormDialog.show(owner(), s, (name, contact, phone, email, address) -> {
+            done[0] = service.updateSupplier(actor.current(), s.supplierId(), name, contact, phone, email, address).name();
+        });
         reload();
+        if (done[0] != null) {
+            Toast.success(owner(), "Supplier saved", done[0] + " was updated.");
+        }
     }
 
     private void toggle(Supplier s) {
@@ -117,7 +128,10 @@ final class SuppliersPane {
                         + "Products already linked to it keep it.", "Deactivate")) {
             return;
         }
-        attempt(() -> service.setActive(actor.current(), s.supplierId(), !s.active()));
+        attempt(() -> {
+            service.setActive(actor.current(), s.supplierId(), !s.active());
+            Toast.success(owner(), s.active() ? "Supplier deactivated" : "Supplier reactivated", s.name());
+        });
     }
 
     private void attempt(Action action) {

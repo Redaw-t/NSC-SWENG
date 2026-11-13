@@ -8,6 +8,9 @@ import java.util.function.Consumer;
 import auth.login.AuthenticationException;
 import auth.login.AuthenticationService;
 import auth.login.LoginResult;
+import auth.login.InactiveUserException;
+import auth.login.LockedUserException;
+
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -28,8 +31,11 @@ import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.scene.text.TextAlignment;
+
 import shared.Theme;
 import shared.UiErrors;
+import shared.Modal;
+
 
 /**
  * LoginScreen: logo, "NICKEL SALES CENTER" title, pill-shaped Username and
@@ -364,6 +370,10 @@ public class LoginScreen {
             showError(e.getMessage());
             passwordField.clear();
             focusPassword();
+            if ((e instanceof LockedUserException || e instanceof InactiveUserException) && view.getScene() != null) {
+                Modal.notice(view.getScene().getWindow(),
+                        e instanceof LockedUserException ? "Account locked" : "Account inactive", e.getMessage());
+            }
             return null;
         } catch (RuntimeException e) {
             // Database or other unexpected problem: never show a stack trace on screen,
