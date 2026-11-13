@@ -21,6 +21,7 @@ final class PeriodControls {
     private final DatePicker day;
     private final DatePicker to;
     private final HBox view;
+
     private boolean quiet;   // true while reset() changes the controls (so it loads once, not three times)
 
     /** @param onEnter called whenever a choice changes */

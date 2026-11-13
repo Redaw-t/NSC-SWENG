@@ -1,5 +1,6 @@
 package system.ui;
 
+import javafx.animation.PauseTransition;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
@@ -20,6 +21,7 @@ import javafx.scene.text.TextAlignment;
 import javafx.stage.Window;
 import javafx.util.Duration;
 import javafx.util.StringConverter;
+
 import shared.Modal;
 import shared.Styles;
 import shared.TablePager;
@@ -246,5 +248,19 @@ final class SystemUi {
         tile.setMinWidth(150);
         tile.setStyle("-fx-background-color: " + Theme.PRIMARY_BLUE + "; -fx-padding: 4 28 4 28;");
         return tile;
+    }
+
+    /** The grey Reset button: clears the filters only. */
+    static Button resetButton(Runnable onClick) {
+        Button button = secondaryButton("Reset");
+        button.setOnAction(e -> onClick.run());
+        return button;
+    }
+
+    /** Runs {@code action} 300 ms after the user stops typing in {@code field}. */
+    static void onTyping(TextField field, Runnable action) {
+        PauseTransition wait = new PauseTransition(Duration.millis(300));
+        wait.setOnFinished(e -> action.run());
+        field.textProperty().addListener((o, was, is) -> wait.playFromStart());
     }
 }

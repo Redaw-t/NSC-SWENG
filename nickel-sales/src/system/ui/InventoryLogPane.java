@@ -78,6 +78,8 @@ final class InventoryLogPane implements SystemPane {
     private final UserNames names;
 
     private List<InventoryLogEntry> rows = List.of();
+    private boolean updating;
+
 
     InventoryLogPane(ScreenContext screen, InventoryLogService logs) {
         this.screen = screen;
@@ -110,13 +112,29 @@ final class InventoryLogPane implements SystemPane {
         typeFilter.setPrefWidth(170);
         search.setPrefWidth(280);
 
-        Button apply = SystemUi.applyButton("Apply");
-        apply.setOnAction(e -> load());
+        Runnable onFilter = () -> {
+            if (!updating) {
+                load();
+            }
+        };
+        from.valueProperty().addListener((o, was, is) -> onFilter.run());
+        to.valueProperty().addListener((o, was, is) -> onFilter.run());
+        typeFilter.valueProperty().addListener((o, was, is) -> onFilter.run());
+        SystemUi.onTyping(search, onFilter);
+        Button reset = SystemUi.resetButton(() -> {
+            updating = true;
+            from.setValue(null);
+            to.setValue(null);
+            typeFilter.setValue(ALL_TYPES);
+            search.clear();
+            updating = false;
+            load();
+        });
         Button export = SystemUi.exportButton(this::export);
 
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
-        HBox toolbar = new HBox(12, from, to, typeFilter, search, apply, spacer, export);
+        HBox toolbar = new HBox(12, from, to, typeFilter, search, reset, spacer, export);
         toolbar.setAlignment(Pos.CENTER_LEFT);
 
         message.setWrapText(true);

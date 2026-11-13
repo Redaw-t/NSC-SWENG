@@ -75,13 +75,13 @@ public final class BarcodePane {
         this.service = service;
 
         table.getColumns().add(Tables.<BarcodeRow>numberColumn(pager));   // No. 1, 2, 3 ... like Products
-        table.getColumns().add(Tables.<BarcodeRow>textColumn("Product Name", 250, r -> r.product().name()));
+        table.getColumns().add(Tables.<BarcodeRow>textColumn("Product Name", 300, r -> r.product().name()));
         table.getColumns().add(Tables.<BarcodeRow>textColumn("Barcode", 180, r -> r.barcode() == null ? "-" : r.barcode()));
         table.getColumns().add(Tables.<BarcodeRow>nodeColumn("Barcode Status", 170, 150,
                 r -> BarcodeUi.pill(r.status(), r.problem())));
         table.getColumns().add(Tables.<BarcodeRow>textColumn("Last Updated", 120,
                 r -> r.barcode() == null || r.lastUpdated() == null ? "-" : DATE.format(r.lastUpdated())));
-        table.getColumns().add(Tables.<BarcodeRow>nodeColumn("Actions", 270, 240, this::actions));
+        table.getColumns().add(Tables.<BarcodeRow>nodeColumn("Actions", 215, 210, this::actions));
         table.setPlaceholder(new Label("No products found."));
         pager.fitToHeight(table, Tables.HEADER_HEIGHT, Tables.ROW_HEIGHT, this::showPage);
 
@@ -99,7 +99,11 @@ public final class BarcodePane {
         Styles.primaryButton(assign);
         assign.setOnAction(e -> openAssign(null));
 
-        HBox toolbar = new HBox(12, search, statusFilter, assign);
+        Button reset = Styles.resetButton(() -> {
+            search.clear();
+            statusFilter.setValue(StatusFilter.ALL);
+        });
+        HBox toolbar = new HBox(12, search, statusFilter, reset, assign);
         toolbar.setAlignment(Pos.CENTER_LEFT);
 
         message.setWrapText(true);

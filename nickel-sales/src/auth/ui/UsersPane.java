@@ -144,17 +144,23 @@ final class UsersPane {
         statusFilter.setValue(StatusFilter.ALL);
         statusFilter.setPrefWidth(180);
         statusFilter.valueProperty().addListener((obs, old, v) -> applyFilters(true));
-        HBox filters = new HBox(12, search, roleFilter, statusFilter);
+
+        Button reset = Styles.resetButton(() -> {
+            search.clear();
+            roleFilter.setValue(RoleFilter.ALL);
+            statusFilter.setValue(StatusFilter.ALL);
+        });
+        HBox filters = new HBox(12, search, roleFilter, statusFilter, reset);
         filters.setAlignment(Pos.CENTER_LEFT);
 
         // ---- table
         table.setPlaceholder(new Label("No users found."));
-        table.getColumns().add(Tables.<User>nodeColumn("User", 260, 200, true, this::userCell));
+        table.getColumns().add(Tables.<User>nodeColumn("User", 300, 200, true, this::userCell));
         table.getColumns().add(Tables.<User>textColumn("Username", 150, User::getLoginName));
         table.getColumns().add(Tables.<User>nodeColumn("Role", 200, 170, false, UserUi::roleCell));
         table.getColumns().add(Tables.<User>nodeColumn("Status", 150, 130, false, this::statusCell));
         table.getColumns().add(Tables.<User>nodeColumn("Last Sign-in", 190, 150, false, UserUi::lastSignInCell));
-        table.getColumns().add(Tables.<User>nodeColumn("Actions", 250, 230, false, this::actionsCell));
+        table.getColumns().add(Tables.<User>nodeColumn("Actions", 190, 185, false, this::actionsCell));
         pager.fitToHeight(table, Tables.HEADER_HEIGHT, Tables.ROW_HEIGHT, this::showPage);
 
         message.setWrapText(true);

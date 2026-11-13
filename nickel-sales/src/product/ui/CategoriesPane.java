@@ -52,9 +52,9 @@ final class CategoriesPane {
         this.actor = actor;
 
         table.getColumns().add(Tables.<Category>numberColumn(pager));
-        table.getColumns().add(Tables.<Category>textColumn("Category", 400, Category::name));
+        table.getColumns().add(Tables.<Category>textColumn("Category", 500, Category::name));
         table.getColumns().add(Tables.<Category>nodeColumn("Status", 120, 100, c -> ProductUi.pill(c.active())));
-        table.getColumns().add(Tables.<Category>nodeColumn("Actions", 260, 210, this::actions));
+        table.getColumns().add(Tables.<Category>nodeColumn("Actions", 180, 175, this::actions));
         table.setPlaceholder(new Label("No categories found."));
         pager.fitToHeight(table, Tables.HEADER_HEIGHT, Tables.ROW_HEIGHT, this::showPage);
 
@@ -65,7 +65,9 @@ final class CategoriesPane {
 
         Button add = ProductUi.primaryButton("+ Add Category");
         add.setOnAction(e -> addCategory());
-        HBox toolbar = new HBox(12, search, add);
+
+        Button reset = Styles.resetButton(() -> search.clear());
+        HBox toolbar = new HBox(12, search, reset, add);
         toolbar.setAlignment(Pos.CENTER_LEFT);
 
         message.setWrapText(true);

@@ -519,6 +519,17 @@ public final class Styles {
         withHover(button, base + Theme.BORDER + ";", base + darker(Theme.BORDER) + ";");
     }
 
+    /** The grey Reset button next to a filter group: clears the filters only. */
+    public static Button resetButton(Runnable onClick) {
+        Button button = new Button("Reset");
+        String base = "-fx-background-radius: 4; -fx-text-fill: " + Theme.PRIMARY_TEXT + "; -fx-font-size: 15px; "
+                + "-fx-font-weight: bold; -fx-padding: 0 22 0 22; -fx-pref-height: 40; -fx-cursor: hand; "
+                + "-fx-background-color: ";
+        withHover(button, base + Theme.BORDER + ";", base + darker(Theme.BORDER) + ";");
+        button.setOnAction(e -> onClick.run());
+        return button;
+    }
+
     /* ------------------------------ slim scroll bar ------------------------------ */
 
     /**

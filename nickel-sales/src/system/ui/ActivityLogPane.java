@@ -58,6 +58,9 @@ final class ActivityLogPane implements SystemPane {
     private static final Set<String> CHANGE_MODULES = Set.of(AuditEvent.USERS, AuditEvent.PRODUCTS,
             AuditEvent.INVENTORY);
 
+    private boolean updating;   // true while Reset or the User list changes the filters itself
+
+
     /** One choice in the User drop-down; {@code id} null = everyone. */
     private record UserChoice(String id, String label) {
         @Override
@@ -128,13 +131,22 @@ final class ActivityLogPane implements SystemPane {
         moduleFilter.setValue(ALL_MODULES);
         moduleFilter.setPrefWidth(170);
 
-        Button apply = SystemUi.applyButton("Apply");
-        apply.setOnAction(e -> load());
+        Runnable onFilter = () -> {
+            if (!updating) {
+                load();
+            }
+        };
+        from.valueProperty().addListener((o, was, is) -> onFilter.run());
+        to.valueProperty().addListener((o, was, is) -> onFilter.run());
+        userFilter.valueProperty().addListener((o, was, is) -> onFilter.run());
+        moduleFilter.valueProperty().addListener((o, was, is) -> onFilter.run());
+        SystemUi.onTyping(search, onFilter);
+        Button reset = SystemUi.resetButton(this::reset);
         Button export = SystemUi.exportButton(this::export);
 
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
-        HBox toolbar = new HBox(12, from, to, userFilter, moduleFilter, search, apply, spacer, export);
+        HBox toolbar = new HBox(12, from, to, userFilter, moduleFilter, search, reset, spacer, export);
         toolbar.setAlignment(Pos.CENTER_LEFT);
 
         message.setWrapText(true);
@@ -213,8 +225,14 @@ final class ActivityLogPane implements SystemPane {
             // the list stays "All Users"; load() shows the problem
         }
         UserChoice current = userFilter.getValue();
-        userFilter.getItems().setAll(choices);
-        userFilter.setValue(current != null && choices.contains(current) ? current : ALL_USERS);
+
+        updating = true;
+        try {
+            userFilter.getItems().setAll(choices);
+            userFilter.setValue(current != null && choices.contains(current) ? current : ALL_USERS);
+        } finally {
+            updating = false;
+        }
     }
 
     private void showPage() {
@@ -298,4 +316,17 @@ final class ActivityLogPane implements SystemPane {
         message.setText(text);
         Styles.muted(message);
     }
+
+    private void reset() {
+        updating = true;
+        from.setValue(null);
+        to.setValue(null);
+        userFilter.setValue(ALL_USERS);
+        moduleFilter.setValue(ALL_MODULES);
+        search.clear();
+        updating = false;
+        load();
+    }
+
+
 }

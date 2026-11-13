@@ -97,7 +97,7 @@ final class ProductsPane {
 
         table.getColumns().add(Tables.<Product>numberColumn(pager));
         table.getColumns().add(Tables.<Product>nodeColumn("Code", 120, 100, this::codeCell));
-        table.getColumns().add(Tables.<Product>textColumn("Description", 220, Product::name));
+        table.getColumns().add(Tables.<Product>textColumn("Description", 280, Product::name));
         table.getColumns().add(Tables.<Product>textColumn("Category", 110,
                 p -> p.categoryName() == null ? "" : p.categoryName()));
         table.getColumns().add(Tables.<Product>textColumn("Supplier", 120,
@@ -108,7 +108,7 @@ final class ProductsPane {
                 p -> p.wholesalePrice() == null ? "" : Money.format(p.wholesalePrice())));
         table.getColumns().add(Tables.<Product>nodeColumn("VAT", 60, 56, this::vatCell));
         table.getColumns().add(Tables.<Product>nodeColumn("Status", 90, 90, p -> ProductUi.pill(p.active())));
-        table.getColumns().add(Tables.<Product>nodeColumn("Actions", 250, 230, this::actions));
+        table.getColumns().add(Tables.<Product>nodeColumn("Actions", 220, 215, this::actions));
         table.setPlaceholder(new Label("No products found."));
         pager.fitToHeight(table, Tables.HEADER_HEIGHT, Tables.ROW_HEIGHT, this::showPage);
 
@@ -141,7 +141,16 @@ final class ProductsPane {
         Button add = ProductUi.primaryButton("+ Add Product");
         add.setOnAction(e -> addProduct());
 
-        HBox toolbar = new HBox(12, search, categoryFilter, statusFilter, supplierFilter, add);
+        Button reset = Styles.resetButton(() -> {
+            updatingChoices = true;
+            categoryFilter.setValue(ALL_CATEGORIES);
+            supplierFilter.setValue(ALL_SUPPLIERS);
+            updatingChoices = false;
+            search.clear();
+            statusFilter.setValue(StatusFilter.ALL);
+            reload(false);
+        });
+        HBox toolbar = new HBox(12, search, categoryFilter, statusFilter, supplierFilter, reset, add);
         toolbar.setAlignment(Pos.CENTER_LEFT);
 
         message.setWrapText(true);

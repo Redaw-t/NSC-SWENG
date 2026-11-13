@@ -56,9 +56,9 @@ final class SuppliersPane {
         table.getColumns().add(Tables.<Supplier>textColumn("Contact Person", 130, s -> blank(s.contactPerson())));
         table.getColumns().add(Tables.<Supplier>textColumn("Phone", 110, s -> blank(s.phone())));
         table.getColumns().add(Tables.<Supplier>textColumn("Email", 170, s -> blank(s.email())));
-        table.getColumns().add(Tables.<Supplier>textColumn("Address", 200, s -> blank(s.address())));
+        table.getColumns().add(Tables.<Supplier>textColumn("Address", 250, s -> blank(s.address())));
         table.getColumns().add(Tables.<Supplier>nodeColumn("Status", 90, 90, s -> ProductUi.pill(s.active())));
-        table.getColumns().add(Tables.<Supplier>nodeColumn("Actions", 220, 200, this::actions));
+        table.getColumns().add(Tables.<Supplier>nodeColumn("Actions", 165, 160, this::actions));
         table.setPlaceholder(new Label("No suppliers found."));
         pager.fitToHeight(table, Tables.HEADER_HEIGHT, Tables.ROW_HEIGHT, this::showPage);
 
@@ -69,7 +69,9 @@ final class SuppliersPane {
 
         Button add = ProductUi.primaryButton("+ Add Supplier");
         add.setOnAction(e -> addSupplier());
-        HBox toolbar = new HBox(12, search, add);
+
+        Button reset = Styles.resetButton(() -> search.clear());
+        HBox toolbar = new HBox(12, search, reset, add);
         toolbar.setAlignment(Pos.CENTER_LEFT);
 
         message.setWrapText(true);

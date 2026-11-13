@@ -35,7 +35,6 @@ final class TopProductsPane implements ReportsPane {
 
     private final ScreenContext screen;
     private final ProductPerformanceService products;
-    private boolean resetting;
 
     private final PeriodControls period = new PeriodControls(this::load);
     private final SearchPicker<ProductRanking> ranking = new SearchPicker<>(false, false);
@@ -46,6 +45,8 @@ final class TopProductsPane implements ReportsPane {
     private final VBox view = new VBox(16);
 
     private List<ProductSales> rows = List.of();
+    private boolean resetting;
+
 
     TopProductsPane(ScreenContext screen, ProductPerformanceService products) {
         this.screen = screen;

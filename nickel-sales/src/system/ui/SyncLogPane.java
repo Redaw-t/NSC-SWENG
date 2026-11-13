@@ -74,6 +74,8 @@ final class SyncLogPane implements SystemPane {
     private final VBox view = new VBox(16);
 
     private List<SyncLogEntry> rows = List.of();
+    private boolean updating;
+
 
     SyncLogPane(ScreenContext screen, SyncLogService logs) {
         this.screen = screen;
@@ -102,13 +104,29 @@ final class SyncLogPane implements SystemPane {
         statusFilter.setPrefWidth(170);
         search.setPrefWidth(260);
 
-        Button apply = SystemUi.applyButton("Apply");
-        apply.setOnAction(e -> load());
+        Runnable onFilter = () -> {
+            if (!updating) {
+                load();
+            }
+        };
+        from.valueProperty().addListener((o, was, is) -> onFilter.run());
+        to.valueProperty().addListener((o, was, is) -> onFilter.run());
+        statusFilter.valueProperty().addListener((o, was, is) -> onFilter.run());
+        SystemUi.onTyping(search, onFilter);
+        Button reset = SystemUi.resetButton(() -> {
+            updating = true;
+            from.setValue(null);
+            to.setValue(null);
+            statusFilter.setValue(ALL_STATUSES);
+            search.clear();
+            updating = false;
+            load();
+        });
         Button export = SystemUi.exportButton(this::export);
 
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
-        HBox toolbar = new HBox(12, from, to, statusFilter, search, apply, spacer, export);
+        HBox toolbar = new HBox(12, from, to, statusFilter, search, reset, spacer, export);
         toolbar.setAlignment(Pos.CENTER_LEFT);
 
         notice.setWrapText(true);

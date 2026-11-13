@@ -49,7 +49,6 @@ final class TransactionsPane implements ReportsPane {
     private final ScreenContext screen;
     private final TransactionHistoryService history;
     private final UserNames names;
-    private boolean updating;   // true while this pane refills its own drop-downs
 
     private final PeriodControls period = new PeriodControls(this::load);
     private final SearchPicker<Choice<String>> cashier = new SearchPicker<>(false, true);
@@ -64,6 +63,8 @@ final class TransactionsPane implements ReportsPane {
     private final VBox view = new VBox(16);
 
     private List<TransactionRow> rows = List.of();
+    private boolean updating;   // true while this pane refills its own drop-downs
+
 
     TransactionsPane(ScreenContext screen, TransactionHistoryService history) {
         this.screen = screen;
