@@ -445,7 +445,7 @@ public final class InventoryScreen {
         value.setStyle("-fx-font-size: 15px; -fx-text-fill: " + Theme.PRIMARY_TEXT + ";");
         Button edit = new Button("Edit");
         Styles.rowButton(edit, Theme.BORDER, Theme.PRIMARY_TEXT);
-        edit.setStyle(edit.getStyle() + " -fx-font-size: 11px; -fx-padding: 2 8 2 8;");
+        //edit.setStyle(edit.getStyle() + " -fx-font-size: 12px; -fx-padding: 2 8 2 8;");
         edit.setFocusTraversable(false);
         edit.setAccessibleText("Change the reorder level of " + row.name());
         edit.setOnAction(e -> act(StockActionDialog.Mode.REORDER, row));

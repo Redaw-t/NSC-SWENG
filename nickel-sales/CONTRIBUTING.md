@@ -87,6 +87,22 @@ The script is safe to run again (`CREATE TABLE IF NOT EXISTS`, `INSERT IGNORE`).
 
 Update the SQL file, the code that reads it, the stand-ins in `test/`, and the docs together.
 
+## Keyboard notes (function keys)
+
+The POS screen is driven by F1 to F9 (see the key table in `pos/ui/PosScreen.java`).
+
+- **MacBooks and many compact laptops:** the F-row sends media keys (brightness, volume) by default,
+  so press **Fn + F-key**. To use plain F-keys: macOS *System Settings > Keyboard > Keyboard Shortcuts >
+  Function Keys > "Use F1, F2, etc. keys as standard function keys"*. On Windows laptops, toggle
+  **Fn Lock** (often Fn + Esc).
+- **macOS reserves some keys** (F9 Mission Control / Exposé, F11 Show Desktop, F12 volume on some
+  setups). If F9 (Cancel Transaction) does nothing, turn those shortcuts off in
+  *System Settings > Keyboard > Keyboard Shortcuts > Mission Control*, or use the on-screen button.
+- Every shortcut also has a clickable button, so nothing depends on the keyboard.
+- Audit Logs shortcuts use **Ctrl** on Windows/Linux and **Cmd** on macOS (Ctrl+1..4, F, E).
+- Esc: closes the open pop-up first; otherwise toggles the sidebar (in POS: back to the Dashboard).
+  With the sidebar open, Up/Down move the menu highlight and Enter opens it.
+
 ## Troubleshooting
 
 | Symptom | Fix |

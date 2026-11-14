@@ -25,17 +25,18 @@ import shared.Theme;
 
 import java.math.BigDecimal;
 import java.util.function.Consumer;
+import java.util.List;
 
 /**
  * F5 on the POS screen: the PAYMENT METHOD card, shown over the dimmed screen.
  *
- * | Key    | Does                                                        |
- * | F1     | Cash: type the amount tendered, the change is shown          |
- * | F2     | Online payment: type the reference number                    |
- * | F3-F5  | (online) GCash / Maya / QRPh                                 |
- * | F8     | (cash) fill in the exact amount                              |
- * | Enter  | Complete Transaction                                         |
- * | Esc    | Cancel (back to the cart)                                    |
+ * | Key       | Does                                                             |
+ * | F1        | Cash: type the amount tendered, the change is shown              |
+ * | F2        | Online payment: type the reference number                        |
+ * | F3-F4, F6 | (online) GCash / Maya / QRPh || Up/Down | previous / next method |                                |
+ * | F8        | (cash) fill in the exact amount                                  |
+ * | Enter     | Complete Transaction                                             |
+ * | Esc       | Cancel (back to the cart)                                        |
  *
  * The amounts are checked by PaymentService; its message is shown in the card and the
  * card stays open until the payment is valid. Nothing is saved here: the POS screen saves
@@ -60,6 +61,8 @@ final class PaymentOverlay {
     private static final double CARD_HEIGHT = 708;
     private static final double FIELD_WIDTH = 616;
     private static final String DARK = Theme.PRIMARY_TEXT;
+    private static final List<PaymentMethod> ORDER =
+            List.of(PaymentMethod.CASH, PaymentMethod.GCASH, PaymentMethod.MAYA, PaymentMethod.QRPH);
 
     private final StackPane host;
     private final PaymentService payments;
@@ -237,7 +240,7 @@ final class PaymentOverlay {
 
         gcashButton = option("GCash", "F3", 139, () -> select(PaymentMethod.GCASH));
         mayaButton = option("Maya", "F4", 139, () -> select(PaymentMethod.MAYA));
-        qrphButton = option("QRPh", "F5", 139, () -> select(PaymentMethod.QRPH));
+        qrphButton = option("QRPh", "F6", 139, () -> select(PaymentMethod.QRPH));
         HBox sub = new HBox(20, gcashButton, mayaButton, qrphButton);
 
         onlineBox.getChildren().addAll(label, gap(18), field, gap(59), sub);
@@ -330,6 +333,8 @@ final class PaymentOverlay {
         } else if (k == KeyCode.F4) {
             select(PaymentMethod.MAYA);
         } else if (k == KeyCode.F5) {
+            // the key that opened this card: ignore it, so pressing it twice changes nothing
+        } else if (k == KeyCode.F6) {
             select(PaymentMethod.QRPH);
         } else if (k == KeyCode.F8) {
             if (method == PaymentMethod.CASH && !refund) {
@@ -342,6 +347,8 @@ final class PaymentOverlay {
             cancel();
         } else if (k == KeyCode.TAB) {
             // nothing behind the card may take the focus
+        } else if (k == KeyCode.UP || k == KeyCode.DOWN) {
+            stepMethod(k == KeyCode.DOWN ? 1 : -1);
         } else {
             return;
         }
@@ -374,6 +381,12 @@ final class PaymentOverlay {
     private void close() {
         host.getChildren().remove(layer);
         onClosed.run();
+    }
+
+    /** Up / Down: previous / next method (Cash, GCash, Maya, QRPh). */
+    private void stepMethod(int step) {
+        int i = ORDER.indexOf(method);
+        select(ORDER.get(Math.floorMod(i + step, ORDER.size())));
     }
 
     /** "1,000.50" or "1000.5" as money; null if it isn't a non-negative number. */
