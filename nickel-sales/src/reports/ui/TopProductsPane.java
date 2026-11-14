@@ -54,7 +54,7 @@ final class TopProductsPane implements ReportsPane {
 
         table.getColumns().add(Tables.numberColumn(pager));
         table.getColumns().get(0).setText("Rank");
-        table.getColumns().add(Tables.<ProductSales>textColumn("Product", 260, ProductSales::name));
+        table.getColumns().add(Tables.<ProductSales>textColumn("Product Name", 260, ProductSales::name));
         table.getColumns().add(Tables.<ProductSales>textColumn("Product ID", 120, ProductSales::productId));
         table.getColumns().add(Tables.<ProductSales>textColumn("Qty Sold", 110,
                 p -> Quantity.format(p.quantity()) + " " + p.unit()));

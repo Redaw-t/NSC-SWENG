@@ -97,8 +97,8 @@ final class ProductsPane {
         this.actor = actor;
 
         table.getColumns().add(Tables.<Product>numberColumn(pager));
-        table.getColumns().add(Tables.<Product>nodeColumn("Code", 120, 100, this::codeCell));
-        table.getColumns().add(Tables.<Product>textColumn("Description", 280, Product::name));
+        table.getColumns().add(Tables.<Product>nodeColumn("Product Code", 130, 110, this::codeCell));
+        table.getColumns().add(Tables.<Product>textColumn("Product Name", 280, Product::name));
         table.getColumns().add(Tables.<Product>textColumn("Category", 110,
                 p -> p.categoryName() == null ? "" : p.categoryName()));
         table.getColumns().add(Tables.<Product>textColumn("Supplier", 120,

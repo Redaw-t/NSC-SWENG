@@ -76,8 +76,8 @@ final class TransactionsPane implements ReportsPane {
                 r -> ROW_TIME.format(PhTime.of(r.when()))));
         // a return shows its return number (the invoice number + -01 ...)
         table.getColumns().add(Tables.<TransactionRow>textColumn("Invoice No.", 150, TransactionRow::number));
-        table.getColumns().add(Tables.<TransactionRow>textColumn("Cashier", 170, r -> names.name(r.cashierId())));
-        table.getColumns().add(Tables.<TransactionRow>textColumn("Terminal", 80, TransactionRow::terminalId));
+        table.getColumns().add(Tables.<TransactionRow>textColumn("Cashier", 220, r -> names.name(r.cashierId())));
+        //table.getColumns().add(Tables.<TransactionRow>textColumn("Terminal", 80, TransactionRow::terminalId));
         table.getColumns().add(Tables.<TransactionRow>textColumn("Payment", 100, TransactionsPane::methods));
         table.getColumns().add(Tables.<TransactionRow>textColumn("Items", 60, r -> String.valueOf(r.items())));
         table.getColumns().add(Tables.<TransactionRow>textColumn("Total", 110, r -> signedPeso(r.total())));

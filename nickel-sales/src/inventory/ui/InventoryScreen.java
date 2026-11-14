@@ -405,13 +405,13 @@ public final class InventoryScreen {
 
     private void buildStockTable() {
         stockTable.getColumns().add(Tables.<StockRow>numberColumn(stockPager));
-        stockTable.getColumns().add(Tables.<StockRow>nodeColumn("Code", 130, 110, InventoryScreen::codeCell));
+        stockTable.getColumns().add(Tables.<StockRow>nodeColumn("Product Code", 130, 110, InventoryScreen::codeCell));
         stockTable.getColumns().add(Tables.<StockRow>textColumn("Product Name", 300, StockRow::name));
         stockTable.getColumns().add(Tables.<StockRow>textColumn("Current\nStock", 100,
                 r -> Quantity.format(r.onHand()) + " " + r.unit()));
         stockTable.getColumns().add(Tables.<StockRow>nodeColumn("Reorder\nLevel", 130, 120, this::reorderCell));
         stockTable.getColumns().add(Tables.<StockRow>nodeColumn("Status", 120, 110, r -> statusPill(r.status())));
-        stockTable.getColumns().add(Tables.<StockRow>textColumn("Last\nUpdated", 100, r -> date(r.updatedAt())));
+        stockTable.getColumns().add(Tables.<StockRow>textColumn("Last Updated", 100, r -> date(r.updatedAt())));
         stockTable.getColumns().add(Tables.<StockRow>nodeColumn("Actions", 250, 240, this::actions));
         stockTable.setPlaceholder(new Label("No products found."));
         stockPager.fitToHeight(stockTable, Tables.HEADER_HEIGHT, Tables.ROW_HEIGHT, this::showStockPage);

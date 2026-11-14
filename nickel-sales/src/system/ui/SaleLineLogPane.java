@@ -103,7 +103,7 @@ final class SaleLineLogPane implements SystemPane {
         table.getColumns().add(Tables.<SaleLineLogEntry>textColumn("Invoice / Return No.", 170,
                 SaleLineLogEntry::documentNo));
         table.getColumns().add(Tables.<SaleLineLogEntry>textColumn("Type", 130, SaleLineLogEntry::typeLabel));
-        table.getColumns().add(Tables.<SaleLineLogEntry>nodeColumn("Item", 220, 140,
+        table.getColumns().add(Tables.<SaleLineLogEntry>nodeColumn("Product Name", 220, 140,
                 e -> SystemUi.wrappedCell(e.productName())));
         table.getColumns().add(Tables.<SaleLineLogEntry>textColumn("Qty", 80,
                 e -> Quantity.format(e.quantity()) + " " + e.unit()));
@@ -241,7 +241,7 @@ final class SaleLineLogPane implements SystemPane {
                 new String[] {"Invoice No.", e.invoiceNo()},
                 new String[] {"Line No.", String.valueOf(e.lineNo())},
                 new String[] {"Type", e.typeLabel()},
-                new String[] {"Item", e.productName()},
+                new String[] {"Product Name", e.productName()},
                 new String[] {"Product ID", e.openItem() ? e.productId() + "  (not in the product list)" : e.productId()},
                 new String[] {"Quantity", Quantity.format(e.quantity()) + " " + e.unit()},
                 new String[] {"Original Price", e.originalPrice() == null ? null : Money.format(e.originalPrice())},

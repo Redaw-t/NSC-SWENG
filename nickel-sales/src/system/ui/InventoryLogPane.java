@@ -91,7 +91,7 @@ final class InventoryLogPane implements SystemPane {
 
         table.getColumns().add(Tables.<InventoryLogEntry>textColumn("Date / Time", 120,
                 e -> ROW_TIME.format(PhTime.of(e.createdAt()))));
-        table.getColumns().add(Tables.<InventoryLogEntry>nodeColumn("Product", 230, 150,
+        table.getColumns().add(Tables.<InventoryLogEntry>nodeColumn("Product Name", 230, 150,
                 e -> SystemUi.wrappedCell(e.productLabel())));
         table.getColumns().add(Tables.<InventoryLogEntry>textColumn("Type", 100,
                 e -> InventoryLogEntry.label(e.type())));
@@ -222,7 +222,7 @@ final class InventoryLogPane implements SystemPane {
     private void showDetails(InventoryLogEntry e) {
         SystemUi.showDetails(screen.stage(), "Stock Change Details", List.of(
                 new String[] {"Date / Time", FULL_TIME.format(PhTime.of(e.createdAt()))},
-                new String[] {"Product", e.productLabel()},
+                new String[] {"Product Name", e.productLabel()},
                 new String[] {"Product ID", e.productId()},
                 new String[] {"Type", InventoryLogEntry.label(e.type())},
                 new String[] {"Change", signed(e.quantity())},

@@ -61,7 +61,7 @@ final class InventoryPane implements ReportsPane {
 
         table.getColumns().add(Tables.numberColumn(pager));
         table.getColumns().add(Tables.<StockSnapshot>nodeColumn("Product Code", 150, 120, InventoryPane::codeCell));
-        table.getColumns().add(Tables.<StockSnapshot>textColumn("Product", 260, StockSnapshot::name));
+        table.getColumns().add(Tables.<StockSnapshot>textColumn("Product Name", 260, StockSnapshot::name));
         table.getColumns().add(Tables.<StockSnapshot>textColumn("On Hand", 110,
                 s -> Quantity.format(s.onHand()) + " " + s.unit()));
         // A reorder level of 0 never gives Low Stock (Inventory's rule), so say it is not set.
